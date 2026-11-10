@@ -3,6 +3,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { IconLayoutDashboard, IconUsers, IconBuilding } from '@tabler/icons-react';
 import apiClient from '../../config/API/axiosConfig.js';
+import { identifyUser } from '../../analytics/posthog.js';
 import PageLoader from '../../components/PageLoader.jsx';
 import SessionCheckError from '../../components/SessionCheckError.jsx';
 import AreaShell from '../../components/partials/AreaShell.jsx';
@@ -67,6 +68,16 @@ export const AdminDashboardWrapper = () => {
     };
   }, [attempt]);
 
+  const sessionUserId = sessionUser?.id ?? null;
+
+  //* Only reaches PostHog once the visitor consented (analytics/posthog.js);
+  //* remembered so consent given later still identifies the admin
+  useEffect(() => {
+    if (sessionUserId) {
+      identifyUser(sessionUserId);
+    }
+  }, [sessionUserId]);
+
   const links = useMemo(
     () => [
       { to: '/admin', label: t('admin.nav.overview'), icon: IconLayoutDashboard, end: true },
@@ -87,14 +98,7 @@ export const AdminDashboardWrapper = () => {
   }
 
   //* Child pages read the signed-in admin via useOutletContext()
-  return (
-    <AreaShell
-      homeTo="/admin"
-      title={t('admin.areaTitle')}
-      links={links}
-      outletContext={outletContext}
-    />
-  );
+  return <AreaShell homeTo="/admin" title={t('admin.areaTitle')} links={links} outletContext={outletContext} />;
 };
 
 export default AdminDashboardWrapper;

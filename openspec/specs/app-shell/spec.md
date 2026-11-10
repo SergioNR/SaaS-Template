@@ -168,7 +168,7 @@ The not-found page SHALL render without the site navigation bar, with its own sk
 
 ### Requirement: Private areas share a navigation shell
 
-The user and admin areas SHALL render a header (brand link to the area home and the area title) and a sidebar listing the area's links under a labelled section, highlighting the current page, with logout at the bottom. The user sidebar SHALL list dashboard, profile, plans/billing and team; the admin sidebar overview, users and companies. Below the small breakpoint the sidebar SHALL collapse behind a burger exposing its open state and controlled sidebar; choosing a link SHALL close it.
+The user and admin areas SHALL render a header (brand link home, area title) and a sidebar listing the area's links in a labelled section, highlighting the current page, with logout and, when analytics is configured, the cookie-preferences control at the bottom. The user sidebar SHALL list dashboard, profile, plans/billing and team; the admin one overview, users and companies. On small screens the sidebar SHALL collapse behind a burger exposing its open state; choosing a link SHALL close it.
 
 #### Scenario: Mobile navigation
 
@@ -179,6 +179,11 @@ The user and admin areas SHALL render a header (brand link to the area home and 
 
 - **WHEN** the admin is on `/admin/users/42`
 - **THEN** the users link is highlighted and the overview link is not
+
+#### Scenario: Cookie preferences in the sidebar
+
+- **WHEN** a signed-in user opens the sidebar on a build with analytics configured
+- **THEN** a cookie-preferences control renders next to logout
 
 ### Requirement: Logout ends the session or stays put on failure
 
