@@ -140,7 +140,7 @@ All routes are versioned under `/api/v1`. Interactive documentation is served by
 | Health | `GET /` (liveness), `GET /health` (readiness: `SELECT 1` against the database, 200 / 503, not rate limited) |
 | Docs | `GET /api/docs` (Swagger UI), `GET /api/docs.json` (OpenAPI spec) - `DEPLOY_ENVIRONMENT=localhost` only |
 | Auth | `POST /api/v1/auth/login`, `POST /api/v1/auth/register`, `POST /api/v1/auth/logout`, `GET /api/v1/auth/session`, password reset (`GET/POST/PATCH /api/v1/auth/password-reset`), team invites (`GET /api/v1/auth/invite`, `POST /api/v1/auth/invite-accept`) |
-| User | `GET /api/v1/user`, `PATCH /api/v1/user/password`, `DELETE /api/v1/user`. `PATCH /api/v1/auth/update-user-password` is a **deprecated** alias of the password route (same handler) kept for older clients |
+| User | `GET /api/v1/user`, `PATCH /api/v1/user/password`, `DELETE /api/v1/user`. |
 | Billing | `GET/POST /api/v1/billing`, `POST /api/v1/billing/checkout-session`, `POST /api/v1/billing/customer-portal` |
 | Files | `POST /api/v1/files` (register + presigned upload URL, valid 5 min), `POST /api/v1/files/:fileId/confirm` (uploader only - verifies the stored object, then publishes it), `GET /api/v1/files` (cursor-paginated list), `GET /api/v1/files/:fileId/download` (presigned download URL), `DELETE /api/v1/files/:fileId` — only mounted when `S3_BUCKET` is set |
 | Team | `GET /api/v1/team`, `POST /api/v1/team/invites`, `POST /api/v1/team/invites/:inviteId/resend`, `DELETE /api/v1/team/invites/:inviteId`, `DELETE/PATCH /api/v1/team/members/:userId` |

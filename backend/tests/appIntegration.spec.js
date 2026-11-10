@@ -321,8 +321,21 @@ describe('auth router gating', () => {
       .get('/api/v1/auth/session')
       .set('X-Forwarded-Proto', 'https')
       .set('Cookie', cookie);
+    //* The deprecated alias was removed - it is an unknown path now
+    const removedAlias = await request(app)
+      .patch('/api/v1/auth/update-user-password')
+      .set('Origin', FRONT_ORIGIN)
+      .set('X-Forwarded-Proto', 'https')
+      .set('Cookie', cookie)
+      .send({ currentPassword: 'Password123!', newPassword: 'Password456!' });
 
     prismaMock.user.findUnique.mockReset();
+
+    expect(removedAlias.status).toBe(404);
+    expect(removedAlias.body).toEqual(ROUTE_NOT_FOUND);
+    expect(prismaMock.user.update).not.toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ password: expect.anything() }),
+    }));
 
     expect(unknown.status).toBe(404);
     expect(unknown.body).toEqual(ROUTE_NOT_FOUND);

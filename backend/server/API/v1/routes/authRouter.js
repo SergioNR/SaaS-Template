@@ -11,7 +11,6 @@ import {
   checkTeamInviteValidity,
   acceptTeamInvite,
 } from '../../../controllers/authController.js';
-import { updateUserPassword } from '../../../controllers/userController.js';
 import { sanitizerResult } from '../../../middlewares/sanitizerResult.js';
 import { authLimiter } from '../../../middlewares/authRateLimiter.js';
 import { passwordResetLimiter } from '../../../middlewares/passwordResetRateLimiter.js';
@@ -19,7 +18,6 @@ import { loginAccountLimiter } from '../../../middlewares/loginAccountRateLimite
 import { createUserValidationSchema } from '../../../utils/validators/createUserSchema.js';
 import { userLoginValidationSchema } from '../../../utils/validators/userLoginValidationSchema.js';
 
-import { updatePasswordSchema } from '../../../utils/validators/updatePasswordSchema.js';
 import { recoverPasswordSchema } from '../../../utils/validators/recoverPasswordSchema.js';
 import { checkAuthentication } from '../../../middlewares/authenticationChecker.js';
 import { requestNewPasswordSchema } from '../../../utils/validators/requestNewPasswordSchema.js';
@@ -355,58 +353,6 @@ authPublicRouter.post('/invite-accept', authLimiter, checkSchema(acceptTeamInvit
  *               $ref: '#/components/schemas/ErrorMessage'
  */
 authPrivateRouter.post('/logout', requireSession, logoutUser);
-
-/**
- * @openapi
- * /api/v1/auth/update-user-password:
- *   patch:
- *     tags: [Auth]
- *     deprecated: true
- *     summary: Update the password of the logged-in user (deprecated alias)
- *     description: Deprecated alias of `PATCH /api/v1/user/password` - same handler, request and responses. Kept so existing clients keep working; new clients must call `PATCH /api/v1/user/password`.
- *     security:
- *       - sessionCookie: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/UpdatePasswordRequest'
- *     responses:
- *       200:
- *         description: Password updated successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: 'object'
- *               properties:
- *                 userId:
- *                   type: string
- *                   format: uuid
- *       400:
- *         description: Current password is incorrect, or the new password is the same as the current one - disambiguated by `code`
- *         content:
- *           application/json:
- *             schema:
- *               allOf:
- *                 - $ref: '#/components/schemas/ErrorMessage'
- *                 - type: object
- *                   properties:
- *                     message:
- *                       type: string
- *                       enum: [Current password is incorrect, New password must be different from the current password]
- *                     code:
- *                       type: string
- *                       enum: [AUTH_CURRENT_PASSWORD_INCORRECT, AUTH_PASSWORD_UNCHANGED]
- *                       description: Machine-readable reason distinguishing the two 400 cases
- *       404:
- *         $ref: '#/components/responses/NotFound'
- *       422:
- *         $ref: '#/components/responses/ValidationError'
- */
-//* Deprecated alias of PATCH /api/v1/user/password (same handler) - remove once
-//* every client calls the user route
-authPrivateRouter.patch('/update-user-password', requireSession, checkSchema(updatePasswordSchema), sanitizerResult, updateUserPassword);
 
 /**
  * @openapi
