@@ -3,10 +3,14 @@
 React single-page application built with Vite and Mantine. It ships with:
 
 - **Public site** — landing page, pricing, FAQ and terms pages with placeholder content
-- **Authentication** — login, registration and password reset/recovery flows
-- **User area** — dashboard, profile and Stripe billing (checkout + customer portal)
-- **Admin area** — user management dashboard
+- **Authentication** — login (returns to the page you were on after a session expiry), registration, password reset/recovery and team invite acceptance
+- **User area** — dashboard, profile, team management (invites, roles, removal) and Stripe billing (checkout + customer portal)
+- **Admin area** — overview stats, searchable user and company lists with detail pages, user deletion
 - **Analytics** — optional PostHog product analytics, enabled when a key is configured. Opt-in: a consent banner asks first, and `posthog-js` is only downloaded (after first paint) once the visitor accepts. Query strings and fragments are stripped from every captured URL, and the reset/invite token pages remove their token from the address bar
+
+- **Theme** — neutral Mantine theme in `src/theme/theme.js` with a self-hosted font (`@fontsource/inter`); rebrand there
+
+Every route except the landing page and login is code-split (`src/routes/lazyPages.js`).
 
 ## Getting started
 
