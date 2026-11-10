@@ -38,6 +38,7 @@ import { useSubscription } from '../../contexts/useSubscription.js';
 import NoActiveSubscriptionBanner from '../../components/partials/NoActiveSubscriptionBanner.jsx';
 import Seo from '../../components/Seo.jsx';
 import { formatDate, formatDateTime } from '../../utils/formatDate.js';
+import StatCard from '../../components/StatCard.jsx';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -48,26 +49,6 @@ const formatRelativeDays = (value) => {
     Math.round((new Date(value).getTime() - Date.now()) / DAY_MS),
     'day'
   );
-};
-
-const StatCard = ({ icon, label, children }) => (
-  <Card withBorder p="lg" radius="md">
-    <Group justify="space-between" mb="xs">
-      <Text c="dimmed" size="sm" fw={500}>
-        {label}
-      </Text>
-      <ThemeIcon variant="light" size="lg" radius="md">
-        {icon}
-      </ThemeIcon>
-    </Group>
-    {children}
-  </Card>
-);
-
-StatCard.propTypes = {
-  icon: PropTypes.node,
-  label: PropTypes.string,
-  children: PropTypes.node,
 };
 
 const QuickAction = ({ icon, title, description, action }) => (

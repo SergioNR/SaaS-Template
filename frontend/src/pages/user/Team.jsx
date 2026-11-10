@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react';
-import PropTypes from 'prop-types';
 import { useTranslation } from 'react-i18next';
 import {
   ActionIcon,
@@ -15,7 +14,6 @@ import {
   Text,
   TextInput,
   Title,
-  Tooltip,
 } from '@mantine/core';
 import {
   IconMailForward,
@@ -24,28 +22,11 @@ import {
 } from '@tabler/icons-react';
 import apiClient from '../../config/API/axiosConfig.js';
 import Seo from '../../components/Seo.jsx';
+import LockedTooltip from '../../components/LockedTooltip.jsx';
 import { notifyError, notifySuccess } from '../../utils/notifications.js';
 import { formatDateTime } from '../../utils/formatDate.js';
 
 const roleLabel = (t, roleName) => t(`team.roles.${roleName}`, roleName);
-
-function LockedTooltip({ locked, label, children }) {
-  if (!locked) {
-    return children;
-  }
-
-  return (
-    <Tooltip label={label}>
-      <span style={{ display: 'inline-flex' }}>{children}</span>
-    </Tooltip>
-  );
-}
-
-LockedTooltip.propTypes = {
-  locked: PropTypes.bool,
-  label: PropTypes.string.isRequired,
-  children: PropTypes.node.isRequired,
-};
 
 export function Team() {
   const { t } = useTranslation();

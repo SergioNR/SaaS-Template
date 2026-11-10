@@ -508,7 +508,9 @@
         "superadminWarning": "Vas a eliminar una cuenta de superadministrador.",
         "cancel": "Cancelar",
         "confirm": "Eliminar"
-      }
+      },
+      "searchLabel": "Buscar usuarios por email",
+      "roleFilterLabel": "Filtrar por rol"
     },
     "userDetail": {
       "notFound": "El usuario no existe o ha sido eliminado.",
@@ -529,7 +531,8 @@
       },
       "empty": "No hay empresas que coincidan con la búsqueda.",
       "loadMore": "Cargar más",
-      "loadMoreError": "No se pudieron cargar más empresas."
+      "loadMoreError": "No se pudieron cargar más empresas.",
+      "searchLabel": "Buscar empresas por nombre"
     },
     "companyDetail": {
       "notFound": "La empresa no existe o ha sido eliminada.",

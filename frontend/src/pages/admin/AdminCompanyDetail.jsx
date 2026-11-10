@@ -16,23 +16,11 @@ import {
   Title,
 } from '@mantine/core';
 import { IconArrowLeft } from '@tabler/icons-react';
-import PropTypes from 'prop-types';
 import apiClient from '../../config/API/axiosConfig.js';
 import Seo from '../../components/Seo.jsx';
+import DetailRow from '../../components/DetailRow.jsx';
 import SubscriptionStatusBadge from '../../components/shared/SubscriptionStatusBadge.jsx';
 import { formatDate, formatDateTime } from '../../utils/formatDate.js';
-
-const DetailRow = ({ label, children }) => (
-  <Group justify="space-between" py="xs" wrap="nowrap">
-    <Text c="dimmed" size="sm">{label}</Text>
-    {children}
-  </Group>
-);
-
-DetailRow.propTypes = {
-  label: PropTypes.string,
-  children: PropTypes.node,
-};
 
 const AdminCompanyDetail = () => {
   const { companyId } = useParams();

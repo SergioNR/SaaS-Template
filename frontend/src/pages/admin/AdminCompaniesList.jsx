@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 import {
@@ -10,117 +10,50 @@ import {
   Stack,
   Table,
   Text,
-  TextInput,
   Title,
 } from '@mantine/core';
-import { IconSearch } from '@tabler/icons-react';
 import apiClient from '../../config/API/axiosConfig.js';
 import Seo from '../../components/Seo.jsx';
 import SubscriptionStatusBadge from '../../components/shared/SubscriptionStatusBadge.jsx';
 import { notifyError } from '../../utils/notifications.js';
 import { formatDateTime } from '../../utils/formatDate.js';
+import { useCursorList } from '../../hooks/useCursorList.js';
+import DebouncedSearchInput from '../../components/DebouncedSearchInput.jsx';
 
 const PAGE_SIZE = 25;
-const SEARCH_DEBOUNCE_MS = 400;
 
 const AdminCompaniesList = () => {
   const { t } = useTranslation();
-  const [companies, setCompanies] = useState([]);
-  const [companyCount, setCompanyCount] = useState(0);
-  const [nextCursor, setNextCursor] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [error, setError] = useState(false);
-  const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
 
-  useEffect(() => {
-    const timer = setTimeout(() => setSearch(searchInput.trim()), SEARCH_DEBOUNCE_MS);
+  const fetchCompanies = useCallback(
+    async ({ cursor, signal } = {}) => {
+      const response = await apiClient.get('/api/v1/admin/companies', {
+        params: {
+          limit: PAGE_SIZE,
+          ...(search ? { search } : {}),
+          ...(cursor ? { cursor } : {}),
+        },
+        signal,
+      });
 
-    return () => clearTimeout(timer);
-  }, [searchInput]);
+      return response.data;
+    },
+    [search],
+  );
 
-  const fetchCompanies = useCallback(async ({ cursor, signal } = {}) => {
-    const response = await apiClient.get('/api/v1/admin/companies', {
-      params: {
-        limit: PAGE_SIZE,
-        ...(search ? { search } : {}),
-        ...(cursor ? { cursor } : {}),
-      },
-      signal,
-    });
+  const onLoadMoreError = useCallback(() => notifyError(t('admin.companies.loadMoreError')), [t]);
 
-    return response.data;
-  }, [search]);
-
-  //* Every first-page load (filter change, refresh) bumps the request id and
-  //* aborts the previous request, so late responses for stale filters - first
-  //* pages or load-more pages - are discarded instead of mixed into the list
-  const requestIdRef = useRef(0);
-  const abortRef = useRef(null);
-
-  const loadFirstPage = useCallback(async () => {
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
-    const requestId = ++requestIdRef.current;
-
-    setLoading(true);
-    setError(false);
-    setNextCursor(null);
-
-    try {
-      const data = await fetchCompanies({ signal: controller.signal });
-
-      if (requestId !== requestIdRef.current) {
-        return;
-      }
-
-      setCompanies(data.companies);
-      setCompanyCount(data.companyCount);
-      setNextCursor(data.nextCursor ?? null);
-    } catch {
-      if (requestId === requestIdRef.current) {
-        setError(true);
-      }
-    } finally {
-      if (requestId === requestIdRef.current) {
-        setLoading(false);
-      }
-    }
-  }, [fetchCompanies]);
-
-  useEffect(() => {
-    loadFirstPage();
-  }, [loadFirstPage]);
-
-  useEffect(() => () => abortRef.current?.abort(), []);
-
-  const loadMore = async () => {
-    const requestId = requestIdRef.current;
-    const signal = abortRef.current?.signal;
-
-    setLoadingMore(true);
-
-    try {
-      const data = await fetchCompanies({ cursor: nextCursor, signal });
-
-      if (requestId !== requestIdRef.current) {
-        return;
-      }
-
-      setCompanies((previousCompanies) => [...previousCompanies, ...data.companies]);
-      setNextCursor(data.nextCursor ?? null);
-    } catch {
-      if (requestId !== requestIdRef.current) {
-        return;
-      }
-
-      notifyError(t('admin.companies.loadMoreError'));
-    } finally {
-      setLoadingMore(false);
-    }
-  };
+  //* Stale-response handling (abort + request id) lives in useCursorList
+  const {
+    rows: companies,
+    rowCount: companyCount,
+    nextCursor,
+    loading,
+    loadingMore,
+    error,
+    loadMore,
+  } = useCursorList({ fetchPage: fetchCompanies, rowsKey: 'companies', countKey: 'companyCount', onLoadMoreError });
 
   const rows = companies.map((company) => (
     <Table.Tr key={company.id}>
@@ -148,11 +81,10 @@ const AdminCompaniesList = () => {
       <Title order={2}>{t('admin.companies.title')}</Title>
 
       <Group justify="space-between" wrap="wrap">
-        <TextInput
-          value={searchInput}
-          onChange={(event) => setSearchInput(event.currentTarget.value)}
+        <DebouncedSearchInput
+          onSearch={setSearch}
+          label={t('admin.companies.searchLabel')}
           placeholder={t('admin.companies.searchPlaceholder')}
-          leftSection={<IconSearch size={16} stroke={1.5} />}
           w={260}
         />
         <Text c="dimmed" size="sm">
