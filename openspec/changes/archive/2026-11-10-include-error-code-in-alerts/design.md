@@ -32,3 +32,9 @@ Downgraded ticks still log a warning with the job name, the error code and the c
 
 - Include `P2024` (connection-pool timeout) and `P1008` (operation timed out)? Recommended: `P2024` yes if it shows up in practice during restarts; leave `P1008` out (it can be a slow query bug).
 - Should N be configurable (`CRON_TRANSIENT_ALERT_THRESHOLD`)? Recommended: no - a constant with a `//*` rationale comment; add an env var only if a fork needs it (and then document it in `.env.example` + README).
+
+## Decisions taken at implementation
+
+- `P2024` and `P1008` are **not** classified as transient: the conservative reading keeps exactly the five codes the spec names. `P2024` (pool timeout) can be added once it shows up during restarts in practice.
+- The threshold is the constant `TRANSIENT_FAILURE_ALERT_THRESHOLD = 3` in `cron/exclusiveCronTick.js`, not an env var.
+- A non-transient error neither resets nor increments the transient count (it alerts on its own).
