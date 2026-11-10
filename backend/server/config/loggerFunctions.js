@@ -68,6 +68,35 @@ export const logInfo = async (message, context = 'no context') => {
   }
 };
 
+//* Business-event audit line for successful writes. The payload is constant
+//* action names, entity types, ids and FIELD NAMES only - never field values
+//* or free text - so PII and secrets stay out of the logs by construction.
+//* Info level keeps it out of the Telegram alert channel; the top-level
+//* userId/companyId/reqId mirror the access-log fields so log searches work
+//* across both line types
+export const logAudit = (req, action, { entity, entityId, changedFields } = {}) => {
+  try {
+    const audit = {
+      entity: entity,
+      entityId: entityId ?? null,
+    };
+
+    if (changedFields !== undefined) {
+      audit.changedFields = changedFields;
+    }
+
+    logger.info({
+      message: action,
+      audit: audit,
+      userId: req?.user?.id ?? null,
+      companyId: req?.user?.company_id ?? null,
+      reqId: req?.id ?? null,
+    });
+  } catch {
+    // Fail silently
+  }
+};
+
 export const logPasswordResetTokenCreated = (userId) => {
   logger.info({
     message: 'User password reset token succesfully created in database',

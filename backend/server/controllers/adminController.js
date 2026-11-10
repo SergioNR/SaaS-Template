@@ -18,7 +18,7 @@ import {
   countActiveSessionsByUserInDb,
 } from '../models/sessionModel.js';
 import { deleteUserAndCleanup } from '../utils/userDeletionCleanup.js';
-import { logInfo } from '../config/loggerFunctions.js';
+import { logAudit } from '../config/loggerFunctions.js';
 
 const DEFAULT_PAGE_SIZE = 50;
 const MAX_PAGE_SIZE = 100;
@@ -137,12 +137,13 @@ export const deleteOneUserById = async (req, res) => {
     });
   }
 
-  //* Admin deletions are privileged actions - the actor is always recorded
-  logInfo(`Superadmin ${req.user.id} deleted user ${deletionResult.deletedUser.id}`, {
-    actorId: req.user.id,
-    deletedUserId: deletionResult.deletedUser.id,
-    companyDeleted: deletionResult.companyDeleted,
-  });
+  //* Admin deletions are privileged actions - the audit line always carries
+  //* the acting superadmin (userId) next to the deleted user
+  logAudit(req, 'admin.user.deleted', { entity: 'user', entityId: deletionResult.deletedUser.id });
+
+  if (deletionResult.companyDeleted) {
+    logAudit(req, 'admin.company.deleted', { entity: 'company', entityId: deletionResult.companyId });
+  }
 
   return res.status(200).json({
     userId: deletionResult.deletedUser.id,

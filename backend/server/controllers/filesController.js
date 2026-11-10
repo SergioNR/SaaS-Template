@@ -14,7 +14,7 @@ import { deleteS3Objects } from '../integrations/s3/deleteS3Objects.js';
 import { buildFileS3Key, sanitizeFilename } from '../utils/s3Key.js';
 import { MAX_PENDING_UPLOADS_PER_COMPANY } from '../config/s3.js';
 import { PENDING_FILE_CONFIRM_MAX_AGE_MS } from '../config/pendingFileUploads.js';
-import { logWarn } from '../config/loggerFunctions.js';
+import { logAudit, logWarn } from '../config/loggerFunctions.js';
 
 //* The catalog row is the source of truth and is already gone when this runs:
 //* an orphaned object is harmless and reclaimable, a dangling row is not, so a
@@ -86,6 +86,8 @@ export const createFileUpload = async (req, res) => {
     sizeBytes,
   }); //* Starts as pending - only listed once confirmed
 
+  logAudit(req, 'file.upload.created', { entity: 'file', entityId: file.id });
+
   return res.status(201).json({
     file: toFileShape(file),
     uploadUrl,
@@ -154,6 +156,8 @@ export const confirmFileUpload = async (req, res) => {
     await deleteFileInDb(file.id, companyId);
     await deleteS3ObjectBestEffort(file.s3_key);
 
+    logAudit(req, 'file.upload.discarded', { entity: 'file', entityId: file.id });
+
     return res.status(400).json({
       message: 'The uploaded object does not match the declared size or content type - the upload was discarded',
       code: 'FILE_UPLOAD_MISMATCH',
@@ -182,6 +186,8 @@ export const confirmFileUpload = async (req, res) => {
 
     return uploadExpiredResponse(res);
   }
+
+  logAudit(req, 'file.upload.confirmed', { entity: 'file', entityId: readyFile.id });
 
   return res.status(200).json({
     file: toFileShape(readyFile),
@@ -257,6 +263,8 @@ export const deleteOneFileById = async (req, res) => {
   }
 
   await deleteS3ObjectBestEffort(file.s3_key);
+
+  logAudit(req, 'file.deleted', { entity: 'file', entityId: file.id });
 
   return res.status(200).json({
     fileId: file.id,

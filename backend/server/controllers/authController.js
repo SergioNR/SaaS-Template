@@ -1,6 +1,6 @@
 import bcrypt from 'bcrypt';
 import { BCRYPT_SALT_ROUNDS, SESSION_COOKIE_NAME, SESSION_COOKIE_OPTIONS } from '../config/security.js';
-import { logError } from '../config/loggerFunctions.js';
+import { logAudit, logError } from '../config/loggerFunctions.js';
 import passport from '../auth/passportjs.js';
 import { posthogUserSuccessLoggedIn } from '../models/posthogModel.js';
 import {
@@ -45,6 +45,10 @@ export const requestPasswordResetToken = async (req, res) => {
   const { email } = req.body;
 
   issuePasswordResetToken(email); // Fire-and-forget
+
+  //* Enumeration-safe logging mirrors the uniform response - no email, no
+  //* user id, so the logs cannot reveal whether the account exists either
+  logAudit(req, 'auth.password_reset.requested', { entity: 'password_reset' });
 
   //* Not checking / notifying for user existence to prevent security leaks
   return res.status(200).json({
@@ -92,6 +96,8 @@ export const updateRecoveredUserPassword = async (req, res) => {
       message: 'Password reset token is invalid or expired',
     });
   }
+
+  logAudit(req, 'auth.password_reset.completed', { entity: 'user', entityId: resetResult.userId });
 
   return res.status(200).json({});
 };
@@ -231,6 +237,8 @@ export const acceptTeamInvite = async (req, res) => {
     });
   }
 
+  logAudit(req, 'auth.invite.accepted', { entity: 'user', entityId: acceptResult.user?.id });
+
   //* No auto-login here - consistent with the register endpoint
   return res.status(201).json({});
 };
@@ -274,6 +282,8 @@ export const loginLocal = (req, res, next) => passport.authenticate('local', (er
     posthogUserSuccessLoggedIn(user.id, 'local'); // Fire-and-forget function
 
     updateUserLastLoginDate(user.id); // Fire-and-forget function
+
+    logAudit(req, 'auth.login.succeeded', { entity: 'user', entityId: user.id });
 
     return res.status(200).json({
       user: {
@@ -322,6 +332,11 @@ export const registerUser = async (req, res) => {
   const { username, password, companyName } = req.body;
 
   registerUserInBackground(username, password, companyName); // Fire-and-forget
+
+  //* Enumeration-safe logging mirrors the uniform response - the create runs
+  //* detached and may not happen (already-registered email), so the action
+  //* is "requested" and carries neither email, user id nor company name
+  logAudit(req, 'auth.register.requested', { entity: 'user' });
 
   //* Same shape & status for new and already-registered emails so the
   //* endpoint cannot be used to enumerate registered emails
@@ -372,28 +387,38 @@ export const updateUserPassword = async (req, res) => {
     keepSessionId: req.sessionID,
   });
 
+  logAudit(req, 'user.password.updated', { entity: 'user', entityId: updatedUser.id });
+
   return res.status(200).json({
     userId: updatedUser.id,
   });
 };
 
-export const logoutUser = (req, res, next) => req.logout((err) => {
-  if (err) {
-    logError('User logout failed', err);
-    return next(err);
-  }
+export const logoutUser = (req, res, next) => {
+  //* req.logout clears req.user before the callbacks run - capture the id
+  //* while it is still on the request
+  const userId = req.user?.id ?? null;
 
-  // Destroy session explicitly
-  return req.session.destroy((error) => {
-    if (error) {
-      logError('Session destruction failed', error);
-      return next(error);
+  return req.logout((err) => {
+    if (err) {
+      logError('User logout failed', err);
+      return next(err);
     }
 
-    //* Clear cookie on client side - same attributes it was set with, or the
-    //* browser keeps it
-    res.clearCookie(SESSION_COOKIE_NAME, SESSION_COOKIE_OPTIONS);
+    // Destroy session explicitly
+    return req.session.destroy((error) => {
+      if (error) {
+        logError('Session destruction failed', error);
+        return next(error);
+      }
 
-    return res.status(200).json({});
+      logAudit(req, 'auth.logout', { entity: 'user', entityId: userId });
+
+      //* Clear cookie on client side - same attributes it was set with, or the
+      //* browser keeps it
+      res.clearCookie(SESSION_COOKIE_NAME, SESSION_COOKIE_OPTIONS);
+
+      return res.status(200).json({});
+    });
   });
-});
+};

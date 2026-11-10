@@ -21,7 +21,7 @@ import {
 import { getCompanyByIdInDb } from '../models/companyModel.js';
 import { deleteUserAndCleanup } from '../utils/userDeletionCleanup.js';
 import { canGrantRole, outranksAllRoles, rolesGrantableBy } from '../utils/companyRoleHierarchy.js';
-import { logError } from '../config/loggerFunctions.js';
+import { logAudit, logError } from '../config/loggerFunctions.js';
 import { sendTeamInviteToUser } from '../integrations/brevo/transactionalEmails/sendTeamInviteToUser.js';
 
 const targetRoleNames = (targetMember) => targetMember.UserRoles.map((userRole) => userRole.Role.name);
@@ -169,6 +169,8 @@ export const createTeamInvite = async (req, res) => {
 
   deliverInviteInBackground(invite, inviteToken, companyId, inviterEmail); // Fire-and-forget
 
+  logAudit(req, 'team.invite.created', { entity: 'invite', entityId: invite.id });
+
   return res.status(201).json({
     invite: toInviteShape(invite, role.name),
   });
@@ -240,6 +242,8 @@ export const resendTeamInvite = async (req, res) => {
   //* detached delivery as on creation decides whether an email goes out
   deliverInviteInBackground(rotatedInvite, inviteToken, companyId, inviterEmail); // Fire-and-forget
 
+  logAudit(req, 'team.invite.resent', { entity: 'invite', entityId: inviteId });
+
   return res.status(200).json({
     invite: toInviteShape(rotatedInvite, invite.Role.name),
   });
@@ -272,6 +276,8 @@ export const revokeTeamInvite = async (req, res) => {
   }
 
   await deleteTeamInviteInDb(inviteId, companyId);
+
+  logAudit(req, 'team.invite.revoked', { entity: 'invite', entityId: inviteId });
 
   return res.status(200).json({});
 };
@@ -336,6 +342,8 @@ export const removeTeamMember = async (req, res) => {
       message: 'The last company owner cannot be removed',
     });
   }
+
+  logAudit(req, 'team.member.removed', { entity: 'user', entityId: userId });
 
   return res.status(200).json({
     userId,
@@ -412,6 +420,12 @@ export const updateTeamMemberRole = async (req, res) => {
       message: 'The last company owner cannot be demoted',
     });
   }
+
+  logAudit(req, 'team.member.role_updated', {
+    entity: 'user',
+    entityId: userId,
+    changedFields: ['role'],
+  });
 
   return res.status(200).json({
     member: toMemberShape(updateResult.member),

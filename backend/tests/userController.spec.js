@@ -8,8 +8,13 @@ jest.unstable_mockModule('../server/utils/userDeletionCleanup.js', () => ({
   deleteUserAndCleanup: jest.fn(),
 }));
 
+jest.unstable_mockModule('../server/config/loggerFunctions.js', () => ({
+  logAudit: jest.fn(),
+}));
+
 const { deleteUser } = await import('../server/controllers/userController.js');
 const { deleteUserAndCleanup } = await import('../server/utils/userDeletionCleanup.js');
+const { logAudit } = await import('../server/config/loggerFunctions.js');
 
 const mockRes = () => {
   const res = {
@@ -41,6 +46,22 @@ describe('deleteUser', () => {
     expect(req.session.destroy).toHaveBeenCalled();
     expect(res.clearCookie).toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(200);
+    expect(logAudit).toHaveBeenCalledWith(req, 'user.deleted', { entity: 'user', entityId: 'user-1' });
+    expect(logAudit).toHaveBeenCalledTimes(1);
+  });
+
+  it('also audits the company removal when the caller was its last member', async () => {
+    deleteUserAndCleanup.mockResolvedValue({
+      status: 'deleted',
+      deletedUser: { id: 'user-1' },
+      companyDeleted: true,
+      companyId: 'company-1',
+    });
+    const req = mockReq();
+
+    await deleteUser(req, mockRes());
+
+    expect(logAudit).toHaveBeenCalledWith(req, 'company.deleted', { entity: 'company', entityId: 'company-1' });
   });
 
   it('returns 409 with a stable code when the caller is the last owner while members remain', async () => {
@@ -53,6 +74,7 @@ describe('deleteUser', () => {
     expect(res.status).toHaveBeenCalledWith(409);
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'USER_LAST_COMPANY_OWNER' }));
     expect(req.session.destroy).not.toHaveBeenCalled();
+    expect(logAudit).not.toHaveBeenCalled();
   });
 
   it('refuses to delete the last superadmin with 409 LAST_SUPERADMIN', async () => {

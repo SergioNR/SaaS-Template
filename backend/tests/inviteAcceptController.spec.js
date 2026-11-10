@@ -29,6 +29,11 @@ jest.unstable_mockModule('../server/models/posthogModel.js', () => ({
   posthogUserSuccessLoggedIn: jest.fn(),
 }));
 
+jest.unstable_mockModule('../server/config/loggerFunctions.js', () => ({
+  logAudit: jest.fn(),
+  logError: jest.fn(),
+}));
+
 jest.unstable_mockModule('../server/auth/passportjs.js', () => ({
   default: { authenticate: jest.fn() },
 }));
@@ -44,6 +49,7 @@ jest.unstable_mockModule('../server/integrations/brevo/transactionalEmails/sendE
 const { checkTeamInviteValidity, acceptTeamInvite } = await import('../server/controllers/authController.js');
 const { getUserByEmail, canCompanyMemberGrantRoleInDb, createUserInDB } = await import('../server/models/userModel.js');
 const { getTeamInviteByTokenInDb, deleteTeamInviteByIdSafe } = await import('../server/models/teamInvitesModel.js');
+const { logAudit } = await import('../server/config/loggerFunctions.js');
 
 const mockRes = () => {
   const res = {
@@ -254,6 +260,7 @@ describe('acceptTeamInvite', () => {
     expect(deleteTeamInviteByIdSafe).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(201);
     expect(res.json).toHaveBeenCalledWith({});
+    expect(logAudit).toHaveBeenCalledWith(expect.anything(), 'auth.invite.accepted', { entity: 'user', entityId: 'new-user' });
   });
 
   it('maps a concurrent-registration P2002 to 409 and keeps the invite row', async () => {

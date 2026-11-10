@@ -13,6 +13,7 @@ import {
   storeBillingCompanyIdInDb,
 } from '../models/subscriptionModel.js';
 import { isStoredSubscriptionActive } from '../config/stripeSubscriptionStatuses.js';
+import { logAudit } from '../config/loggerFunctions.js';
 
 //* Creates the Stripe customer and stores it with a conditional write. When a
 //* concurrent request stored a customer first, the stored id is reused
@@ -43,6 +44,8 @@ export const createCompanyBillingId = async (req, res) => {
 
   await createAndStoreCompanyStripeId(email, companyId);
 
+  logAudit(req, 'billing.customer.created', { entity: 'company', entityId: companyId });
+
   return res.status(201).json({});
 };
 
@@ -64,6 +67,8 @@ export const getBillingCustomerPortalUrl = async (req, res) => {
   const customerPortalCreationQuery = await createStripeCustomerPortalSession(companyStripeId);
 
   const { url } = customerPortalCreationQuery;
+
+  logAudit(req, 'billing.portal_session.created', { entity: 'company', entityId: companyId });
 
   return res.status(200).json({
     customerPortalUrl: url,
@@ -106,6 +111,8 @@ export const getBillingCheckoutSessionUrl = async (req, res) => {
       const reusableSession = await reuseOrExpireOpenStripeCheckoutSessions(storedStripeId, planName, planBillingCycle);
 
       if (reusableSession) {
+        logAudit(req, 'billing.checkout_session.reused', { entity: 'checkout_session', entityId: reusableSession.id });
+
         return res.status(200).json({
           checkoutSessionUrl: reusableSession.url,
         });
@@ -124,6 +131,8 @@ export const getBillingCheckoutSessionUrl = async (req, res) => {
       planName,
       planBillingCycle,
     );
+
+    logAudit(req, 'billing.checkout_session.created', { entity: 'checkout_session', entityId: checkoutSession.id });
 
     return res.status(200).json({
       checkoutSessionUrl: checkoutSession.url,

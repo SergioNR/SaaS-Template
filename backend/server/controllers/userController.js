@@ -1,6 +1,7 @@
 import { getUserById } from '../models/userModel.js';
 import { SESSION_COOKIE_NAME, SESSION_COOKIE_OPTIONS } from '../config/security.js';
 import { deleteUserAndCleanup } from '../utils/userDeletionCleanup.js';
+import { logAudit } from '../config/loggerFunctions.js';
 
 export const getUserProfile = async (req, res) => {
   const { id: userId } = req.user;
@@ -54,6 +55,12 @@ export const deleteUser = async (req, res) => {
       message: 'You are the last superadmin - promote another superadmin before deleting your account',
       code: 'LAST_SUPERADMIN',
     });
+  }
+
+  logAudit(req, 'user.deleted', { entity: 'user', entityId: req.user.id });
+
+  if (deletionResult.companyDeleted) {
+    logAudit(req, 'company.deleted', { entity: 'company', entityId: deletionResult.companyId });
   }
 
   //* Best-effort destruction of the (now revoked) current session
