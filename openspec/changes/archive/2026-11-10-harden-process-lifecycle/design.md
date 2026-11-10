@@ -32,3 +32,9 @@ A module-level `crashing` flag: the first crash event starts the wait; later `un
 
 - Downgrade cron tick errors raised after shutdown started to warnings? Recommended: yes, in `runExclusiveCronTick` via `isShuttingDown()`; it is the same file `include-error-code-in-alerts` touches, so coordinate if both are in flight.
 - Should the crash alert bypass the 60 s dedupe? Recommended: no - a crash loop restarting every few seconds should not page on every restart.
+
+## Decisions taken at implementation
+
+- **Post-shutdown tick errors are downgraded** to `logWarn` in `runExclusiveCronTick` (checked first, before the transient-error rule from `include-error-code-in-alerts`).
+- **The crash alert keeps the 60 s dedupe** (no bypass).
+- Option 1 (`logError` returns the alert promise) was taken. The crash handler and the shutdown sequence moved into `utils/processLifecycle.js` as dependency-injected factories (`createCrashHandler`, `createGracefulShutdown`) so they are unit-tested without a real `process.exit`; `app.js` only wires them. `raceWithTimeout` is shared by both and by `waitForBackgroundTasks`.
