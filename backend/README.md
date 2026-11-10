@@ -94,7 +94,7 @@ For AWS, leave `S3_ENDPOINT` empty and point `S3_REGION`/credentials/bucket at y
 | `npm run start` | Start the server |
 | `npm run start:local` | Start locally with `--watch` using the `.env` file |
 | `npm run stripe:listen` | Forward Stripe webhooks to localhost for testing |
-| `npm test` | Run the test suite (Jest) |
+| `npm test` | Run the test suite (Jest) - unit specs plus `tests/appIntegration.spec.js` (supertest against `createApp()`, no database) and `tests/openapiCoverage.spec.js` (fails when a route is undocumented) |
 
 ## Environment variables
 
@@ -162,7 +162,15 @@ server/
 └── webhooks/          # Stripe webhook processing
 ```
 
-MVC + repository pattern: controllers handle requests, models encapsulate all database operations.
+MVC + repository pattern: controllers handle requests, models encapsulate all database operations. `server/createApp.js` builds the Express app (middleware order included) and `server/app.js` binds it to the port, starts the cron jobs and owns the process lifecycle.
+
+## Logging
+
+- **Access log** - one line per request (pino-http): message `METHOD /route/pattern` (e.g. `DELETE /api/v1/team/members/:userId`), status, response time, `userId`, `companyId`, `ip`, `reqId`. Query strings, headers and bodies are never logged. 4xx log at `warn`, 5xx at `error`; `/health` is skipped.
+- **Request ids** - every response carries `X-Request-Id` (server-generated UUID; inbound values are ignored). Access, audit and error lines of a request share it, and Telegram alerts show it.
+- **Audit lines** - every successful write logs `<entity>.<verb>` (e.g. `team.invite.created`, `file.deleted`, `auth.login.succeeded`) with entity ids and changed field *names* only - never values. Registration and password-reset requests are audited without any user identifier.
+- **Output** - stdout always (pretty on localhost, JSON elsewhere), plus Better Stack when `BETTER_STACK_SOURCE_TOKEN` and `BETTER_STACK_INGESTING_HOST` are set; level from `LOG_LEVEL`. Errors (only `logError`) also page Telegram. `console` is not used in server code.
+- **Shutdown** - SIGTERM flips `GET /health` to 503, waits up to 8 s for in-flight requests and detached work (emails, registration, analytics), then closes the database; crashes (`unhandledRejection` / `uncaughtException`) are logged before exiting with code 1.
 
 ## Deployment
 
