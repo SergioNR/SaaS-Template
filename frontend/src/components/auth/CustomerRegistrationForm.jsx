@@ -132,7 +132,7 @@ const CustomerRegistrationForm = () => {
               {t('auth.register.submit')}
             </Button>
           </form>
-          <Text size="sm" c="dimmed" className="terms-and-conditions" style={{ textAlign: 'center', marginTop: '10px' }}>
+          <Text size="sm" c="dimmed" ta="center" mt={10}>
             <Trans
               i18nKey="auth.register.terms"
               t={t}

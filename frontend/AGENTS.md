@@ -15,6 +15,8 @@ Rules describe how this codebase is written today. Follow them for all new and m
 - `src/pages/<area>/` — one folder per area: `index/` (public site), `auth/`, `user/`, `admin/`. Each area has a `*Wrapper.jsx` layout component.
 - `src/components/partials/` — navbars/footers; `src/components/auth/` — forms; `src/components/navBarElements/` — navbar action buttons. Shared app components (`ErrorBoundary.jsx`, `PageLoader.jsx`, `Seo.jsx`, `StatCard.jsx`, `DetailRow.jsx`, `LockedTooltip.jsx`, `DebouncedSearchInput.jsx`, `ConsentBanner.jsx`) live directly in `src/components/` — reuse them instead of redefining per page. `src/hooks/` — shared hooks (`useCursorList`, `useCompanyPermissions`); `src/routes/lazyPages.js` — lazy route imports; `src/analytics/` — PostHog loader, consent store, URL sanitizer.
 - `src/contexts/` — React contexts (server state). `src/config/` — `API/axiosConfig.js` and `plans.js`. `src/utils/` — shared helpers (`notifications.js`). `src/i18n/` — i18next init (`index.js`) + the Spanish catalog (`locales/es.json`).
+- `prop-types` stays a dependency only because ESLint's `react/prop-types` (from `react.configs.recommended`) requires declared props; React 19 ignores `propTypes` at runtime. Declare `propTypes` on every component that takes props.
+- Section components used only by the homepage live in `src/pages/index/sections/`; `src/index.css` holds global rules only.
 - Components export both named and default (`export function LoginForm` + `export default LoginForm`).
 
 ## Routing & guards

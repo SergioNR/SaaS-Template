@@ -13,7 +13,7 @@ import {
   Title,
   Alert,
 } from '@mantine/core';
-import { IconAlertCircle, IconCheck } from '@tabler/icons-react';
+import { IconAlertCircle } from '@tabler/icons-react';
 import classes from './AuthenticationTitle.module.css';
 import apiClient from '../../config/API/axiosConfig.js';
 import { Link } from 'react-router';
@@ -25,7 +25,7 @@ export function LoginForm() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [loginResponse, setLoginResponse] = useState(null);
+  const [loginError, setLoginError] = useState(null);
   //* State drives the button spinner; the ref blocks a second submit that
   //* lands before the re-render (double Enter / double click)
   const [submitting, setSubmitting] = useState(false);
@@ -40,8 +40,7 @@ export function LoginForm() {
 
     submittingRef.current = true;
     setSubmitting(true);
-    // Reset messages
-    setLoginResponse(null);
+    setLoginError(null);
 
     const data = {
       username: e.target.username.value,
@@ -69,20 +68,11 @@ export function LoginForm() {
       //* 422 = malformed email - from the user's point of view the same as
       //* wrong credentials; 429 = login rate limit
       if (status === 401 || status === 422) {
-        setLoginResponse({
-          type: 'error',
-          message: t('auth.login.errors.invalidCredentials'),
-        });
+        setLoginError(t('auth.login.errors.invalidCredentials'));
       } else if (status === 429) {
-        setLoginResponse({
-          type: 'error',
-          message: t('auth.errors.tooManyAttempts'),
-        });
+        setLoginError(t('auth.errors.tooManyAttempts'));
       } else {
-        setLoginResponse({
-          type: 'error',
-          message: t('auth.login.errors.internal'),
-        });
+        setLoginError(t('auth.login.errors.internal'));
       }
     }
   };
@@ -100,13 +90,9 @@ export function LoginForm() {
         </Anchor>
       </Text>
 
-      {loginResponse && (
-        <Alert
-          icon={loginResponse.type === 'error' ? <IconAlertCircle size={16} /> : <IconCheck size={16} />}
-          color={loginResponse.type === 'error' ? 'red' : 'green'}
-          mt={20}
-        >
-          {loginResponse.message}
+      {loginError && (
+        <Alert icon={<IconAlertCircle size={16} />} color="red" mt={20}>
+          {loginError}
         </Alert>
       )}
 
