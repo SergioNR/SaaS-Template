@@ -21,7 +21,7 @@ import {
   IconUsers,
 } from '@tabler/icons-react';
 import PropTypes from 'prop-types';
-import apiClient from '../../config/API/axiosConfig.mjs';
+import apiClient from '../../config/API/axiosConfig.js';
 import Seo from '../../components/Seo.jsx';
 import { formatDateTime } from '../../utils/formatDate.js';
 

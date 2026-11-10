@@ -14,7 +14,7 @@ import {
   Title,
 } from '@mantine/core';
 import { IconSearch } from '@tabler/icons-react';
-import apiClient from '../../config/API/axiosConfig.mjs';
+import apiClient from '../../config/API/axiosConfig.js';
 import Seo from '../../components/Seo.jsx';
 import SubscriptionStatusBadge from '../../components/shared/SubscriptionStatusBadge.jsx';
 import { notifyError } from '../../utils/notifications.js';

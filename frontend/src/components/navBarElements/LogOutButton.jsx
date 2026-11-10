@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { UnstyledButton } from '@mantine/core';
-import apiClient from '../../config/API/axiosConfig.mjs';
+import apiClient from '../../config/API/axiosConfig.js';
 import { usePostHog } from 'posthog-js/react';
 import { IconLogout } from '@tabler/icons-react';
 import classes from '../partials/AreaShell.module.css';

@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import apiClient from '../../config/API/axiosConfig.mjs';
+import apiClient from '../../config/API/axiosConfig.js';
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import {

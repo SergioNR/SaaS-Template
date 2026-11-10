@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import PropTypes from 'prop-types';
-import apiClient from '../config/API/axiosConfig.mjs';
+import apiClient from '../config/API/axiosConfig.js';
 import { SubscriptionContext } from './useSubscription.js';
 
 export const SubscriptionProvider = ({ children }) => {

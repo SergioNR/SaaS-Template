@@ -15,7 +15,7 @@ import {
 } from '@mantine/core';
 import classes from './ForgotPassword.module.css';
 import { Link } from 'react-router';
-import apiClient from '../../config/API/axiosConfig.mjs';
+import apiClient from '../../config/API/axiosConfig.js';
 import { useState } from 'react';
 import Seo from '../Seo.jsx';
 

@@ -17,7 +17,7 @@ import {
 } from '@mantine/core';
 import { IconArrowLeft } from '@tabler/icons-react';
 import PropTypes from 'prop-types';
-import apiClient from '../../config/API/axiosConfig.mjs';
+import apiClient from '../../config/API/axiosConfig.js';
 import Seo from '../../components/Seo.jsx';
 import SubscriptionStatusBadge from '../../components/shared/SubscriptionStatusBadge.jsx';
 import { formatDate, formatDateTime } from '../../utils/formatDate.js';

@@ -13,9 +13,7 @@
   "scripts": {
     "build": "vite build",
     "start:local": "vite",
-    "docker-build:local": "docker build --platform=linux/amd64 --build-arg VITE_API_BASE_URL=http://localhost:3000 --build-arg VITE_SITE_BASE_URL=http://localhost:8080 --build-arg VITE_PUBLIC_POSTHOG_KEY -t expressjs-template-front:local .",
-    "docker-build:prod": "docker build --platform=linux/amd64 --build-arg VITE_API_BASE_URL --build-arg VITE_PUBLIC_POSTHOG_KEY --build-arg VITE_SITE_BASE_URL -t expressjs-template-front:latest . && docker push expressjs-template-front:latest",
-    "docker-build:dev": "docker build --platform=linux/amd64 --build-arg VITE_API_BASE_URL --build-arg VITE_PUBLIC_POSTHOG_KEY --build-arg VITE_SITE_BASE_URL -t expressjs-template-front:next . && docker push expressjs-template-front:next"
+    "lint": "eslint ."
   },
   "dependencies": {
     "@mantine/core": "^9.7.3",

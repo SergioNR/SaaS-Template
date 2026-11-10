@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { useState } from 'react';
-import apiClient from '../../config/API/axiosConfig.mjs';
+import apiClient from '../../config/API/axiosConfig.js';
 import { Card, Button, TextInput, Text, Alert, Box } from '@mantine/core';
 import { IconAlertCircle } from '@tabler/icons-react';
 import { notifySuccess } from '../../utils/notifications.js';

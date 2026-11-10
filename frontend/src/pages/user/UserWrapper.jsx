@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router';
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import apiClient from '../../config/API/axiosConfig.mjs';
+import apiClient from '../../config/API/axiosConfig.js';
 import { usePostHog } from 'posthog-js/react';
 import {
   IconHomeFilled,

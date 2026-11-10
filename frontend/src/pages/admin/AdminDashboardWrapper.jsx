@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router';
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { IconLayoutDashboard, IconUsers, IconBuilding } from '@tabler/icons-react';
-import apiClient from '../../config/API/axiosConfig.mjs';
+import apiClient from '../../config/API/axiosConfig.js';
 import PageLoader from '../../components/PageLoader.jsx';
 import SessionCheckError from '../../components/SessionCheckError.jsx';
 import AreaShell from '../../components/partials/AreaShell.jsx';

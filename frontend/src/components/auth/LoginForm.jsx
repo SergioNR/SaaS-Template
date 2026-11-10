@@ -15,7 +15,7 @@ import {
 } from '@mantine/core';
 import { IconAlertCircle, IconCheck } from '@tabler/icons-react';
 import classes from './AuthenticationTitle.module.css';
-import apiClient from '../../config/API/axiosConfig.mjs';
+import apiClient from '../../config/API/axiosConfig.js';
 import { Link } from 'react-router';
 import Seo from '../Seo.jsx';
 

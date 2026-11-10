@@ -23,15 +23,11 @@ The app expects the backend API to be running (see `../backend/README.md`). Copy
 | --- | --- |
 | `npm run start:local` | Start the Vite dev server locally |
 | `npm run build` | Build the production bundle (`dist/`) |
-| `npm run docker-build:local` | Build a local Docker image |
-| `npm run docker-build:prod` | Build and push the `latest` Docker image |
-| `npm run docker-build:dev` | Build and push the `next` Docker image |
-
-Adapt the image names in these scripts to your own Docker registry.
+| `npm run lint` | Lint the package with ESLint |
 
 ## Environment variables
 
-Because the app is built with Vite, all `VITE_*` variables are baked in at build time and must be provided as `--build-arg`s when building the Docker image (see `Dockerfile`). The `docker-build:prod`/`docker-build:dev` scripts forward them from your shell environment (`export VITE_API_BASE_URL=...` first); the image build fails if a required one is missing. An example list lives in `.env.example`.
+Because the app is built with Vite, all `VITE_*` variables are baked in at build time and must be provided as `--build-arg`s when building the Docker image (see `Dockerfile`). The image build fails if a required one is missing. An example list lives in `.env.example`.
 
 | Variable | When | Purpose |
 | --- | --- | --- |
@@ -45,4 +41,11 @@ Because the app is built with Vite, all `VITE_*` variables are baked in at build
 
 The web app is packaged in a Docker image: an unprivileged nginx (`nginxinc/nginx-unprivileged`, runs as non-root) serving the built bundle on **port 8080**. The server config lives in `nginx/*.template` and is rendered with `envsubst` at container start (SPA history fallback, security headers incl. CSP, `no-cache` for `index.html`, immutable caching for `/assets/`, gzip).
 
-`npm run docker-build:local` builds the image locally; run it with `docker run --rm -p 8080:8080 expressjs-template-front:local` and open http://localhost:8080. `docker-build:prod` and `docker-build:dev` build and push the `latest` and `next` tags to Docker Hub; adapt the image names in these scripts to your own registry.
+Published images are built and pushed by CI (`.github/workflows/`) on `latest`/`next`. To try the image locally:
+
+```bash
+docker build --build-arg VITE_API_BASE_URL=http://localhost:3000 --build-arg VITE_SITE_BASE_URL=http://localhost:8080 -t expressjs-template-front:local .
+docker run --rm -p 8080:8080 expressjs-template-front:local
+```
+
+then open http://localhost:8080.

@@ -19,7 +19,7 @@ import {
   Tooltip,
 } from '@mantine/core';
 import { IconSearch, IconTrash } from '@tabler/icons-react';
-import apiClient from '../../config/API/axiosConfig.mjs';
+import apiClient from '../../config/API/axiosConfig.js';
 import Seo from '../../components/Seo.jsx';
 import { notifyError, notifySuccess } from '../../utils/notifications.js';
 import { formatDateTime } from '../../utils/formatDate.js';
