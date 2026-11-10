@@ -4,7 +4,6 @@ import './config/environmentGuard.js';
 import express from 'express';
 import passport from 'passport';
 import { createServer } from 'http';
-import { cookieParserMiddleware } from './middlewares/cookieParser.js';
 import { corsMiddleware } from './middlewares/cors.js';
 import { helmetMiddleware } from './middlewares/helmet.js';
 import { apiRouter } from './API/apiRouter.js';
@@ -68,8 +67,6 @@ if (process.env.DEPLOY_ENVIRONMENT !== 'localhost') app.use(slowLimiter);
 
 //* CSRF protection - state-changing requests must come from an allowed origin
 app.use(checkOrigin());
-
-app.use(cookieParserMiddleware);
 
 //* Only JSON bodies are accepted on the API (no urlencoded/form parsing, so
 //* cross-site HTML forms cannot submit to it)

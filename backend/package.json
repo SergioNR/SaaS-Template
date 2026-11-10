@@ -4,7 +4,7 @@
         "node": ">=26"
     },
     "description": "Express.js server template with authentication, billing, and database integrations",
-    "main": "app.js",
+    "main": "server/app.js",
     "private": true,
     "version": "1.0.0",
     "type": "module",
@@ -26,7 +26,6 @@
         "@prisma/client": "^7.10.1",
         "@quixo3/prisma-session-store": "^3.1.13",
         "bcrypt": "^6.0.0",
-        "cookie-parser": "^1.4.7",
         "cors": "^2.8.5",
         "cron": "^4.3.4",
         "dotenv": "^18.0.8",
@@ -38,7 +37,6 @@
         "helmet": "^8.1.0",
         "passport": "^0.7.0",
         "passport-local": "^1.0.0",
-        "pg": "^8.23.1",
         "pino": "^10.1.0",
         "pino-http": "^11.0.0",
         "posthog-node": "^5.13.2",
@@ -65,7 +63,6 @@
         "test": "tests"
     },
     "overrides": {
-        "deepmerge-ts": "^8.0.0",
         "argparse": "^2.0.0",
         "eslint-config-airbnb-base": {
             "eslint": "$eslint"
