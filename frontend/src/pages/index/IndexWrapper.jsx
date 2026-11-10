@@ -1,17 +1,17 @@
-import { Outlet } from 'react-router'
-import SiteNavBar from '../../components/partials/SiteNavBar'
+import { Outlet } from 'react-router';
+import SiteNavBar from '../../components/partials/SiteNavBar';
 import { SiteFooter } from '../../components/partials/SiteFooter';
 
 const IndexWrapper = () => {
-    return (
-        <>
-          <SiteNavBar />
+  return (
+    <>
+      <SiteNavBar />
 
-                <Outlet />
+      <Outlet />
 
-            <SiteFooter />
-        </>
-      )
-    };
+      <SiteFooter />
+    </>
+  );
+};
 
 export default IndexWrapper;

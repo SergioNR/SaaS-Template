@@ -1,8 +1,8 @@
-import js from '@eslint/js'
-import globals from 'globals'
-import react from 'eslint-plugin-react'
-import reactHooks from 'eslint-plugin-react-hooks'
-import reactRefresh from 'eslint-plugin-react-refresh'
+import js from '@eslint/js';
+import globals from 'globals';
+import react from 'eslint-plugin-react';
+import reactHooks from 'eslint-plugin-react-hooks';
+import reactRefresh from 'eslint-plugin-react-refresh';
 
 export default [
   { ignores: ['dist'] },
@@ -46,17 +46,15 @@ export default [
         },
         {
           // Backend response bodies: `response.data.message`, `err.response?.data?.message`, ...
-          selector: "MemberExpression[property.name='message'][object.type='MemberExpression'][object.property.name='data']",
+          selector:
+            "MemberExpression[property.name='message'][object.type='MemberExpression'][object.property.name='data']",
           message: 'Never render backend response messages (`*.data.message`) — map status/code to t() keys.',
         },
       ],
       // The codebase fetches on mount in effects (see SubscriptionContext);
       // this rule cannot trace setState past async boundaries and false-flags it
       'react-hooks/set-state-in-effect': 'off',
-      'react-refresh/only-export-components': [
-        'warn',
-        { allowConstantExport: true },
-      ],
+      'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
     },
   },
-]
+];

@@ -1,17 +1,16 @@
-import { Outlet } from "react-router";
-import AuthNavBar from "../../components/partials/AuthNavBar";
-import { SiteFooter } from "../../components/partials/SiteFooter";
+import { Outlet } from 'react-router';
+import AuthNavBar from '../../components/partials/AuthNavBar';
+import { SiteFooter } from '../../components/partials/SiteFooter';
 
 const AuthWrapper = () => {
-    return (
-        <>
-        <AuthNavBar />
- 
-        <Outlet />
-        <SiteFooter />
- 
-        </>
-    );
-    };
+  return (
+    <>
+      <AuthNavBar />
 
-    export default AuthWrapper;
+      <Outlet />
+      <SiteFooter />
+    </>
+  );
+};
+
+export default AuthWrapper;

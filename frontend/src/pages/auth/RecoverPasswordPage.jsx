@@ -1,14 +1,7 @@
-import ForgotPasswordForm from "../../components/auth/RecoverPasswordForm";
-
+import ForgotPasswordForm from '../../components/auth/RecoverPasswordForm';
 
 const RecoverPasswordPage = () => {
-    
-    
-
-    return (
-        <ForgotPasswordForm />
-    )
-
+  return <ForgotPasswordForm />;
 };
 
 export default RecoverPasswordPage;
