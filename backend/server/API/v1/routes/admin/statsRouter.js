@@ -39,16 +39,8 @@ export const statsRouter = Router();
  *                     activeSessions:
  *                       type: integer
  *       401:
- *         description: Not authenticated
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorMessage'
+ *         $ref: '#/components/responses/Unauthorized'
  *       403:
- *         description: Missing permissions
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorMessage'
+ *         $ref: '#/components/responses/Forbidden'
  */
 statsRouter.get('/', getAdminStats);

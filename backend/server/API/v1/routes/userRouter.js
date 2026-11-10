@@ -48,17 +48,9 @@ export const userRouter = Router();
  *                       format: date-time
  *                       nullable: true
  *       401:
- *         description: Not authenticated
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorMessage'
+ *         $ref: '#/components/responses/Unauthorized'
  *       404:
- *         description: User not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorMessage'
+ *         $ref: '#/components/responses/NotFound'
  */
 userRouter.get('/', getUserProfile);
 
@@ -105,23 +97,11 @@ userRouter.get('/', getUserProfile);
  *                       enum: [AUTH_CURRENT_PASSWORD_INCORRECT, AUTH_PASSWORD_UNCHANGED]
  *                       description: Machine-readable reason distinguishing the two 400 cases
  *       401:
- *         description: Not authenticated
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorMessage'
+ *         $ref: '#/components/responses/Unauthorized'
  *       404:
- *         description: User not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorMessage'
+ *         $ref: '#/components/responses/NotFound'
  *       422:
- *         description: Validation errors
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ValidationError'
+ *         $ref: '#/components/responses/ValidationError'
  */
 userRouter.patch('/password', checkSchema(updatePasswordSchema), sanitizerResult, updateUserPassword);
 
@@ -142,11 +122,7 @@ userRouter.patch('/password', checkSchema(updatePasswordSchema), sanitizerResult
  *             schema:
  *               $ref: '#/components/schemas/SuccessMessage'
  *       401:
- *         description: Not authenticated
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorMessage'
+ *         $ref: '#/components/responses/Unauthorized'
  *       404:
  *         description: User no longer exists
  *         content:

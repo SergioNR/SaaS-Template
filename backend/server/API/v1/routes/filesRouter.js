@@ -62,17 +62,9 @@ const fileIdParamValidation = [
  *                   format: uri
  *                   description: Presigned PUT URL (valid for a few minutes)
  *       401:
- *         description: Not authenticated
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorMessage'
+ *         $ref: '#/components/responses/Unauthorized'
  *       403:
- *         description: Missing permissions
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorMessage'
+ *         $ref: '#/components/responses/Forbidden'
  *       409:
  *         description: Too many unconfirmed uploads for the company (code `FILE_PENDING_UPLOAD_LIMIT`) - confirm them or wait for the hourly cleanup
  *         content:
@@ -128,17 +120,9 @@ filesRouter.post('/', checkCompanyPermission('files.upload'), createUploadValida
  *             schema:
  *               $ref: '#/components/schemas/ErrorMessage'
  *       401:
- *         description: Not authenticated
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorMessage'
+ *         $ref: '#/components/responses/Unauthorized'
  *       403:
- *         description: Missing permissions
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorMessage'
+ *         $ref: '#/components/responses/Forbidden'
  *       404:
  *         description: File does not exist in the caller's company
  *         content:
@@ -158,11 +142,7 @@ filesRouter.post('/', checkCompanyPermission('files.upload'), createUploadValida
  *                       type: string
  *                       enum: [FILE_UPLOAD_MISSING, FILE_UPLOAD_EXPIRED]
  *       422:
- *         description: Validation errors
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ValidationError'
+ *         $ref: '#/components/responses/ValidationError'
  */
 filesRouter.post('/:fileId/confirm', checkCompanyPermission('files.upload'), fileIdParamValidation, confirmFileUpload);
 
@@ -176,21 +156,8 @@ filesRouter.post('/:fileId/confirm', checkCompanyPermission('files.upload'), fil
  *     security:
  *       - sessionCookie: []
  *     parameters:
- *       - in: query
- *         name: limit
- *         required: false
- *         schema:
- *           type: integer
- *           minimum: 1
- *           maximum: 100
- *         description: Page size (default 50, capped at 100)
- *       - in: query
- *         name: cursor
- *         required: false
- *         schema:
- *           type: string
- *           format: uuid
- *         description: File id to start after (the previous response's nextCursor)
+ *       - $ref: '#/components/parameters/LimitQuery'
+ *       - $ref: '#/components/parameters/CursorQuery'
  *     responses:
  *       200:
  *         description: Files retrieved successfully
@@ -208,23 +175,11 @@ filesRouter.post('/:fileId/confirm', checkCompanyPermission('files.upload'), fil
  *                   format: uuid
  *                   description: Present only when another page exists
  *       401:
- *         description: Not authenticated
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorMessage'
+ *         $ref: '#/components/responses/Unauthorized'
  *       403:
- *         description: Missing permissions
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorMessage'
+ *         $ref: '#/components/responses/Forbidden'
  *       422:
- *         description: Validation errors
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ValidationError'
+ *         $ref: '#/components/responses/ValidationError'
  */
 filesRouter.get('/', checkCompanyPermission('files.view'), filesListValidation, getFiles);
 
@@ -258,17 +213,9 @@ filesRouter.get('/', checkCompanyPermission('files.view'), filesListValidation, 
  *                   format: uri
  *                   description: Presigned GET URL (valid for a few minutes)
  *       401:
- *         description: Not authenticated
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorMessage'
+ *         $ref: '#/components/responses/Unauthorized'
  *       403:
- *         description: Missing permissions
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorMessage'
+ *         $ref: '#/components/responses/Forbidden'
  *       404:
  *         description: File does not exist in the caller's company, or its upload is not confirmed yet
  *         content:
@@ -276,11 +223,7 @@ filesRouter.get('/', checkCompanyPermission('files.view'), filesListValidation, 
  *             schema:
  *               $ref: '#/components/schemas/ErrorMessage'
  *       422:
- *         description: Validation errors
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ValidationError'
+ *         $ref: '#/components/responses/ValidationError'
  */
 filesRouter.get('/:fileId/download', checkCompanyPermission('files.view'), fileIdParamValidation, getFileDownloadUrl);
 
@@ -313,17 +256,9 @@ filesRouter.get('/:fileId/download', checkCompanyPermission('files.view'), fileI
  *                   type: string
  *                   format: uuid
  *       401:
- *         description: Not authenticated
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorMessage'
+ *         $ref: '#/components/responses/Unauthorized'
  *       403:
- *         description: Missing permissions
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorMessage'
+ *         $ref: '#/components/responses/Forbidden'
  *       404:
  *         description: File does not exist in the caller's company
  *         content:
@@ -331,11 +266,7 @@ filesRouter.get('/:fileId/download', checkCompanyPermission('files.view'), fileI
  *             schema:
  *               $ref: '#/components/schemas/ErrorMessage'
  *       422:
- *         description: Validation errors
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ValidationError'
+ *         $ref: '#/components/responses/ValidationError'
  */
 filesRouter.delete('/:fileId', checkCompanyPermission('files.delete'), fileIdParamValidation, deleteOneFileById);
 

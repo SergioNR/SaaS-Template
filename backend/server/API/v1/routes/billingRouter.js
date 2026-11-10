@@ -55,11 +55,7 @@ const requireBillingManage = checkCompanyPermission('billing.manage');
  *                       type: boolean
  *                       description: Whether the company has a Stripe customer id - false until the first checkout session is started
  *       401:
- *         description: Not authenticated
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorMessage'
+ *         $ref: '#/components/responses/Unauthorized'
  *       404:
  *         description: No subscription found for the company
  *         content:
@@ -86,11 +82,7 @@ billingRouter.get('/', getCompanySubscriptionData);
  *             schema:
  *               $ref: '#/components/schemas/SuccessMessage'
  *       401:
- *         description: Not authenticated
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorMessage'
+ *         $ref: '#/components/responses/Unauthorized'
  *       403:
  *         description: Missing the `billing.manage` company permission
  *         content:
@@ -141,11 +133,7 @@ billingRouter.post('/', requireBillingManage, createCompanyBillingId);
  *                   type: string
  *                   format: uri
  *       401:
- *         description: Not authenticated
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorMessage'
+ *         $ref: '#/components/responses/Unauthorized'
  *       403:
  *         description: Missing the `billing.manage` company permission
  *         content:
@@ -194,11 +182,7 @@ billingRouter.post('/checkout-session', requireBillingManage, checkSchema(checko
  *                   type: string
  *                   format: uri
  *       401:
- *         description: Not authenticated
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorMessage'
+ *         $ref: '#/components/responses/Unauthorized'
  *       403:
  *         description: Missing the `billing.manage` company permission
  *         content:

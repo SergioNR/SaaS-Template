@@ -26,32 +26,13 @@ const companyListQueryValidation = [
  *   get:
  *     tags: [Admin]
  *     summary: List all companies (superadmin only)
- *     description: Returns the companies in the database, newest first, with cursor-based pagination, their user count and their subscription (public fields). The Stripe customer id is never exposed - only a `stripeLinked` boolean.
+ *     description: Returns the companies in the database, newest first, with cursor-based pagination (`search` matches the company name), their user count and their subscription (public fields). The Stripe customer id is never exposed - only a `stripeLinked` boolean.
  *     security:
  *       - sessionCookie: []
  *     parameters:
- *       - in: query
- *         name: search
- *         required: false
- *         schema:
- *           type: string
- *           maxLength: 100
- *         description: Optional case-insensitive partial match on the company name.
- *       - in: query
- *         name: limit
- *         required: false
- *         schema:
- *           type: integer
- *           default: 50
- *           maximum: 100
- *         description: Page size.
- *       - in: query
- *         name: cursor
- *         required: false
- *         schema:
- *           type: string
- *           format: uuid
- *         description: Company id to paginate after (the `nextCursor` value of the previous page).
+ *       - $ref: '#/components/parameters/SearchQuery'
+ *       - $ref: '#/components/parameters/LimitQuery'
+ *       - $ref: '#/components/parameters/CursorQuery'
  *     responses:
  *       200:
  *         description: Companies retrieved successfully
@@ -71,23 +52,11 @@ const companyListQueryValidation = [
  *                   type: string
  *                   nullable: true
  *       401:
- *         description: Not authenticated
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorMessage'
+ *         $ref: '#/components/responses/Unauthorized'
  *       403:
- *         description: Missing permissions
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorMessage'
+ *         $ref: '#/components/responses/Forbidden'
  *       422:
- *         description: Validation errors
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ValidationError'
+ *         $ref: '#/components/responses/ValidationError'
  */
 companiesRouter.get('/', companyListQueryValidation, getAllCompanies);
 
@@ -133,28 +102,12 @@ companiesRouter.get('/', companyListQueryValidation, getAllCompanies);
  *                       items:
  *                         type: object
  *       404:
- *         description: Company not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorMessage'
+ *         $ref: '#/components/responses/NotFound'
  *       401:
- *         description: Not authenticated
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorMessage'
+ *         $ref: '#/components/responses/Unauthorized'
  *       403:
- *         description: Missing permissions
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorMessage'
+ *         $ref: '#/components/responses/Forbidden'
  *       422:
- *         description: Validation errors
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ValidationError'
+ *         $ref: '#/components/responses/ValidationError'
  */
 companiesRouter.get('/:companyId', companyIdParamValidation, getOneCompanyById);

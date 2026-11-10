@@ -29,6 +29,97 @@ const swaggerOptions = {
       { name: 'Webhooks', description: 'Inbound third-party webhooks' },
     ],
     components: {
+      //* Shared query parameters - the same rules utils/validators/listQueryFields.js
+      //* enforces and utils/cursorPagination.js applies
+      parameters: {
+        SearchQuery: {
+          in: 'query',
+          name: 'search',
+          required: false,
+          schema: {
+            type: 'string',
+            maxLength: 100,
+          },
+          description: 'Optional case-insensitive partial match (trimmed) - the searched field is named in the endpoint description',
+        },
+        LimitQuery: {
+          in: 'query',
+          name: 'limit',
+          required: false,
+          schema: {
+            type: 'integer',
+            minimum: 1,
+            maximum: 100,
+            default: 50,
+          },
+          description: 'Page size (default 50, capped at 100)',
+        },
+        CursorQuery: {
+          in: 'query',
+          name: 'cursor',
+          required: false,
+          schema: {
+            type: 'string',
+            format: 'uuid',
+          },
+          description: 'Row id to start after (the `nextCursor` of the previous page)',
+        },
+      },
+      //* Shared generic responses. OpenAPI 3.0 ignores siblings of a $ref, so
+      //* endpoint-specific descriptions (stable `code` enums, limiter-specific
+      //* 429s, per-entity 404s) stay inline in the route blocks
+      responses: {
+        Unauthorized: {
+          description: 'Not authenticated - no valid session cookie',
+          content: {
+            'application/json': {
+              schema: {
+                $ref: '#/components/schemas/ErrorMessage',
+              },
+            },
+          },
+        },
+        Forbidden: {
+          description: 'Missing permissions - the caller lacks the platform role, company membership or company permission the route requires',
+          content: {
+            'application/json': {
+              schema: {
+                $ref: '#/components/schemas/ErrorMessage',
+              },
+            },
+          },
+        },
+        NotFound: {
+          description: 'The resource does not exist',
+          content: {
+            'application/json': {
+              schema: {
+                $ref: '#/components/schemas/ErrorMessage',
+              },
+            },
+          },
+        },
+        ValidationError: {
+          description: 'Validation errors',
+          content: {
+            'application/json': {
+              schema: {
+                $ref: '#/components/schemas/ValidationError',
+              },
+            },
+          },
+        },
+        TooManyRequests: {
+          description: 'Rate limited - the route\'s limiter budget is exhausted (see the README rate-limit table)',
+          content: {
+            'application/json': {
+              schema: {
+                $ref: '#/components/schemas/ErrorMessage',
+              },
+            },
+          },
+        },
+      },
       securitySchemes: {
         sessionCookie: {
           type: 'apiKey',

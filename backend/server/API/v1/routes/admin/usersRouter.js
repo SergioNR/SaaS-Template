@@ -28,7 +28,7 @@ const userListQueryValidation = [
  *   get:
  *     tags: [Admin]
  *     summary: List all users (superadmin only)
- *     description: Returns the users in the database, newest first, with cursor-based pagination. Requires an authenticated session with the `superadmin` platform role.
+ *     description: Returns the users in the database, newest first, with cursor-based pagination. `search` matches the user email. Requires an authenticated session with the `superadmin` platform role.
  *     security:
  *       - sessionCookie: []
  *     parameters:
@@ -39,28 +39,9 @@ const userListQueryValidation = [
  *           type: string
  *           enum: [user, superadmin]
  *         description: Optional filter by role. Any other query parameter is ignored.
- *       - in: query
- *         name: search
- *         required: false
- *         schema:
- *           type: string
- *           maxLength: 100
- *         description: Optional case-insensitive partial match on the user email.
- *       - in: query
- *         name: limit
- *         required: false
- *         schema:
- *           type: integer
- *           default: 50
- *           maximum: 100
- *         description: Page size.
- *       - in: query
- *         name: cursor
- *         required: false
- *         schema:
- *           type: string
- *           format: uuid
- *         description: User id to paginate after (the `nextCursor` value of the previous page).
+ *       - $ref: '#/components/parameters/SearchQuery'
+ *       - $ref: '#/components/parameters/LimitQuery'
+ *       - $ref: '#/components/parameters/CursorQuery'
  *     responses:
  *       200:
  *         description: Users retrieved successfully
@@ -80,23 +61,11 @@ const userListQueryValidation = [
  *                   type: string
  *                   nullable: true
  *       401:
- *         description: Not authenticated
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorMessage'
+ *         $ref: '#/components/responses/Unauthorized'
  *       403:
- *         description: Missing permissions
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorMessage'
+ *         $ref: '#/components/responses/Forbidden'
  *       422:
- *         description: Validation errors
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ValidationError'
+ *         $ref: '#/components/responses/ValidationError'
  */
 usersRouter.get('/', userListQueryValidation, getAllUsers);
 
@@ -144,29 +113,13 @@ usersRouter.get('/', userListQueryValidation, getAllUsers);
  *                     activeSessionCount:
  *                       type: integer
  *       404:
- *         description: User not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorMessage'
+ *         $ref: '#/components/responses/NotFound'
  *       401:
- *         description: Not authenticated
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorMessage'
+ *         $ref: '#/components/responses/Unauthorized'
  *       403:
- *         description: Missing permissions
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorMessage'
+ *         $ref: '#/components/responses/Forbidden'
  *       422:
- *         description: Validation errors
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ValidationError'
+ *         $ref: '#/components/responses/ValidationError'
  */
 usersRouter.get('/:userId', userIdParamValidation, getOneUserById);
 
@@ -197,23 +150,11 @@ usersRouter.get('/:userId', userIdParamValidation, getOneUserById);
  *                 userId:
  *                   type: string
  *       401:
- *         description: Not authenticated
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorMessage'
+ *         $ref: '#/components/responses/Unauthorized'
  *       403:
- *         description: Missing permissions
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorMessage'
+ *         $ref: '#/components/responses/Forbidden'
  *       404:
- *         description: User does not exist
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorMessage'
+ *         $ref: '#/components/responses/NotFound'
  *       409:
  *         description: Superadmin tried to delete their own account via the admin endpoint, the user is the last owner of a company with other members (code `LAST_COMPANY_OWNER`), or related DB entries exist (nothing was deleted)
  *         content:
@@ -228,10 +169,6 @@ usersRouter.get('/:userId', userIdParamValidation, getOneUserById);
  *                       enum: [LAST_COMPANY_OWNER]
  *                       description: Only present for the last-owner conflict
  *       422:
- *         description: Validation errors
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ValidationError'
+ *         $ref: '#/components/responses/ValidationError'
  */
 usersRouter.delete('/:userId', userIdParamValidation, deleteOneUserById);

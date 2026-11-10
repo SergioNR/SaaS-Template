@@ -74,11 +74,7 @@ export const authRouter = Router();
  *             schema:
  *               $ref: '#/components/schemas/ErrorMessage'
  *       422:
- *         description: Validation errors
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ValidationError'
+ *         $ref: '#/components/responses/ValidationError'
  *       429:
  *         description: Too many authentication attempts (per IP) or too many failed attempts for this account
  *         content:
@@ -118,17 +114,9 @@ authPublicRouter.post('/login', authLimiter, checkSchema(userLoginValidationSche
  *             schema:
  *               $ref: '#/components/schemas/SuccessMessage'
  *       422:
- *         description: Validation errors
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ValidationError'
+ *         $ref: '#/components/responses/ValidationError'
  *       429:
- *         description: Too many authentication attempts
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorMessage'
+ *         $ref: '#/components/responses/TooManyRequests'
  */
 authPublicRouter.post('/register', authLimiter, checkSchema(createUserValidationSchema), sanitizerResult, registerUser);
 
@@ -174,11 +162,7 @@ authPublicRouter.post('/register', authLimiter, checkSchema(createUserValidation
  *             schema:
  *               $ref: '#/components/schemas/ErrorMessage'
  *       429:
- *         description: Too many authentication attempts
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorMessage'
+ *         $ref: '#/components/responses/TooManyRequests'
  */
 authPublicRouter.get('/password-reset', authLimiter, checkSchema(passwordResetTokenQuerySchema), sanitizerResult, checkPasswordResetTokenValidity);
 
@@ -203,11 +187,7 @@ authPublicRouter.get('/password-reset', authLimiter, checkSchema(passwordResetTo
  *             schema:
  *               $ref: '#/components/schemas/SuccessMessage'
  *       422:
- *         description: Validation errors
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ValidationError'
+ *         $ref: '#/components/responses/ValidationError'
  *       429:
  *         description: Too many password reset requests
  *         content:
@@ -244,17 +224,9 @@ authPublicRouter.post('/password-reset', passwordResetLimiter, checkSchema(reque
  *             schema:
  *               $ref: '#/components/schemas/ErrorMessage'
  *       422:
- *         description: Validation errors
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ValidationError'
+ *         $ref: '#/components/responses/ValidationError'
  *       429:
- *         description: Too many authentication attempts
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorMessage'
+ *         $ref: '#/components/responses/TooManyRequests'
  */
 authPublicRouter.patch('/password-reset', authLimiter, checkSchema(recoverPasswordSchema), sanitizerResult, updateRecoveredUserPassword);
 
@@ -350,17 +322,9 @@ authPublicRouter.get('/invite', authLimiter, checkSchema(teamInviteTokenQuerySch
  *             schema:
  *               $ref: '#/components/schemas/ErrorMessage'
  *       422:
- *         description: Validation errors
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ValidationError'
+ *         $ref: '#/components/responses/ValidationError'
  *       429:
- *         description: Too many authentication attempts
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorMessage'
+ *         $ref: '#/components/responses/TooManyRequests'
  */
 authPublicRouter.post('/invite-accept', authLimiter, checkSchema(acceptTeamInviteSchema), sanitizerResult, acceptTeamInvite);
 
@@ -433,17 +397,9 @@ authPrivateRouter.post('/logout', logoutUser);
  *                       enum: [AUTH_CURRENT_PASSWORD_INCORRECT, AUTH_PASSWORD_UNCHANGED]
  *                       description: Machine-readable reason distinguishing the two 400 cases
  *       404:
- *         description: User not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorMessage'
+ *         $ref: '#/components/responses/NotFound'
  *       422:
- *         description: Validation errors
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ValidationError'
+ *         $ref: '#/components/responses/ValidationError'
  */
 //* Deprecated alias of PATCH /api/v1/user/password (same handler) - remove once
 //* every client calls the user route
