@@ -147,6 +147,62 @@ describe('Telegram alert dedupe', () => {
   });
 });
 
+describe('Telegram alert error code', () => {
+  beforeEach(() => {
+    resetAlertDedupe();
+    jest.clearAllMocks();
+  });
+
+  const lastAlert = () => sendTelegramMessage.mock.calls.at(-1)[1];
+
+  it('shows the code and the message for a normal error', () => {
+    logError('request failed', Object.assign(new Error('Unique constraint failed'), { code: 'P2002' }));
+
+    expect(lastAlert()).toContain('<b>Error Code</b>: P2002');
+    expect(lastAlert()).toContain('<b>Error Details</b>: Unique constraint failed');
+  });
+
+  it('falls back to the code when the message is only a Prisma invocation header', () => {
+    const error = Object.assign(new Error('\nInvalid `prisma.file.findMany()` invocation:\n\n'), {
+      name: 'PrismaClientKnownRequestError',
+      code: 'ECONNREFUSED',
+    });
+
+    logError('request failed', error);
+
+    expect(lastAlert()).toContain('<b>Error Name</b>: PrismaClientKnownRequestError');
+    expect(lastAlert()).toContain('<b>Error Code</b>: ECONNREFUSED');
+    expect(lastAlert()).toContain('<b>Error Details</b>: ECONNREFUSED');
+  });
+
+  it('falls back to the code when the message is empty', () => {
+    logError('request failed', Object.assign(new Error(''), { code: 'ECONNRESET' }));
+
+    expect(lastAlert()).toContain('<b>Error Details</b>: ECONNRESET');
+  });
+
+  it('shows N/A as the code of an error without one', () => {
+    logError('request failed', new Error('boom'));
+
+    expect(lastAlert()).toContain('<b>Error Code</b>: N/A');
+    expect(lastAlert()).toContain('<b>Error Details</b>: boom');
+  });
+
+  it('escapes the code', () => {
+    logError('request failed', Object.assign(new Error('x'), { code: '<b>' }));
+
+    expect(lastAlert()).toContain('<b>Error Code</b>: &lt;b&gt;');
+  });
+
+  it('keys the dedupe on the code - same empty message, different codes both alert', () => {
+    logError('request failed', Object.assign(new Error(''), { code: 'ECONNREFUSED' }));
+    logError('request failed', Object.assign(new Error(''), { code: 'ETIMEDOUT' }));
+    logError('request failed', Object.assign(new Error(''), { code: 'ETIMEDOUT' }));
+
+    expect(sendTelegramMessage).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe('escapeHtml', () => {
   it('escapes HTML special characters and stringifies objects', () => {
     expect(escapeHtml('<b>&</b>')).toBe('&lt;b&gt;&amp;&lt;/b&gt;');
