@@ -5,7 +5,7 @@ Rules describe how this codebase is written today. Follow them for all new and m
 ## Stack & runtime
 
 - Node.js >= 26, ESM only (`"type": "module"`), plain `.js` executed via `tsx`.
-- ESLint 10 flat config (`eslint.config.mjs`) extending `airbnb-base`: 2-space indent, single quotes, semicolons, trailing commas. Run `npx eslint .` from `backend/`.
+- ESLint 10 flat config (`eslint.config.js`) extending `airbnb-base`: 2-space indent, single quotes, semicolons, trailing commas, Node globals only (no `globals.browser`), `no-console: error`. `no-await-in-loop` / `no-restricted-syntax` are off only for specs, `tests/helpers/**` and the files listed in the config that iterate sequentially - add a file there instead of disabling the rules repo-wide. Run `npx eslint .` from `backend/`.
 - TypeScript is used only for Prisma config (`prisma.config.ts`) and the generated client; server code stays `.js`.
 
 ## Architecture — layer rules (strict)
