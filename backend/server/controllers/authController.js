@@ -21,6 +21,7 @@ import { linkSessionToUser } from '../models/sessionModel.js';
 import { sendResetPasswordTokenToUser } from '../integrations/brevo/transactionalEmails/sendResetPasswordTokenToUser.js';
 import { sendExistingAccountNoticeToUser } from '../integrations/brevo/transactionalEmails/sendExistingAccountNoticeToUser.js';
 import { trackBackground } from '../utils/processLifecycle.js';
+import { isPrismaErrorCode, sendMappedWriteError } from '../utils/prismaErrors.js';
 
 //* Detached from the request: the lookup, token creation and email all run
 //* after the response was sent, so neither the body nor the timing of the
@@ -214,10 +215,10 @@ export const acceptTeamInvite = async (req, res) => {
     //* Concurrent self-registration with the same email can beat the check
     //* above - the unique constraint resolves the race (the invite row is
     //* kept for the same reason as above; the transaction rolled back)
-    if (error.code === 'P2002') {
-      return res.status(409).json({
-        message: 'Email is already registered - Please log in instead',
-      });
+    const alreadyRegistered = { status: 409, message: 'Email is already registered - Please log in instead' };
+
+    if (sendMappedWriteError(res, error, { P2002: alreadyRegistered })) {
+      return res;
     }
 
     throw error;
@@ -321,7 +322,7 @@ const registerUserInBackground = async (email, password, companyName) => {
   } catch (error) {
     //* Concurrent registrations can beat the existence check - the unique
     //* constraint resolves the race, nothing else to do
-    if (error.code === 'P2002') {
+    if (isPrismaErrorCode(error, 'P2002')) {
       return;
     }
 

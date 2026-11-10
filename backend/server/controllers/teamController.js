@@ -24,6 +24,7 @@ import { canGrantRole, outranksAllRoles, rolesGrantableBy } from '../utils/compa
 import { logAudit, logError } from '../config/loggerFunctions.js';
 import { sendTeamInviteToUser } from '../integrations/brevo/transactionalEmails/sendTeamInviteToUser.js';
 import { trackBackground } from '../utils/processLifecycle.js';
+import { sendMappedWriteError } from '../utils/prismaErrors.js';
 
 const targetRoleNames = (targetMember) => targetMember.UserRoles.map((userRole) => userRole.Role.name);
 
@@ -159,8 +160,8 @@ export const createTeamInvite = async (req, res) => {
   } catch (error) {
     //* A concurrent invite for the same company+email beat the pending check
     //* - the unique constraint resolves the race
-    if (error.code === 'P2002') {
-      return res.status(409).json(PENDING_INVITE_CONFLICT);
+    if (sendMappedWriteError(res, error, { P2002: { status: 409, ...PENDING_INVITE_CONFLICT } })) {
+      return res;
     }
 
     throw error;
@@ -221,10 +222,10 @@ export const resendTeamInvite = async (req, res) => {
     //* window resets and the invite id (and original inviter) stay the same
     rotation = await rotateTeamInviteTokenInDb(inviteId, companyId);
   } catch (error) {
-    if (error.code === 'P2002') {
-      return res.status(409).json({
-        message: 'The invite could not be rotated - please try again',
-      });
+    const rotationConflict = { status: 409, message: 'The invite could not be rotated - please try again' };
+
+    if (sendMappedWriteError(res, error, { P2002: rotationConflict })) {
+      return res;
     }
 
     throw error;

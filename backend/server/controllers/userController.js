@@ -2,6 +2,11 @@ import { getUserById } from '../models/userModel.js';
 import { SESSION_COOKIE_NAME, SESSION_COOKIE_OPTIONS } from '../config/security.js';
 import { deleteUserAndCleanup } from '../utils/userDeletionCleanup.js';
 import { logAudit } from '../config/loggerFunctions.js';
+import { sendMappedWriteError } from '../utils/prismaErrors.js';
+
+const USER_DELETION_WRITE_ERRORS = {
+  P2003: { status: 409, message: 'User deletion failed - Related DB entries exist' },
+};
 
 export const getUserProfile = async (req, res) => {
   const { id: userId } = req.user;
@@ -29,11 +34,9 @@ export const deleteUser = async (req, res) => {
     });
   } catch (error) {
     //* Only the DB transaction can throw - post-commit cleanup never does,
-    //* so a 409 here always means nothing was deleted
-    if (error.code === 'P2003') {
-      return res.status(409).json({
-        message: 'User deletion failed - Related DB entries exist',
-      });
+    //* so a mapped 409/404 here always means nothing was deleted
+    if (sendMappedWriteError(res, error, USER_DELETION_WRITE_ERRORS)) {
+      return res;
     }
 
     throw error; //* Forwarded to the global error handler (Express 5)

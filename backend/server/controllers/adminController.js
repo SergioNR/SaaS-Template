@@ -20,8 +20,13 @@ import {
 import { deleteUserAndCleanup } from '../utils/userDeletionCleanup.js';
 import { logAudit } from '../config/loggerFunctions.js';
 import { computeNextCursor, parsePagination } from '../utils/cursorPagination.js';
+import { sendMappedWriteError } from '../utils/prismaErrors.js';
 
 const WEEK_IN_MS = 7 * 24 * 60 * 60 * 1000;
+
+const USER_DELETION_WRITE_ERRORS = {
+  P2003: { status: 409, message: 'User deletion failed - Related DB entries exist' },
+};
 
 export const getAllUsers = async (req, res) => {
   const filters = {};
@@ -99,10 +104,8 @@ export const deleteOneUserById = async (req, res) => {
       protectLastOwner: true,
     });
   } catch (error) {
-    if (error.code === 'P2003') {
-      return res.status(409).json({
-        message: 'User deletion failed - Related DB entries exist',
-      });
+    if (sendMappedWriteError(res, error, USER_DELETION_WRITE_ERRORS)) {
+      return res;
     }
 
     throw error; //* Forwarded to the global error handler (Express 5)
