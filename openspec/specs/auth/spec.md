@@ -39,7 +39,7 @@ The system SHALL reject requests failing validation with 422 and `{ "errors": [.
 
 ### Requirement: Self-service registration creates a company and its owner
 
-The system SHALL accept `POST /api/v1/auth/register` with `username` (email), `password` and optional `companyName` (2-100 characters after trimming). For an unregistered email it SHALL create in one write a company (named, or unnamed), its trial subscription (see `billing`) and the user with platform role `user` holding the `company_owner` company role. Registration SHALL NOT log the user in and SHALL NOT require email verification.
+The system SHALL accept `POST /api/v1/auth/register` with `username` (email), `password` and a required `companyName` (2-100 characters after trimming). For an unregistered email it SHALL create in one write a named company, its trial subscription (see `billing`) and the user with platform role `user` holding the `company_owner` company role. Registration SHALL NOT log the user in and SHALL NOT require email verification.
 
 #### Scenario: New email registers
 
@@ -48,8 +48,8 @@ The system SHALL accept `POST /api/v1/auth/register` with `username` (email), `p
 
 #### Scenario: Company name omitted
 
-- **WHEN** a valid registration omits `companyName`
-- **THEN** the company is created without a name and the registrant still becomes its `company_owner`
+- **WHEN** a registration omits `companyName` or sends it empty
+- **THEN** the API responds 422 and nothing is created
 
 #### Scenario: Blocked email domain
 
@@ -58,7 +58,7 @@ The system SHALL accept `POST /api/v1/auth/register` with `username` (email), `p
 
 #### Scenario: Invalid company name
 
-- **WHEN** `companyName` is sent but is shorter than 2 or longer than 100 characters after trimming, or is not a string
+- **WHEN** `companyName` is shorter than 2 or longer than 100 characters after trimming, or is not a string
 - **THEN** the API responds 422
 
 ### Requirement: Registration is enumeration-safe
@@ -161,7 +161,7 @@ The system SHALL expose `GET /api/v1/auth/session`, which responds 200 with `{ "
 
 ### Requirement: Authenticated auth routes require a session
 
-The system SHALL answer 401 with `{}` to every authenticated route under `/api/v1/auth` (`POST /logout`, `GET /session`, `PATCH /update-user-password`) when the request carries no valid session, and SHALL also answer 401 to unauthenticated requests for paths under `/api/v1/auth` that match no route. Authenticated requests to unknown paths under `/api/v1/auth` SHALL receive 404 with a JSON `message`.
+The system SHALL answer 401 with `{}` to every authenticated route under `/api/v1/auth` (`POST /logout`, `GET /session`, `PATCH /update-user-password`) when the request carries no valid session. Requests to paths under `/api/v1/auth` that match no route SHALL receive 404 with the route-not-found `message`, with or without a session.
 
 #### Scenario: Unknown auth path while authenticated
 
@@ -170,7 +170,12 @@ The system SHALL answer 401 with `{}` to every authenticated route under `/api/v
 
 #### Scenario: Unknown auth path while unauthenticated
 
-- **WHEN** an unauthenticated client requests a path under `/api/v1/auth` that matches no public route
+- **WHEN** an unauthenticated client requests a path under `/api/v1/auth` that matches no route
+- **THEN** the API responds 404 with the route-not-found `message`
+
+#### Scenario: Private route without a session
+
+- **WHEN** an unauthenticated client calls `GET /api/v1/auth/session`
 - **THEN** the API responds 401 with `{}`
 
 ### Requirement: Logout destroys the session
@@ -453,3 +458,17 @@ The SPA SHALL call the logout endpoint and, only after it succeeds, reset sessio
 
 - **WHEN** the logout request fails
 - **THEN** the user stays on the current page and sees an error notice
+
+### Requirement: Emailed links point at the SPA token pages
+
+The system SHALL build the links it emails from the origin of `FRONT_WEB_APP_ORIGIN_URL` (scheme, host and port only): password-reset emails SHALL link to `/auth/restore-password?passwordResetToken=<token>` and invite emails to `/auth/accept-invite?inviteToken=<token>`, with the token URL-encoded, and pass these URLs to the email templates.
+
+#### Scenario: Reset link
+
+- **WHEN** a reset email is sent with `FRONT_WEB_APP_ORIGIN_URL=https://app.example.com/`
+- **THEN** the template receives `https://app.example.com/auth/restore-password?passwordResetToken=<token>`
+
+#### Scenario: Invite link
+
+- **WHEN** an invite email is sent
+- **THEN** the template receives a link to `/auth/accept-invite?inviteToken=<token>` on the front-end origin
