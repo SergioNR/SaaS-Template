@@ -23,7 +23,7 @@
     "@mantine/notifications": "^9.7.3",
     "@tabler/icons-react": "^3.31.0",
     "axios": "^1.7.9",
-    "i18next": "^26.5.3",
+    "i18next": "^27.0.0",
     "posthog-js": "^1.257.2",
     "prop-types": "^15.8.1",
     "react": "^19.0.0",
