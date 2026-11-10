@@ -6,6 +6,8 @@ import {
   getStalePendingFileKeysInDb,
 } from '../models/pendingFileUploadsModel.js';
 import { deleteS3Objects } from '../integrations/s3/deleteS3Objects.js';
+import { ADVISORY_LOCK_KEYS } from '../config/advisoryLockKeys.js';
+import { runExclusiveCronTick } from './exclusiveCronTick.js';
 
 //* Keys whose bucket delete failed on the previous tick. A key that keeps
 //* failing is retried every tick, so it alerts (logError, Telegram) only the
@@ -61,15 +63,14 @@ export const deletePendingFileUploads = async () => {
 };
 
 //* waitForCompletion: an in-flight tick (slow bucket delete) is never
-//* overlapped by the next one, so two runs cannot race on the same keys
+//* overlapped by the next one, and the advisory lock keeps other replicas
+//* from running it concurrently, so two runs cannot race on the same keys
 export const deletePendingFileUploadsScheduler = CronJob.from({
   cronTime: '*/15 * * * *',
-  onTick: async () => {
-    try {
-      await deletePendingFileUploads();
-    } catch (error) {
-      logError('Error deleting stale pending file uploads:', error);
-    }
-  },
+  onTick: () => runExclusiveCronTick(
+    'deletePendingFileUploads',
+    ADVISORY_LOCK_KEYS.cronPendingFileUploads,
+    deletePendingFileUploads,
+  ),
   waitForCompletion: true,
 });

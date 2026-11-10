@@ -19,7 +19,7 @@ Request flow: `server/app.js` → middlewares → routers → controllers → mo
 - `server/middlewares/` — one middleware per file, named export matching the file name. Factories return the handler: `checkAuthentication()`, `checkPermissionByRole(role)`.
 - `server/utils/` — cross-cutting helpers (`userDeletionCleanup.js`) and `utils/validators/` with one express-validator schema file per request shape.
 - `server/config/` — shared singletons and constants (`prismaClient.js`, `stripe.js`, `logger.js`, `planPrices.js`, `security.js`). No request handling.
-- `server/cron/` — `CronJob` instances, started from `cron/jobsContainer.js` (registered in `app.js` via `startCronJobs()`). Errors inside the tick are caught and `logError`-ed, never thrown.
+- `server/cron/` — `CronJob` instances, started from `cron/jobsContainer.js` (registered in `app.js` via `startCronJobs()`). Errors inside the tick are caught and `logError`-ed, never thrown. Every tick runs through `runExclusiveCronTick` (`cron/exclusiveCronTick.js`): a transaction-scoped `pg_try_advisory_xact_lock` (`models/advisoryLockModel.js`, one key per job in `config/advisoryLockKeys.js`) so only one replica runs a job; the others skip the tick.
 - `server/webhooks/` — inbound webhooks; raw-body only (see Security).
 - `server/auth/` — Passport setup; strategies in `auth/strategies/`.
 

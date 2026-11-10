@@ -6,6 +6,7 @@ import {
   logInfo,
 } from '../config/loggerFunctions.js';
 import { lockCompanyForUpdateInDb } from './companyModel.js';
+import { ADVISORY_LOCK_KEYS } from '../config/advisoryLockKeys.js';
 import { deleteUserSessionsInTx } from './sessionModel.js';
 import { deleteUserPasswordResetTokensInTx } from './passwordResetTokensModel.js';
 import { hashSecureToken } from '../utils/secureToken.js';
@@ -13,10 +14,6 @@ import { canGrantRole, outranksAllRoles, rolesGrantableBy } from '../utils/compa
 
 const COMPANY_OWNER_ROLE = 'company_owner';
 
-//* Transaction-scoped advisory lock serializing superadmin deletions -
-//* superadmins have no company row to lock, and two concurrent deletions of
-//* the last two superadmins must not both pass the last-superadmin check
-const SUPERADMIN_DELETION_LOCK_KEY = 4815162342;
 
 //* The caller's roles are only meaningful while they are still a member of
 //* the company - resolves to null when they are not (removed concurrently)
@@ -462,11 +459,12 @@ export const deleteUserWithCompanyDataInDb = async (userId, options = {}) => {
 
     //* Superadmins belong to no company: no company lock, no owner checks and
     //* no company cleanup (`company_id: null` would match every superadmin).
-    //* The platform must keep at least one superadmin - checked under an
-    //* advisory lock so concurrent deletions cannot both pass it
+    //* The platform must keep at least one superadmin - checked under a
+    //* transaction-scoped advisory lock (superadmins have no company row to
+    //* lock) so concurrent deletions of the last two cannot both pass it
     if (!userCompanyId) {
       if (user.role === 'superadmin') {
-        await tx.$queryRaw`SELECT pg_advisory_xact_lock(${SUPERADMIN_DELETION_LOCK_KEY})`;
+        await tx.$queryRaw`SELECT pg_advisory_xact_lock(${ADVISORY_LOCK_KEYS.superadminDeletion}::bigint)`;
 
         //* A concurrent deletion of the same account may have committed
         //* while this one waited for the lock

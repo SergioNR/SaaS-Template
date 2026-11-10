@@ -9,6 +9,10 @@ jest.unstable_mockModule('../server/integrations/s3/deleteS3Objects.js', () => (
   deleteS3Objects: jest.fn(),
 }));
 
+jest.unstable_mockModule('../server/models/advisoryLockModel.js', () => ({
+  runWithAdvisoryLockInDb: jest.fn(),
+}));
+
 jest.unstable_mockModule('../server/config/loggerFunctions.js', () => ({
   logError: jest.fn(),
   logInfo: jest.fn(),
