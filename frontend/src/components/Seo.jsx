@@ -1,5 +1,6 @@
 import PropTypes from 'prop-types';
 import { useTranslation } from 'react-i18next';
+import { normalizeSiteOrigin } from '../config/siteOrigin.js';
 
 export const DEFAULT_OG_IMAGE_PATH = '/og-image.png';
 
@@ -9,7 +10,8 @@ export const DEFAULT_OG_IMAGE_PATH = '/og-image.png';
 export const Seo = ({ title, description, path, type = 'website', robots, image = DEFAULT_OG_IMAGE_PATH }) => {
   const { t } = useTranslation();
 
-  const baseUrl = import.meta.env.VITE_SITE_BASE_URL;
+  //* Same normalisation as the build-time sitemap, so canonicals match it
+  const baseUrl = normalizeSiteOrigin(import.meta.env.VITE_SITE_BASE_URL);
   const siteName = t('common.siteName');
   const fullTitle = title ? `${title} · ${siteName}` : t('seo.defaultTitle');
   const resolvedDescription = description ?? t('seo.defaultDescription');

@@ -40,7 +40,7 @@ Because the app is built with Vite, all `VITE_*` variables are baked in at build
 | `VITE_API_BASE_URL` | Build (required for `npm run build`) | Base URL of the backend API |
 | `VITE_PUBLIC_POSTHOG_KEY` | Build (optional) | PostHog project key. Analytics stay disabled when unset |
 | `VITE_PUBLIC_POSTHOG_HOST` | Build (optional) | PostHog ingestion host. Defaults to `https://eu.i.posthog.com`; keep `NGINX_CSP_POSTHOG_ORIGINS` in sync |
-| `VITE_SITE_BASE_URL` | Build (required for `npm run build`) | Public URL of the deployed frontend (canonical / `og:url`). The dev server defaults to `http://localhost:5173` |
+| `VITE_SITE_BASE_URL` | Build (required for `npm run build`) | Public URL of the deployed frontend (canonical / `og:url`); a trailing slash is optional. The dev server defaults to `http://localhost:5173` |
 | `NGINX_CSP_API_ORIGIN` | Container runtime (optional) | API origin allowed in the CSP `connect-src`. Defaults to the `VITE_API_BASE_URL` build arg; override with `docker run -e NGINX_CSP_API_ORIGIN=https://api.example.com` |
 | `NGINX_CSP_POSTHOG_ORIGINS` | Container runtime (required in the image, may be empty) | Space-separated PostHog origins allowed in the CSP `script-src` and `connect-src` — the ingestion and assets hosts of `VITE_PUBLIC_POSTHOG_HOST` (EU default: `https://eu.i.posthog.com https://eu-assets.i.posthog.com`) |
 | `NGINX_CSP_CONNECT_EXTRA` | Container runtime (optional) | Space-separated extra origins allowed in the CSP `connect-src` — e.g. the S3/MinIO origin that presigned file uploads/downloads go to. Defaults to empty |
