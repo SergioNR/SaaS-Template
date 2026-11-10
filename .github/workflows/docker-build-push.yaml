@@ -94,6 +94,13 @@ jobs:
           VITE_API_BASE_URL: https://api.ci.invalid
         run: npm run build
 
+      # Specs are the system of record for behaviour - a malformed main spec
+      # or in-flight change delta must not merge. Pinned because the tool is
+      # not a workspace dependency (the bare `openspec` npm package is an
+      # unrelated placeholder); bump together with the generated skills
+      - name: OpenSpec - validate
+        run: npx -y @fission-ai/openspec@1.16.0 validate --specs --changes --strict --no-interactive
+
   backend:
     name: Backend image
     needs: test

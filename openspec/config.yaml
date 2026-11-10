@@ -1,0 +1,51 @@
+schema: spec-driven
+
+# Project context
+# Only constraints an agent cannot infer by reading the code.
+context: |
+  This repo is a SaaS template (Express 5 + Prisma/PostgreSQL API in
+  `backend/`, React/Vite/Mantine SPA in `frontend/`). Specs describe the
+  template's behaviour; products forked from it diverge in their own copy.
+
+  Specs are written in English; user-facing UI copy is Spanish (from the i18n
+  catalog) and is never quoted verbatim in requirements.
+
+  Specs describe observable behaviour - routes, statuses, stable `code`
+  values, payloads, guards, flows, scheduled jobs, log/alert outcomes.
+  Layer/implementation conventions (folder layout, middleware chains,
+  component patterns) stay in the AGENTS.md files and are never restated in
+  specs.
+
+  Every behaviour change ships its spec delta in the same change as the code:
+  `openspec/changes/<name>/specs/<capability>/spec.md` under
+  `## ADDED`/`## MODIFIED`/`## REMOVED`, updated before archive. `auth` owns
+  rate-limit outcomes within its flows; `api-hardening` owns the budgets.
+  Changes with no observable behaviour (dependency upgrades, migration
+  housekeeping, repo settings) carry proposal + tasks only and set
+  `skip_specs: true` in the change's `.openspec.yaml`.
+
+  Validation: each requirement has at least one WHEN/THEN scenario; run
+  `openspec validate <change> --strict` before archiving. CI runs
+  `openspec validate --specs --changes`.
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+# Example:
+#   rules:
+#     proposal:
+#       - Keep proposals under 500 words
+#       - Always state what is out of scope
+#     tasks:
+#       - Break tasks into chunks of max 2 hours
+
+# Per-operation guidance (optional)
+# Add advisory guidance for how apply and archive work should be conducted.
+# This is separate from artifact rules above.
+# Example:
+#   operations:
+#     apply:
+#       guidance:
+#         - Keep test summaries concise
+#     archive:
+#       guidance:
+#         - Summarize the archive outcome before finishing
