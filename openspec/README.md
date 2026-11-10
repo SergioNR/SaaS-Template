@@ -44,4 +44,6 @@ archives second rebases its delta onto the updated spec.
 | 10 | `distributed-rate-limits`, `add-telegram-business-events` | New capabilities for multi-replica / ops |
 | 11 | `squash-migrations` | After every change that adds a migration has landed |
 | 12 | `upgrade-held-dependencies` | When the held releases clear the 7-day cooldown / gain peer support |
-| — | `filterable-admin-lists` (optional), `replace-template-placeholders` (per fork) | Whenever needed |
+| — | `filterable-admin-lists` (optional) | Whenever needed |
+
+Forks: the per-fork placeholder work is the root README "Forking checklist", not an open change.

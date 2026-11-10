@@ -5,7 +5,8 @@ import { createTheme, DEFAULT_THEME } from '@mantine/core';
 //* font. Components reference the primary colour through Mantine's
 //* `--mantine-primary-color-*` variables, never a hard-coded colour name.
 //* The font is self-hosted via @fontsource (imported in main.jsx), so the
-//* CSP needs no third-party font origin
+//* CSP needs no third-party font origin. Every other placeholder a fork
+//* replaces is listed in the root README "Forking checklist"
 const brand = DEFAULT_THEME.colors.blue;
 
 export const FONT_BODY = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
