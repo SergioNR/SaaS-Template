@@ -43,3 +43,13 @@ The integration swallows everything; a non-OK response or exception logs `logWar
 - Should `company.registered` include the registrant's email domain (not the address) for B2B qualification? Recommended: no by default.
 - Emit `account.deleted` for superadmin self-deletion? Recommended: yes, as "platform admin account deleted" with no other fields.
 - Message language: the alert channel is English; keep events English too unless the product owner asks otherwise.
+
+## Decisions taken at implementation
+
+- No email domain on `company.registered` (no PII creep by default).
+- A superadmin deletion emits `account.deleted` as a bare "Platform admin account deleted" message with no other field.
+- Messages are English.
+- The integration (`sendBusinessEventsToTelegram.js`) only formats and sends; the display reads (company name, member count, trial end) live in `utils/businessEvents.js` notifiers, which return early without any database read when the channel is off.
+- A deleted company's name is read inside the deletion transaction (`companyName` on the model's result); the non-last-member result carries `remainingMemberCount`.
+- `syncSubscriptionWithCompanyLockInDb` now resolves to `{ previous, written }` or `null` (was `true`/`false`). A same-subscription row without a stored `stripe_status` (synced before that column existed) counts as access-granting while `expires_at` is in the future, so legacy renewals do not look like new starts. A company with no subscription row at all starts as "converted from trial".
+- Plan + cycle come from a reverse lookup of the subscription's first item price id (`getPlanForStripePriceId`); an ambiguous or unknown price prints "unknown plan". Checkout metadata is not consulted (it lives on the session, not the subscription).
