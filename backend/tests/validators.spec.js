@@ -16,7 +16,6 @@ const VALID_PASSWORD = 'Password123';
 //* 24 three-byte characters + 'Aa1' = 27 characters but 75 bytes
 const MULTIBYTE_PASSWORD = `${'€'.repeat(24)}Aa1`;
 
-
 describe('email fields reject non-string values', () => {
   test.each([
     ['register', createUserValidationSchema, 'username', { password: VALID_PASSWORD }],

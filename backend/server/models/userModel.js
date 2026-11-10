@@ -15,7 +15,6 @@ import { canGrantRole, outranksAllRoles, rolesGrantableBy } from '../utils/compa
 
 const COMPANY_OWNER_ROLE = 'company_owner';
 
-
 //* The caller's roles are only meaningful while they are still a member of
 //* the company - resolves to null when they are not (removed concurrently)
 const getMemberRoleNamesInTx = async (tx, userId, companyId) => {

@@ -38,4 +38,3 @@ describe('docsRouter', () => {
     await expect(dispatch(method, url)).resolves.toEqual({ handled: false });
   });
 });
-
