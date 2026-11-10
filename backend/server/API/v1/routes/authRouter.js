@@ -10,11 +10,14 @@ import {
   logoutUser,
   checkTeamInviteValidity,
   acceptTeamInvite,
+  verifyEmail,
+  resendEmailVerification,
 } from '../../../controllers/authController.js';
 import { sanitizerResult } from '../../../middlewares/sanitizerResult.js';
 import { authLimiter } from '../../../middlewares/authRateLimiter.js';
 import { passwordResetLimiter } from '../../../middlewares/passwordResetRateLimiter.js';
 import { loginAccountLimiter } from '../../../middlewares/loginAccountRateLimiter.js';
+import { verificationEmailLimiter } from '../../../middlewares/verificationEmailRateLimiter.js';
 import { createUserValidationSchema } from '../../../utils/validators/createUserSchema.js';
 import { userLoginValidationSchema } from '../../../utils/validators/userLoginValidationSchema.js';
 
@@ -24,6 +27,8 @@ import { requestNewPasswordSchema } from '../../../utils/validators/requestNewPa
 import { passwordResetTokenQuerySchema } from '../../../utils/validators/passwordResetTokenQuerySchema.js';
 import { teamInviteTokenQuerySchema } from '../../../utils/validators/teamInviteTokenQuerySchema.js';
 import { acceptTeamInviteSchema } from '../../../utils/validators/acceptTeamInviteSchema.js';
+import { emailVerificationSchema } from '../../../utils/validators/emailVerificationSchema.js';
+import { resendVerificationSchema } from '../../../utils/validators/resendVerificationSchema.js';
 
 //* Public (unauthenticated) routes - session establishment, credential
 //* recovery and invite consumption
@@ -74,6 +79,18 @@ export const authRouter = Router();
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/ErrorMessage'
+ *       403:
+ *         description: Correct credentials, but the account has not verified its email yet (code `EMAIL_NOT_VERIFIED`) - no session is created
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/ErrorMessage'
+ *                 - type: object
+ *                   properties:
+ *                     code:
+ *                       type: string
+ *                       enum: [EMAIL_NOT_VERIFIED]
  *       422:
  *         $ref: '#/components/responses/ValidationError'
  *       429:
@@ -97,6 +114,8 @@ authPublicRouter.post('/login', authLimiter, checkSchema(userLoginValidationSche
  *       - a new company named `companyName` (required, 2-100 characters after trimming), with a 7-day free trial subscription
  *       - the user, with the global `user` role, as that company's first member
  *       - a `company_owner` role assignment for the user, which grants every company permission, billing included
+ *
+ *       The account starts unverified: a verification link is emailed and the account cannot log in until it is opened (`POST /api/v1/auth/email-verification`).
  *
  *       Additional members join an existing company only through team invites (`POST /api/v1/auth/invite-accept`) and never become owners automatically.
  *
@@ -317,7 +336,7 @@ authPublicRouter.get('/invite', authLimiter, checkSchema(teamInviteTokenQuerySch
  *             schema:
  *               $ref: '#/components/schemas/ErrorMessage'
  *       409:
- *         description: The invited email became registered in the meantime - the invite was revoked
+ *         description: The invited email belongs to a verified account (registered and verified in the meantime) - the invite is kept until it expires. An unverified account holding the address is deleted with its company and the invitee is created instead
  *         content:
  *           application/json:
  *             schema:
@@ -328,6 +347,76 @@ authPublicRouter.get('/invite', authLimiter, checkSchema(teamInviteTokenQuerySch
  *         $ref: '#/components/responses/TooManyRequests'
  */
 authPublicRouter.post('/invite-accept', authLimiter, checkSchema(acceptTeamInviteSchema), sanitizerResult, acceptTeamInvite);
+
+/**
+ * @openapi
+ * /api/v1/auth/email-verification:
+ *   post:
+ *     tags: [Auth]
+ *     summary: Verify the email address of a registered account
+ *     description: Consumes the single-use token from the verification email (24-hour lifetime, only the newest one is valid) and marks the account verified. Does not log the user in.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/EmailVerificationRequest'
+ *     responses:
+ *       200:
+ *         description: Email verified - the account can now log in
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessMessage'
+ *       400:
+ *         description: Token is unknown, expired or already used (code `EMAIL_VERIFICATION_INVALID`)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/ErrorMessage'
+ *                 - type: object
+ *                   properties:
+ *                     code:
+ *                       type: string
+ *                       enum: [EMAIL_VERIFICATION_INVALID]
+ *       422:
+ *         $ref: '#/components/responses/ValidationError'
+ *       429:
+ *         $ref: '#/components/responses/TooManyRequests'
+ */
+authPublicRouter.post('/email-verification', authLimiter, checkSchema(emailVerificationSchema), sanitizerResult, verifyEmail);
+
+/**
+ * @openapi
+ * /api/v1/auth/email-verification/resend:
+ *   post:
+ *     tags: [Auth]
+ *     summary: Request a new verification email
+ *     description: Sends a new verification link (invalidating the previous one) when the email belongs to an unverified account. The response is identical - and sent before any lookup - whether or not such an account exists, to prevent user enumeration.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/ResendVerificationRequest'
+ *     responses:
+ *       200:
+ *         description: A new link will be sent if the email belongs to an unverified account
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessMessage'
+ *       422:
+ *         $ref: '#/components/responses/ValidationError'
+ *       429:
+ *         description: Too many verification email requests (5 per hour per IP)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorMessage'
+ */
+authPublicRouter.post('/email-verification/resend', verificationEmailLimiter, checkSchema(resendVerificationSchema), sanitizerResult, resendEmailVerification);
 
 /**
  * @openapi

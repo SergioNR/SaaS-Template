@@ -55,6 +55,7 @@ describe('user lookups never leak the password hash by accident', () => {
         email: true,
         role: true,
         company_id: true,
+        email_verified_at: true,
         password: true,
       },
     });

@@ -10,6 +10,8 @@ import { recoverPasswordSchema } from '../server/utils/validators/recoverPasswor
 import { acceptTeamInviteSchema } from '../server/utils/validators/acceptTeamInviteSchema.js';
 import { teamInviteTokenQuerySchema } from '../server/utils/validators/teamInviteTokenQuerySchema.js';
 import { BCRYPT_MAX_PASSWORD_BYTES } from '../server/utils/validators/passwordByteLength.js';
+import { emailVerificationSchema } from '../server/utils/validators/emailVerificationSchema.js';
+import { resendVerificationSchema } from '../server/utils/validators/resendVerificationSchema.js';
 
 const VALID_TOKEN = 'a'.repeat(43);
 const VALID_PASSWORD = 'Password123';
@@ -147,5 +149,38 @@ describe('role names', () => {
     const { errors } = await run(updateMemberRoleSchema, { body: { roleName: ['company_admin'] } });
 
     expect(failedPaths(errors)).toEqual(['roleName']);
+  });
+});
+
+describe('email verification schemas', () => {
+  test('accept a well-formed token in the body', async () => {
+    const { errors } = await run(emailVerificationSchema, { body: { emailVerificationToken: VALID_TOKEN } });
+
+    expect(errors).toEqual([]);
+  });
+
+  test.each([
+    ['missing', {}],
+    ['malformed', { emailVerificationToken: 'short' }],
+    ['an array', { emailVerificationToken: [VALID_TOKEN] }],
+  ])('reject a token that is %s', async (_label, body) => {
+    const { errors } = await run(emailVerificationSchema, { body });
+
+    expect(failedPaths(errors)).toContain('emailVerificationToken');
+  });
+
+  test('ignore a token sent in the query string (body only)', async () => {
+    const { errors } = await run(emailVerificationSchema, { body: {}, query: { emailVerificationToken: VALID_TOKEN } });
+
+    expect(failedPaths(errors)).toContain('emailVerificationToken');
+  });
+
+  test('resend normalizes the email like registration and rejects arrays', async () => {
+    const { req, errors } = await run(resendVerificationSchema, { body: { email: 'User@Example.com' } });
+    const arrayCase = await run(resendVerificationSchema, { body: { email: ['a@b.co'] } });
+
+    expect(errors).toEqual([]);
+    expect(req.body.email).toBe('user@example.com');
+    expect(failedPaths(arrayCase.errors)).toContain('email');
   });
 });

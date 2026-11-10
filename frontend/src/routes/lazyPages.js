@@ -18,6 +18,7 @@ export const Register = lazy(() => import('../pages/auth/RegisterPage.jsx'));
 export const RecoverPasswordPage = lazy(() => import('../pages/auth/RecoverPasswordPage.jsx'));
 export const RestorePasswordPage = lazy(() => import('../pages/auth/RestorePasswordPage.jsx'));
 export const AcceptInvitePage = lazy(() => import('../pages/auth/AcceptInvitePage.jsx'));
+export const VerifyEmailPage = lazy(() => import('../pages/auth/VerifyEmailPage.jsx'));
 
 // User area
 export const UserWrapper = lazy(() => import('../pages/user/UserWrapper.jsx'));

@@ -44,6 +44,19 @@ jest.unstable_mockModule('../server/integrations/brevo/transactionalEmails/sendE
   sendExistingAccountNoticeToUser: jest.fn(),
 }));
 
+jest.unstable_mockModule('../server/integrations/brevo/transactionalEmails/sendEmailVerificationToUser.js', () => ({
+  sendEmailVerificationToUser: jest.fn(),
+}));
+
+jest.unstable_mockModule('../server/models/emailVerificationTokensModel.js', () => ({
+  createEmailVerificationTokenInDb: jest.fn(),
+  consumeEmailVerificationTokenInDb: jest.fn(),
+}));
+
+jest.unstable_mockModule('../server/utils/userDeletionCleanup.js', () => ({
+  cleanupAfterUserDeletion: jest.fn().mockResolvedValue(undefined),
+}));
+
 const {
   checkPasswordResetTokenValidity,
   checkSession,
@@ -51,8 +64,15 @@ const {
   logoutUser,
   registerUser,
   requestPasswordResetToken,
+  resendEmailVerification,
   updateRecoveredUserPassword,
+  verifyEmail,
 } = await import('../server/controllers/authController.js');
+const { sendEmailVerificationToUser } = await import('../server/integrations/brevo/transactionalEmails/sendEmailVerificationToUser.js');
+const {
+  createEmailVerificationTokenInDb,
+  consumeEmailVerificationTokenInDb,
+} = await import('../server/models/emailVerificationTokensModel.js');
 const {
   getUserByEmail,
   createUserInDb,
@@ -231,19 +251,22 @@ describe('registerUser', () => {
     expect(JSON.stringify(logAudit.mock.calls.map((call) => call.slice(1)))).not.toContain('acme');
   });
 
-  it('creates the account and its company in the background for a new email', async () => {
+  it('creates the account and its company in the background for a new email and emails a verification link', async () => {
     getUserByEmail.mockResolvedValue(null);
-    createUserInDb.mockResolvedValue({ id: 'new-user' });
+    createUserInDb.mockResolvedValue({ id: 'new-user', email: 'new@acme.test' });
+    createEmailVerificationTokenInDb.mockResolvedValue('raw-verify-token');
     const res = mockRes();
 
     await registerUser({ body: { username: 'new@acme.test', companyName: 'Acme Corp', password: 'Password123' } }, res);
-    await waitUntilCalled(createUserInDb);
+    await waitUntilCalled(sendEmailVerificationToUser);
 
     expect(createUserInDb).toHaveBeenCalledWith({
       username: 'new@acme.test',
       password: expect.stringMatching(/^\$2[aby]\$/),
       companyName: 'Acme Corp',
     });
+    expect(createEmailVerificationTokenInDb).toHaveBeenCalledWith('new-user');
+    expect(sendEmailVerificationToUser).toHaveBeenCalledWith('new@acme.test', 'raw-verify-token');
     expect(sendExistingAccountNoticeToUser).not.toHaveBeenCalled();
   });
 
@@ -258,6 +281,98 @@ describe('registerUser', () => {
     expect(res.json).toHaveBeenCalledWith({});
     expect(sendExistingAccountNoticeToUser).toHaveBeenCalledWith('stored@acme.test');
     expect(createUserInDb).not.toHaveBeenCalled();
+    //* Never a new verification link for an existing (possibly squatted)
+    //* address - the squatter's password would become valid on the click
+    expect(sendEmailVerificationToUser).not.toHaveBeenCalled();
+  });
+});
+
+describe('verifyEmail', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('verifies the account, audits it and answers 200 {} without logging in', async () => {
+    consumeEmailVerificationTokenInDb.mockResolvedValue({ userId: 'user-1' });
+    const req = { body: { emailVerificationToken: 'raw' } };
+    const res = mockRes();
+
+    await verifyEmail(req, res);
+
+    expect(consumeEmailVerificationTokenInDb).toHaveBeenCalledWith('raw');
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({});
+    expect(logAudit).toHaveBeenCalledWith(req, 'auth.email.verified', { entity: 'user', entityId: 'user-1' });
+  });
+
+  it('answers 400 EMAIL_VERIFICATION_INVALID for an unknown, expired or used token', async () => {
+    consumeEmailVerificationTokenInDb.mockResolvedValue(null);
+    const res = mockRes();
+
+    await verifyEmail({ body: { emailVerificationToken: 'raw' } }, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'EMAIL_VERIFICATION_INVALID' }));
+    expect(logAudit).not.toHaveBeenCalled();
+  });
+});
+
+describe('resendEmailVerification', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  const expectedBody = {
+    message: 'If this email belongs to an unverified account, a new verification link will be sent',
+  };
+
+  it('responds before any lookup with the fixed message and an enumeration-safe audit line', async () => {
+    getUserByEmail.mockReturnValue(new Promise(() => {}));
+    const req = { body: { email: 'new@acme.test' } };
+    const res = mockRes();
+
+    await resendEmailVerification(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith(expectedBody);
+    expect(createEmailVerificationTokenInDb).not.toHaveBeenCalled();
+    expect(logAudit).toHaveBeenCalledWith(req, 'auth.email_verification.requested', { entity: 'email_verification' });
+  });
+
+  it('re-issues the link for an unverified account in the background', async () => {
+    getUserByEmail.mockResolvedValue({ id: 'user-1', email: 'stored@acme.test', email_verified_at: null });
+    createEmailVerificationTokenInDb.mockResolvedValue('new-token');
+    const res = mockRes();
+
+    await resendEmailVerification({ body: { email: 'stored@acme.test' } }, res);
+    await waitUntilCalled(sendEmailVerificationToUser);
+
+    expect(sendEmailVerificationToUser).toHaveBeenCalledWith('stored@acme.test', 'new-token');
+  });
+
+  it.each([
+    ['unknown', null],
+    ['verified', { id: 'user-1', email: 'stored@acme.test', email_verified_at: new Date() }],
+  ])('answers the identical 200 and sends nothing for an %s account', async (_label, lookup) => {
+    getUserByEmail.mockResolvedValue(lookup);
+    const res = mockRes();
+
+    await resendEmailVerification({ body: { email: 'stored@acme.test' } }, res);
+    await flushBackgroundWork();
+
+    expect(res.json).toHaveBeenCalledWith(expectedBody);
+    expect(createEmailVerificationTokenInDb).not.toHaveBeenCalled();
+    expect(sendEmailVerificationToUser).not.toHaveBeenCalled();
+  });
+
+  it('swallows and logs background failures', async () => {
+    getUserByEmail.mockRejectedValue(new Error('db down'));
+    const res = mockRes();
+
+    await resendEmailVerification({ body: { email: 'stored@acme.test' } }, res);
+    await flushBackgroundWork();
+
+    expect(logError).toHaveBeenCalledWith('Email verification resend failed', expect.any(Error));
   });
 });
 
@@ -339,5 +454,29 @@ describe('loginLocal', () => {
     expect(req.session.destroy).toHaveBeenCalled();
     expect(next).toHaveBeenCalledWith(linkError);
     expect(res.status).not.toHaveBeenCalled();
+  });
+  it('answers 403 EMAIL_NOT_VERIFIED without a session for an unverified account', async () => {
+    passport.authenticate.mockImplementation((strategy, callback) => () => callback(null, false, { code: 'EMAIL_NOT_VERIFIED' }));
+    const req = { login: jest.fn() };
+    const res = mockRes();
+
+    loginLocal(req, res, jest.fn());
+    await flushBackgroundWork();
+
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'EMAIL_NOT_VERIFIED' }));
+    expect(req.login).not.toHaveBeenCalled();
+  });
+
+  it('answers 401 {} for wrong credentials', async () => {
+    passport.authenticate.mockImplementation((strategy, callback) => () => callback(null, false, undefined));
+    const req = { login: jest.fn() };
+    const res = mockRes();
+
+    loginLocal(req, res, jest.fn());
+    await flushBackgroundWork();
+
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith({});
   });
 });

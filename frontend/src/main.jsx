@@ -32,6 +32,7 @@ import {
   RecoverPasswordPage,
   RestorePasswordPage,
   AcceptInvitePage,
+  VerifyEmailPage,
   UserWrapper,
   UserDashboard,
   CustomerProfile,
@@ -96,6 +97,7 @@ createRoot(document.getElementById('root')).render(
                 <Route path="recover-password" element={<RecoverPasswordPage />} />
                 <Route path="restore-password" element={<RestorePasswordPage />} />
                 <Route path="accept-invite" element={<AcceptInvitePage />} />
+                <Route path="verify-email" element={<VerifyEmailPage />} />
               </Route>
 
               <Route path="/*" element={<PageNotFound />} />

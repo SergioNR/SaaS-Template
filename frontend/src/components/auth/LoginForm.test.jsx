@@ -77,4 +77,36 @@ describe('LoginForm next redirect', () => {
 
     expect(apiClient.post).toHaveBeenCalledTimes(1);
   });
+
+  it('explains an unverified email on 403 EMAIL_NOT_VERIFIED and resends to the typed address', async () => {
+    apiClient.post
+      .mockRejectedValueOnce({ response: { status: 403, data: { code: 'EMAIL_NOT_VERIFIED' } } })
+      .mockResolvedValueOnce({ data: {} });
+
+    renderLogin('');
+    submit();
+
+    expect(await screen.findByText(/confirmar tu correo electrónico antes de iniciar sesión/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Reenviar el correo de confirmación/)).toHaveValue('user@example.com');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Enviar nuevo enlace' }));
+
+    expect(await screen.findByText(/recibirás un nuevo enlace/)).toBeInTheDocument();
+    expect(apiClient.post).toHaveBeenLastCalledWith('/api/v1/auth/email-verification/resend', {
+      email: 'user@example.com',
+    });
+  });
+
+  it('shows the too-many-attempts message when the resend is throttled', async () => {
+    apiClient.post
+      .mockRejectedValueOnce({ response: { status: 403, data: { code: 'EMAIL_NOT_VERIFIED' } } })
+      .mockRejectedValueOnce({ response: { status: 429 } });
+
+    renderLogin('');
+    submit();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Enviar nuevo enlace' }));
+
+    expect(await screen.findByText(/Demasiados intentos/)).toBeInTheDocument();
+  });
 });

@@ -7,6 +7,8 @@ requireEnv('BREVO_API_KEY', 'refusing to start without transactional email deliv
 requireEnv('BREVO_SENDER_EMAIL', 'refusing to start without a transactional email sender');
 requireEnv('BREVO_RESET_PASSWORD_TEMPLATE_ID', 'refusing to start without the password reset email template');
 requireEnv('BREVO_TEAM_INVITE_TEMPLATE_ID', 'refusing to start without the team invite email template');
+//* Self-registered accounts cannot log in until they verify their address
+requireEnv('BREVO_VERIFY_EMAIL_TEMPLATE_ID', 'refusing to start without the email verification template');
 
 export const brevoClient = new BrevoClient({
   apiKey: process.env.BREVO_API_KEY,
@@ -23,6 +25,7 @@ export const companyEmails = {
 export const templateIds = {
   resetPassword: Number(process.env.BREVO_RESET_PASSWORD_TEMPLATE_ID),
   teamInvite: Number(process.env.BREVO_TEAM_INVITE_TEMPLATE_ID),
+  verifyEmail: Number(process.env.BREVO_VERIFY_EMAIL_TEMPLATE_ID),
 };
 
 //* Shared template params - every template can build absolute links from

@@ -202,6 +202,27 @@ const swaggerOptions = {
             },
           },
         },
+        EmailVerificationRequest: {
+          type: 'object',
+          required: ['emailVerificationToken'],
+          properties: {
+            emailVerificationToken: {
+              type: 'string',
+              pattern: '^[A-Za-z0-9_-]{43}$',
+              description: 'Opaque base64url token from the verification email link (only its SHA-256 hash is stored)',
+            },
+          },
+        },
+        ResendVerificationRequest: {
+          type: 'object',
+          required: ['email'],
+          properties: {
+            email: {
+              type: 'string',
+              format: 'email',
+            },
+          },
+        },
         PasswordResetRequest: {
           type: 'object',
           required: ['email'],

@@ -157,6 +157,44 @@ describe('deleteUserWithCompanyDataInDb', () => {
       expect(tx.user.delete).not.toHaveBeenCalled();
     });
 
+    it('onlyIfUnverified keeps an account verified meanwhile (row-locked re-read under the company lock)', async () => {
+      tx.user.findFirst
+        .mockResolvedValueOnce({ id: 'target', role: 'user', company_id: 'company-1' })
+        .mockResolvedValueOnce({ UserRoles: rolesOf(['company_owner']) });
+      tx.$queryRaw
+        .mockResolvedValueOnce([]) //* company lock
+        .mockResolvedValueOnce([{ email_verified_at: new Date() }]); //* user row lock
+
+      const result = await deleteUserWithCompanyDataInDb('target', { onlyIfUnverified: true });
+
+      expect(result).toEqual({ status: 'verified' });
+      expect(tx.$queryRaw).toHaveBeenCalledTimes(2);
+      expect(tx.user.delete).not.toHaveBeenCalled();
+    });
+
+    it('onlyIfUnverified deletes a still-unverified account', async () => {
+      tx.user.findFirst
+        .mockResolvedValueOnce({ id: 'target', role: 'user', company_id: 'company-1' })
+        .mockResolvedValueOnce({ UserRoles: rolesOf(['company_owner']) });
+      tx.$queryRaw
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ email_verified_at: null }]);
+      tx.user.delete.mockResolvedValue({ id: 'target', role: 'user' });
+
+      const result = await deleteUserWithCompanyDataInDb('target', { onlyIfUnverified: true });
+
+      expect(result).toEqual(expect.objectContaining({ status: 'deleted' }));
+    });
+
+    it('onlyIfUnverified never touches a company-less account', async () => {
+      tx.user.findFirst.mockResolvedValueOnce({ id: 'staff-1', role: 'superadmin', company_id: null });
+
+      const result = await deleteUserWithCompanyDataInDb('staff-1', { onlyIfUnverified: true });
+
+      expect(result).toEqual({ status: 'not_found' });
+      expect(tx.user.delete).not.toHaveBeenCalled();
+    });
+
     it('deletes the member, their sessions and the invites they issued', async () => {
       tx.user.findFirst
         .mockResolvedValueOnce({ id: 'target', company_id: 'company-1' })

@@ -39,3 +39,13 @@ Backfill `email_verified_at = created_at` in the migration so the rollout never 
 - Token lifetime: 24 h recommended; purge window for unverified accounts: 7 days recommended (must exceed the token lifetime).
 - Should verification log the user in? Recommended: no - consistent with registration and invite acceptance; the page links to login.
 - Show "unverified" in admin user lists? Recommended as a follow-up change.
+
+## Implementation decisions (resolved open questions)
+
+- Token lifetime **24 h**; unverified accounts purged **7 days** after registration (daily 03:30, advisory lock key `cronUnverifiedAccounts`).
+- Verification does **not** log the user in; the page links to login.
+- Admin "unverified" indicator: left as a follow-up (out of scope).
+- Concurrency: purge and invite claim delete through `deleteUserWithCompanyDataInTx(..., { onlyIfUnverified: true })`, which re-reads `email_verified_at` under a `FOR UPDATE` row lock taken after the company lock, so a verification committing concurrently either lands first (account kept; invite acceptance rolls back and answers 409) or waits and then finds no row (400). Verification itself uses a conditional `updateMany` so a deleted or already-verified account resolves to 400, never a P2025.
+- A verification link whose account is already verified (e.g. by a password reset) is consumed and answers 400 `EMAIL_VERIFICATION_INVALID` - nothing to distinguish for the user.
+- The login 403 code travels from the strategy as `done(null, false, { code })` (`auth/loginFailureCodes.js`), so the timing-equalized password check is unchanged and runs first.
+- The SPA verification page dedupes its POST per attempt (StrictMode re-runs effects; the token is single-use).

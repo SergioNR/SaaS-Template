@@ -10,25 +10,29 @@ datasource db {
 }
 
 model User {
-  id                  String                @id @default(uuid())
+  id                      String                    @id @default(uuid())
   //* citext: uniqueness and every lookup are case-insensitive in the
   //* database itself (validators also lower-case, this is the backstop)
-  email               String                @unique @db.Citext
-  password            String
-  role                UserRoles
-  created_at          DateTime              @default(now())
-  last_updated_at     DateTime              @default(now()) @updatedAt
-  last_login_at       DateTime?
+  email                   String                    @unique @db.Citext
+  password                String
+  role                    UserRoles
+  created_at              DateTime                  @default(now())
+  last_updated_at         DateTime                  @default(now()) @updatedAt
+  last_login_at           DateTime?
+  //* Null until the registrant proves mailbox control (verification link,
+  //* password reset or invite acceptance) - unverified accounts cannot log in
+  email_verified_at       DateTime?
   //* Null only for superadmins - SaaS-provider staff who belong to no tenant
   //* company. Restrict (not Prisma's optional-relation SetNull default) so a
   //* company with members can still never be deleted out from under them
-  company_id          String?
-  Company             Company?              @relation(fields: [company_id], references: [id], onDelete: Restrict)
-  PasswordResetTokens PasswordResetTokens[]
-  UserRoles           UserRole[]
-  File                File[]
-  Sessions            Session[]
-  IssuedTeamInvites   TeamInvites[]         @relation("TeamInviteInviter")
+  company_id              String?
+  Company                 Company?                  @relation(fields: [company_id], references: [id], onDelete: Restrict)
+  PasswordResetTokens     PasswordResetTokens[]
+  EmailVerificationTokens EmailVerificationTokens[]
+  UserRoles               UserRole[]
+  File                    File[]
+  Sessions                Session[]
+  IssuedTeamInvites       TeamInvites[]             @relation("TeamInviteInviter")
 
   @@index([company_id])
 }
@@ -99,6 +103,18 @@ model TeamInvites {
 }
 
 model PasswordResetTokens {
+  id            String   @id @default(uuid())
+  User          User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  user_id       String
+  //* sha256 hex of the emailed secret token - the raw token is never stored
+  token_hash    String   @unique
+  token_expires DateTime
+  created_at    DateTime @default(now())
+
+  @@index([user_id])
+}
+
+model EmailVerificationTokens {
   id            String   @id @default(uuid())
   User          User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
   user_id       String

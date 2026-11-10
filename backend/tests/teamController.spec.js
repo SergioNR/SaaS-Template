@@ -333,7 +333,7 @@ describe('createTeamInvite', () => {
 
   it('creates the row for an already-registered email too, answers the identical 201 and sends no email', async () => {
     allowCreation();
-    getUserByEmail.mockResolvedValue({ id: 'existing-user', email: 'new@acme.test' });
+    getUserByEmail.mockResolvedValue({ id: 'existing-user', email: 'new@acme.test', email_verified_at: new Date() });
     const res = mockRes();
 
     await createTeamInvite({ user: caller, body: inviteBody }, res);
@@ -349,6 +349,18 @@ describe('createTeamInvite', () => {
     expect(res.json).toHaveBeenCalledWith(expectedResponse);
     expect(sendTeamInviteToUser).not.toHaveBeenCalled();
     expect(sendExistingAccountNoticeToUser).not.toHaveBeenCalled();
+  });
+
+  it('still emails the invite when only an unverified account holds the address', async () => {
+    allowCreation();
+    getUserByEmail.mockResolvedValue({ id: 'squatter', email: 'new@acme.test', email_verified_at: null });
+    const res = mockRes();
+
+    await createTeamInvite({ user: caller, body: inviteBody }, res);
+    await flushBackgroundWork();
+
+    expect(res.status).toHaveBeenCalledWith(201);
+    expect(sendTeamInviteToUser).toHaveBeenCalledWith('new@acme.test', 'raw-secret-token', 'Acme Corp', 'owner@acme.test');
   });
 
   it('maps a concurrent-creation P2002 to the same 409 as a pending invite', async () => {
@@ -442,7 +454,7 @@ describe('resendTeamInvite', () => {
 
   it('answers the same 200 when the invitee registered on their own, keeping the row and sending nothing', async () => {
     getTeamInviteByIdInDb.mockResolvedValue(pendingInvite);
-    getUserByEmail.mockResolvedValue({ id: 'existing-user' });
+    getUserByEmail.mockResolvedValue({ id: 'existing-user', email_verified_at: new Date() });
     rotateTeamInviteTokenInDb.mockResolvedValue({ invite: rotatedInvite, inviteToken: 'rotated-secret-token' });
     const res = mockRes();
 

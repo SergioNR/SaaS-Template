@@ -220,6 +220,7 @@ describe('session cookie', () => {
       email: 'owner@acme.test',
       role: 'user',
       company_id: '00000000-0000-4000-8000-0000000000c0',
+      email_verified_at: new Date(),
       password: passwordHash,
     });
 
@@ -264,7 +265,7 @@ const OWNER = {
 
 const loginAsOwner = async () => {
   const passwordHash = await bcrypt.hash('Password123!', 4);
-  prismaMock.user.findUnique.mockResolvedValueOnce({ ...OWNER, password: passwordHash });
+  prismaMock.user.findUnique.mockResolvedValueOnce({ ...OWNER, email_verified_at: new Date(), password: passwordHash });
 
   authLimiterHits += 1;
   const response = await request(app)
@@ -341,6 +342,39 @@ describe('auth router gating', () => {
     expect(unknown.body).toEqual(ROUTE_NOT_FOUND);
     expect(sessionCheck.status).toBe(200);
     expect(sessionCheck.body).toEqual({ user: { id: OWNER.id, role: 'user' } });
+  });
+});
+
+describe('email verification routes', () => {
+  it('validates the verification token (422) under the shared credential budget', async () => {
+    authLimiterHits += 1;
+    const response = await request(app)
+      .post('/api/v1/auth/email-verification')
+      .set('Origin', FRONT_ORIGIN)
+      .send({ emailVerificationToken: 'not-a-token' });
+
+    expect(response.status).toBe(422);
+  });
+
+  it('answers the fixed 200 to a resend and throttles the 6th request per hour with 429', async () => {
+    const statuses = [];
+
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const response = await request(app)
+        .post('/api/v1/auth/email-verification/resend')
+        .set('Origin', FRONT_ORIGIN)
+        .send({ email: 'nobody@acme.test' });
+
+      statuses.push(response.status);
+
+      if (response.status === 200) {
+        expect(response.body).toEqual({
+          message: 'If this email belongs to an unverified account, a new verification link will be sent',
+        });
+      }
+    }
+
+    expect(statuses).toEqual([200, 200, 200, 200, 200, 429]);
   });
 });
 

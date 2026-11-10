@@ -9,6 +9,7 @@ Object.assign(process.env, {
   BREVO_SENDER_EMAIL: 'support@acme.test',
   BREVO_RESET_PASSWORD_TEMPLATE_ID: '2',
   BREVO_TEAM_INVITE_TEMPLATE_ID: '3',
+  BREVO_VERIFY_EMAIL_TEMPLATE_ID: '4',
   FRONT_WEB_APP_ORIGIN_URL: 'https://app.example.com/',
 });
 
@@ -32,6 +33,7 @@ jest.unstable_mockModule('../server/config/loggerFunctions.js', () => ({
 const { frontendUrl } = await import('../server/integrations/brevo/transactionalEmails/brevo.js');
 const { sendResetPasswordTokenToUser } = await import('../server/integrations/brevo/transactionalEmails/sendResetPasswordTokenToUser.js');
 const { sendTeamInviteToUser } = await import('../server/integrations/brevo/transactionalEmails/sendTeamInviteToUser.js');
+const { sendEmailVerificationToUser } = await import('../server/integrations/brevo/transactionalEmails/sendEmailVerificationToUser.js');
 const { sendExistingAccountNoticeToUser } = await import('../server/integrations/brevo/transactionalEmails/sendExistingAccountNoticeToUser.js');
 
 describe('frontendUrl', () => {
@@ -104,7 +106,22 @@ describe('brevo transactional emails', () => {
     });
   });
 
+  it('sendEmailVerificationToUser links the SPA verification page and never passes the raw token on its own', async () => {
+    sendTransacEmail.mockResolvedValue({ messageId: 'ok' });
+
+    await sendEmailVerificationToUser('new@acme.test', 'raw-verify-token');
+
+    const [payload] = sendTransacEmail.mock.calls[0];
+    expect(payload.to).toEqual([{ email: 'new@acme.test' }]);
+    expect(payload.templateId).toBe(4);
+    expect(payload.params).toEqual({
+      appOrigin: 'https://app.example.com/',
+      emailVerificationUrl: 'https://app.example.com/auth/verify-email?emailVerificationToken=raw-verify-token',
+    });
+  });
+
   it.each([
+    ['email verification', () => sendEmailVerificationToUser('new@acme.test', 'raw-verify-token')],
     ['reset token', () => sendResetPasswordTokenToUser('owner@acme.test', 'raw-reset-token')],
     ['team invite', () => sendTeamInviteToUser('new@acme.test', 'raw-invite-token', 'Acme Corp', 'owner@acme.test')],
   ])('%s send resolves instead of rejecting when Brevo fails (fire-and-forget invariant)', async (_name, send) => {

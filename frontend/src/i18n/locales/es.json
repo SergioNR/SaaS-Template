@@ -64,8 +64,10 @@
       "submit": "Iniciar sesión",
       "errors": {
         "invalidCredentials": "La combinación de email y contraseña es incorrecta",
-        "internal": "Error interno, por favor inténtalo de nuevo más tarde"
-      }
+        "internal": "Error interno, por favor inténtalo de nuevo más tarde",
+        "emailNotVerified": "Tienes que confirmar tu correo electrónico antes de iniciar sesión. Revisa tu bandeja de entrada (y la carpeta de spam)."
+      },
+      "resendVerification": "Reenviar correo de confirmación"
     },
     "register": {
       "title": "¡Estamos encantados de verte por aqui!",
@@ -73,7 +75,7 @@
       "loginLink": "Iniciar sesión",
       "submit": "Crear cuenta",
       "companyNameHint": "Crearemos tu empresa y serás su propietario. Podrás invitar a tu equipo después.",
-      "success": "Usuario creado correctamente - Redirigiendo al inicio de sesión",
+      "success": "Cuenta creada. Te hemos enviado un correo para confirmar tu dirección: abre el enlace antes de iniciar sesión. Redirigiendo al inicio de sesión…",
       "terms": "Al registrarte, aceptas estar de acuerdo con los <1>términos y condiciones</1>",
       "errors": {
         "invalid": "Por favor, proporcione un correo electrónico, nombre de empresa y contraseña válidos",
@@ -152,6 +154,25 @@
         "registered": "Ese email ya tiene una cuenta. Inicia sesión.",
         "invalidPassword": "La contraseña no cumple los requisitos: mínimo 8 caracteres, con al menos una mayúscula, una minúscula y un número.",
         "generic": "No se pudo aceptar la invitación. Inténtalo de nuevo."
+      }
+    },
+    "verifyEmail": {
+      "title": "Confirmar correo electrónico",
+      "successTitle": "¡Correo confirmado!",
+      "successBody": "Tu dirección de correo está confirmada. Ya puedes iniciar sesión.",
+      "goToLogin": "Ir al inicio de sesión",
+      "invalidTitle": "Enlace inválido",
+      "invalidBody": "El enlace de confirmación no es válido, ha caducado o ya se ha usado. Solicita un nuevo correo de confirmación.",
+      "errorTitle": "No se pudo confirmar el correo",
+      "errorBody": "No hemos podido comprobar el enlace. Revisa tu conexión e inténtalo de nuevo."
+    },
+    "resendVerification": {
+      "label": "Reenviar el correo de confirmación",
+      "submit": "Enviar nuevo enlace",
+      "success": "Si la dirección pertenece a una cuenta pendiente de confirmar, recibirás un nuevo enlace en unos minutos.",
+      "errors": {
+        "invalid": "Introduce un correo electrónico válido.",
+        "generic": "No se pudo enviar el correo. Por favor, inténtalo de nuevo más tarde."
       }
     }
   },
@@ -572,7 +593,8 @@
       "adminUsers": "Usuarios · Administración",
       "adminUserDetail": "Detalle de usuario · Administración",
       "adminCompanies": "Empresas · Administración",
-      "adminCompanyDetail": "Detalle de empresa · Administración"
+      "adminCompanyDetail": "Detalle de empresa · Administración",
+      "verifyEmail": "Confirmar correo electrónico"
     }
   },
   "notFound": {

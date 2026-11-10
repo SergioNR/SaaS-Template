@@ -2,6 +2,7 @@ import bcrypt from 'bcrypt';
 import { BCRYPT_SALT_ROUNDS, SESSION_COOKIE_NAME, SESSION_COOKIE_OPTIONS } from '../config/security.js';
 import { logAudit, logError } from '../config/loggerFunctions.js';
 import passport from '../auth/passportjs.js';
+import { EMAIL_NOT_VERIFIED } from '../auth/loginFailureCodes.js';
 import { posthogUserSuccessLoggedIn } from '../models/posthogModel.js';
 import {
   getUserByEmail,
@@ -18,6 +19,12 @@ import { getTeamInviteByTokenInDb, deleteTeamInviteByIdSafe } from '../models/te
 import { linkSessionToUser } from '../models/sessionModel.js';
 import { sendResetPasswordTokenToUser } from '../integrations/brevo/transactionalEmails/sendResetPasswordTokenToUser.js';
 import { sendExistingAccountNoticeToUser } from '../integrations/brevo/transactionalEmails/sendExistingAccountNoticeToUser.js';
+import { sendEmailVerificationToUser } from '../integrations/brevo/transactionalEmails/sendEmailVerificationToUser.js';
+import {
+  consumeEmailVerificationTokenInDb,
+  createEmailVerificationTokenInDb,
+} from '../models/emailVerificationTokensModel.js';
+import { cleanupAfterUserDeletion } from '../utils/userDeletionCleanup.js';
 import { trackBackground } from '../utils/processLifecycle.js';
 import { isPrismaErrorCode, sendMappedWriteError } from '../utils/prismaErrors.js';
 
@@ -109,6 +116,10 @@ const INVITE_EXPIRED_RESPONSE = {
   code: 'INVITE_EXPIRED',
 };
 
+const ALREADY_REGISTERED_RESPONSE = {
+  message: 'Email is already registered - Please log in instead',
+};
+
 const INVITER_INVALID_RESPONSE = {
   message: 'Invite is no longer valid - the inviter left the company or lost the required role',
   code: 'INVITER_INVALID',
@@ -178,14 +189,15 @@ export const acceptTeamInvite = async (req, res) => {
 
   const existingUser = await getUserByEmail(inviteData.email);
 
-  if (existingUser) {
-    //* The invitee registered on their own in the meantime. The row is kept
-    //* (it expires and is cleaned up like any other): deleting it would make
-    //* the invite vanish from GET /team and tell the inviting company that
-    //* the address now has an account
-    return res.status(409).json({
-      message: 'Email is already registered - Please log in instead',
-    });
+  //* Fast path only - repeated under the lock inside createUserInDb. An
+  //* UNVERIFIED holder never proved the mailbox, so the acceptance claims the
+  //* address (the squatting account is deleted in the acceptance transaction)
+  if (existingUser?.email_verified_at) {
+    //* The invitee registered (and verified) on their own in the meantime. The
+    //* row is kept (it expires and is cleaned up like any other): deleting it
+    //* would make the invite vanish from GET /team and tell the inviting
+    //* company that the address now has an account
+    return res.status(409).json(ALREADY_REGISTERED_RESPONSE);
   }
 
   const hashedPassword = await bcrypt.hash(password, BCRYPT_SALT_ROUNDS);
@@ -213,13 +225,18 @@ export const acceptTeamInvite = async (req, res) => {
     //* Concurrent self-registration with the same email can beat the check
     //* above - the unique constraint resolves the race (the invite row is
     //* kept for the same reason as above; the transaction rolled back)
-    const alreadyRegistered = { status: 409, message: 'Email is already registered - Please log in instead' };
+    const alreadyRegistered = { status: 409, ...ALREADY_REGISTERED_RESPONSE };
 
     if (sendMappedWriteError(res, error, { P2002: alreadyRegistered })) {
       return res;
     }
 
     throw error;
+  }
+
+  if (acceptResult.status === 'already_registered') {
+    //* Verified concurrently - same outcome as the fast path, invite kept
+    return res.status(409).json(ALREADY_REGISTERED_RESPONSE);
   }
 
   if (acceptResult.status === 'inviter_invalid') {
@@ -237,6 +254,12 @@ export const acceptTeamInvite = async (req, res) => {
     });
   }
 
+  if (acceptResult.claimedDeletion) {
+    //* Stripe/S3 cleanup of the claimed unverified account - after the
+    //* commit, never throws (effectively a no-op: it could never pay)
+    trackBackground(cleanupAfterUserDeletion(acceptResult.claimedDeletion));
+  }
+
   logAudit(req, 'auth.invite.accepted', { entity: 'user', entityId: acceptResult.user?.id });
 
   //* No auto-login here - consistent with the register endpoint
@@ -251,9 +274,17 @@ export const checkSession = async (req, res) => res.status(200).json({
   },
 });
 
-export const loginLocal = (req, res, next) => passport.authenticate('local', (err, user) => {
+export const loginLocal = (req, res, next) => passport.authenticate('local', (err, user, info) => {
   if (err) {
     return next(err);
+  }
+
+  if (!user && info?.code === EMAIL_NOT_VERIFIED) {
+    //* Correct credentials of an unverified account - no session
+    return res.status(403).json({
+      message: 'Email address is not verified - check your inbox or request a new verification email',
+      code: EMAIL_NOT_VERIFIED,
+    });
   }
 
   if (!user) { //* Will trigger if user does not exist
@@ -294,6 +325,14 @@ export const loginLocal = (req, res, next) => passport.authenticate('local', (er
   });
 })(req, res, next);
 
+//* Issues a fresh verification token (earlier links stop working) and emails
+//* the link to the stored address. The email function swallows its own errors
+const issueEmailVerification = async (user) => {
+  const emailVerificationToken = await createEmailVerificationTokenInDb(user.id);
+
+  await sendEmailVerificationToUser(user.email, emailVerificationToken);
+};
+
 //* Detached from the request so the existing-account and new-account paths
 //* are indistinguishable in response body, status AND timing (the bcrypt
 //* hash and the multi-row create would otherwise only run for new emails).
@@ -311,12 +350,15 @@ const registerUserInBackground = async (email, password, companyName) => {
 
     const hashedPassword = await bcrypt.hash(password, BCRYPT_SALT_ROUNDS);
 
-    //* The registrant founds the company and becomes its company owner
-    await createUserInDb({
+    //* The registrant founds the company and becomes its company owner -
+    //* unverified until they open the emailed link
+    const createdUser = await createUserInDb({
       username: email,
       password: hashedPassword,
       companyName,
     });
+
+    await issueEmailVerification(createdUser);
   } catch (error) {
     //* Concurrent registrations can beat the existence check - the unique
     //* constraint resolves the race, nothing else to do
@@ -369,5 +411,55 @@ export const logoutUser = (req, res, next) => {
 
       return res.status(200).json({});
     });
+  });
+};
+
+export const verifyEmail = async (req, res) => {
+  const { emailVerificationToken } = req.body;
+
+  //* Consumes the token (single use) and marks the account verified in one
+  //* transaction. Unknown, expired and used tokens are indistinguishable
+  const verification = await consumeEmailVerificationTokenInDb(emailVerificationToken);
+
+  if (!verification) {
+    return res.status(400).json({
+      message: 'Email verification link is invalid or expired - request a new one',
+      code: 'EMAIL_VERIFICATION_INVALID',
+    });
+  }
+
+  logAudit(req, 'auth.email.verified', { entity: 'user', entityId: verification.userId });
+
+  //* No auto-login - consistent with registration and invite acceptance
+  return res.status(200).json({});
+};
+
+//* Detached from the request: lookup, token and email run after the response,
+//* so neither body nor timing reveals whether (or how) the address is
+//* registered. Only unverified accounts get a new link. Swallows its errors
+const resendEmailVerificationInBackground = async (email) => {
+  try {
+    const user = await getUserByEmail(email);
+
+    if (!user || user.email_verified_at) {
+      return;
+    }
+
+    await issueEmailVerification(user);
+  } catch (error) {
+    logError('Email verification resend failed', error);
+  }
+};
+
+export const resendEmailVerification = async (req, res) => {
+  const { email } = req.body;
+
+  trackBackground(resendEmailVerificationInBackground(email)); // Fire-and-forget - tracked so a shutdown waits for it
+
+  //* Enumeration-safe: no email, no user id
+  logAudit(req, 'auth.email_verification.requested', { entity: 'email_verification' });
+
+  return res.status(200).json({
+    message: 'If this email belongs to an unverified account, a new verification link will be sent',
   });
 };

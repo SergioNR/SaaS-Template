@@ -91,7 +91,9 @@ const deliverInviteInBackground = async (invite, inviteToken, companyId, inviter
   try {
     const existingUser = await getUserByEmail(invite.email);
 
-    if (existingUser) {
+    //* Only a VERIFIED account keeps the address - an unverified holder
+    //* (possibly a squatter) is replaced when the mailbox owner accepts
+    if (existingUser?.email_verified_at) {
       return;
     }
 
