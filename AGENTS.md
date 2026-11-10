@@ -8,7 +8,9 @@ Full-stack template monorepo: Express.js 5 API (`backend/`) + React/Vite/Mantine
 | --- | --- |
 | `backend/` | Express API — auth, billing, PostgreSQL/Prisma, Docker |
 | `frontend/` | React SPA — public site, auth, user/admin areas |
-| `.github/workflows/` | Docker build & push on `latest`/`next` |
+| `.github/workflows/` | `docker-build-push.yaml`: PR gate (test job) on PRs into `latest`/`next`, image build & push on pushes; `codeql.yml`: CodeQL scan |
+| `.github/dependabot.yml` | Weekly grouped updates: both npm packages, Actions, Docker images |
+| `compose.yaml` / `compose.dev.yaml` | Deploy stacks running the CI images (`latest` / `next`) + Postgres, configured from the root `.env` (`.env.example` has the deploy checklist) |
 | `.github/pull_request_template.md` | Default PR template (checklist); typed variants in `.github/PULL_REQUEST_TEMPLATE/` |
 | `.kilo/plans/` | Kilo plan history — gitignored, local only, do not hand-edit |
 
@@ -18,7 +20,8 @@ Full-stack template monorepo: Express.js 5 API (`backend/`) + React/Vite/Mantine
 - Separate lockfiles per package — run `npm ci` inside `backend/` or `frontend/`, never at the root.
 - Read the scoped `AGENTS.md` before changing a package.
 - New environment variables: add to the package's `.env.example` and README table in the same change.
-- Node 26+.
+- Node 26+ (`.nvmrc`); formatting per `.editorconfig`.
+- PRs must pass the CI PR gate (the `Test, lint and build` job) before merging.
 
 ## Never
 
@@ -26,6 +29,8 @@ Full-stack template monorepo: Express.js 5 API (`backend/`) + React/Vite/Mantine
 - Edit `backend/server/config/generated/` (Prisma-generated, gitignored).
 - Change `prisma/schema.prisma` without a migration.
 - Push directly to `latest` or `next` — PR first (templates in `.github/PULL_REQUEST_TEMPLATE/`).
+- Create `.mjs` files — both packages are `"type": "module"`, plain `.js` is already ESM.
+- Publish a database port beyond `127.0.0.1` in any compose file.
 
 ## Commands
 
@@ -34,6 +39,7 @@ Full-stack template monorepo: Express.js 5 API (`backend/`) + React/Vite/Mantine
 | Install | backend / frontend | `npm ci` |
 | Run locally | backend | `npm run start:local` (needs `docker compose up -d database` + `npx prisma migrate deploy`) |
 | Run locally | frontend | `npm run start:local` |
-| Test | backend | `npm test` |
-| Lint | backend / frontend | `npx eslint .` |
+| Test | backend / frontend | `npm test` |
+| Lint | backend / frontend | `npx eslint .` (frontend also `npm run lint`) |
 | Build | frontend | `npm run build` |
+| Deploy (prod / staging) | root | `docker compose pull && docker compose up -d --wait` / same with `-f compose.dev.yaml` |
