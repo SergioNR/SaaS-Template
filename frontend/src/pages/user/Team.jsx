@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
-import PropTypes from 'prop-types';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActionIcon,
@@ -15,37 +14,20 @@ import {
   Text,
   TextInput,
   Title,
-  Tooltip,
 } from '@mantine/core';
-import {
-  IconMailForward,
-  IconTrash,
-  IconUserPlus,
-} from '@tabler/icons-react';
-import apiClient from '../../config/API/axiosConfig.mjs';
+import { IconMailForward, IconTrash, IconUserPlus } from '@tabler/icons-react';
+import apiClient from '../../config/API/axiosConfig.js';
 import Seo from '../../components/Seo.jsx';
+import LockedTooltip from '../../components/LockedTooltip.jsx';
 import { notifyError, notifySuccess } from '../../utils/notifications.js';
 import { formatDateTime } from '../../utils/formatDate.js';
+import { primeCompanyPermissions } from '../../hooks/useCompanyPermissions.js';
+import { callerCapabilities, inviteButtonState, inviteLocks, memberLocks } from './teamLocks.js';
 
 const roleLabel = (t, roleName) => t(`team.roles.${roleName}`, roleName);
 
-function LockedTooltip({ locked, label, children }) {
-  if (!locked) {
-    return children;
-  }
-
-  return (
-    <Tooltip label={label}>
-      <span style={{ display: 'inline-flex' }}>{children}</span>
-    </Tooltip>
-  );
-}
-
-LockedTooltip.propTypes = {
-  locked: PropTypes.bool,
-  label: PropTypes.string.isRequired,
-  children: PropTypes.node.isRequired,
-};
+const memberKey = (id) => `member:${id}`;
+const inviteKey = (id) => `invite:${id}`;
 
 export function Team() {
   const { t } = useTranslation();
@@ -58,6 +40,9 @@ export function Team() {
   const [assignableRoles, setAssignableRoles] = useState([]);
   const [callerId, setCallerId] = useState(null);
   const [now, setNow] = useState(null);
+  //* Rows with a mutation in flight (role change, resend, revoke) - their
+  //* controls are disabled so a double click cannot fire the request twice
+  const [pendingIds, setPendingIds] = useState(() => new Set());
 
   useEffect(() => {
     setNow(Date.now());
@@ -71,19 +56,44 @@ export function Team() {
   const [removeTarget, setRemoveTarget] = useState(null);
   const [removing, setRemoving] = useState(false);
 
-  const loadTeam = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  //* Every load aborts the previous one and bumps the request id, so a slow
+  //* response never overwrites a newer one (e.g. the reload after a mutation)
+  const requestIdRef = useRef(0);
+  const abortRef = useRef(null);
+
+  //* `silent` (after a mutation) keeps the current table on screen instead
+  //* of flashing the skeleton, and keeps the last good data on failure
+  const loadTeam = useCallback(async ({ silent = false } = {}) => {
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const requestId = ++requestIdRef.current;
+
+    if (!silent) {
+      setLoading(true);
+      setError(null);
+    }
 
     try {
-      const response = await apiClient.get('/api/v1/team');
+      const response = await apiClient.get('/api/v1/team', { signal: controller.signal });
+
+      if (requestId !== requestIdRef.current) {
+        return;
+      }
 
       setMembers(response.data.members);
       setInvites(response.data.invites);
       setCallerPermissions(response.data.callerPermissions);
       setAssignableRoles(response.data.assignableRoles);
       setCallerId(response.data.callerId ?? null);
+      setError(null);
+      //* Other pages (billing) read the same permissions from the session cache
+      primeCompanyPermissions(response.data.callerPermissions);
     } catch (err) {
+      if (requestId !== requestIdRef.current || silent) {
+        return;
+      }
+
       const status = err?.response?.status;
       const code = err?.response?.data?.code;
 
@@ -91,7 +101,9 @@ export function Team() {
       //* wrapper redirects superadmins) get a specific message
       setError(status === 403 && code === 'COMPANY_MEMBERSHIP_REQUIRED' ? 'membership' : 'load');
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current && !silent) {
+        setLoading(false);
+      }
     }
   }, []);
 
@@ -99,9 +111,32 @@ export function Team() {
     loadTeam();
   }, [loadTeam]);
 
-  const canInvite = callerPermissions.includes('team.invite');
-  const canRemove = callerPermissions.includes('team.remove');
-  const canManageRoles = callerPermissions.includes('team.manage_roles');
+  useEffect(() => () => abortRef.current?.abort(), []);
+
+  const isPending = (key) => pendingIds.has(key);
+
+  //* Marks a row busy for the duration of `action`; a second call while busy
+  //* is dropped
+  const pendingRef = useRef(new Set());
+  const withPending = async (key, action) => {
+    if (pendingRef.current.has(key)) {
+      return;
+    }
+
+    pendingRef.current.add(key);
+    setPendingIds(new Set(pendingRef.current));
+
+    try {
+      await action();
+    } finally {
+      pendingRef.current.delete(key);
+      setPendingIds(new Set(pendingRef.current));
+    }
+  };
+
+  const capabilities = callerCapabilities(callerPermissions);
+  const permissionsKnown = !loading && !error;
+  const inviteButton = inviteButtonState({ permissionsKnown, capabilities });
 
   const assignableRoleOptions = assignableRoles.map((roleName) => ({
     value: roleName,
@@ -111,25 +146,32 @@ export function Team() {
   const submitInvite = async (event) => {
     event.preventDefault();
 
+    if (inviting) {
+      return;
+    }
+
     //* Mantine's Select `required` is not enforced by the browser
     if (!inviteRole) {
       setInviteRoleError(true);
       return;
     }
 
+    //* Captured before the await - React reuses the event object afterwards
+    const form = event.currentTarget;
+
     setInviting(true);
 
     try {
       await apiClient.post('/api/v1/team/invites', {
-        email: event.target.email.value,
+        email: form.email.value,
         roleName: inviteRole,
       });
 
       notifySuccess(t('team.invites.sentToast'));
       setInviteModalOpened(false);
       setInviteRole(null);
-      event.target.email.value = '';
-      await loadTeam();
+      form.reset();
+      await loadTeam({ silent: true });
     } catch (err) {
       const status = err?.response?.status;
 
@@ -147,7 +189,7 @@ export function Team() {
   };
 
   const confirmRemove = async () => {
-    if (!removeTarget) {
+    if (!removeTarget || removing) {
       return;
     }
 
@@ -158,7 +200,7 @@ export function Team() {
 
       notifySuccess(t('team.members.removedToast', { email: removeTarget.email }));
       setRemoveTarget(null);
-      await loadTeam();
+      await loadTeam({ silent: true });
     } catch (err) {
       const status = err?.response?.status;
 
@@ -174,90 +216,81 @@ export function Team() {
     }
   };
 
-  const changeMemberRole = async (memberId, roleName) => {
+  const changeMemberRole = (memberId, roleName) => {
     if (!roleName) {
-      return;
+      return undefined;
     }
 
-    try {
-      await apiClient.patch(`/api/v1/team/members/${memberId}`, { roleName });
+    return withPending(memberKey(memberId), async () => {
+      try {
+        await apiClient.patch(`/api/v1/team/members/${memberId}`, { roleName });
 
-      notifySuccess(t('team.members.roleUpdatedToast'));
-      await loadTeam();
-    } catch (err) {
-      const status = err?.response?.status;
+        notifySuccess(t('team.members.roleUpdatedToast'));
+        await loadTeam({ silent: true });
+      } catch (err) {
+        const status = err?.response?.status;
 
-      if (status === 409) {
-        notifyError(t('team.errors.roleConflict'));
-      } else if (status === 403) {
-        notifyError(t('team.errors.forbidden'));
-      } else {
-        notifyError(t('team.errors.generic'));
+        if (status === 409) {
+          notifyError(t('team.errors.roleConflict'));
+        } else if (status === 403) {
+          notifyError(t('team.errors.forbidden'));
+        } else {
+          notifyError(t('team.errors.generic'));
+        }
       }
-    }
+    });
   };
 
-  const resendInvite = async (inviteId) => {
-    try {
-      await apiClient.post(`/api/v1/team/invites/${inviteId}/resend`);
+  const resendInvite = (inviteId) =>
+    withPending(inviteKey(inviteId), async () => {
+      try {
+        await apiClient.post(`/api/v1/team/invites/${inviteId}/resend`);
 
-      notifySuccess(t('team.invites.resentToast'));
-      await loadTeam();
-    } catch (err) {
-      const status = err?.response?.status;
-      const code = err?.response?.data?.code;
+        notifySuccess(t('team.invites.resentToast'));
+        await loadTeam({ silent: true });
+      } catch (err) {
+        const status = err?.response?.status;
+        const code = err?.response?.data?.code;
 
-      //* INVITER_INVALID: the original inviter can no longer grant the role -
-      //* the invite has to be revoked and sent again. Any other 409 is a
-      //* transient conflict worth retrying
-      if (status === 409 && code === 'INVITER_INVALID') {
-        notifyError(t('team.errors.resendInviterInvalid'));
-      } else if (status === 409) {
-        notifyError(t('team.errors.retry'));
-      } else if (status === 403) {
-        notifyError(t('team.errors.forbidden'));
-      } else {
-        notifyError(t('team.errors.generic'));
+        //* INVITER_INVALID: the original inviter can no longer grant the role -
+        //* the invite has to be revoked and sent again. Any other 409 is a
+        //* transient conflict worth retrying
+        if (status === 409 && code === 'INVITER_INVALID') {
+          notifyError(t('team.errors.resendInviterInvalid'));
+        } else if (status === 409) {
+          notifyError(t('team.errors.retry'));
+        } else if (status === 403) {
+          notifyError(t('team.errors.forbidden'));
+        } else {
+          notifyError(t('team.errors.generic'));
+        }
       }
-    }
-  };
+    });
 
-  const revokeInvite = async (inviteId) => {
-    try {
-      await apiClient.delete(`/api/v1/team/invites/${inviteId}`);
+  const revokeInvite = (inviteId) =>
+    withPending(inviteKey(inviteId), async () => {
+      try {
+        await apiClient.delete(`/api/v1/team/invites/${inviteId}`);
 
-      notifySuccess(t('team.invites.revokedToast'));
-      await loadTeam();
-    } catch (err) {
-      if (err?.response?.status === 403) {
-        notifyError(t('team.errors.forbidden'));
-      } else {
-        notifyError(t('team.errors.generic'));
+        notifySuccess(t('team.invites.revokedToast'));
+        await loadTeam({ silent: true });
+      } catch (err) {
+        if (err?.response?.status === 403) {
+          notifyError(t('team.errors.forbidden'));
+        } else {
+          notifyError(t('team.errors.generic'));
+        }
       }
-    }
-  };
+    });
 
   const memberRows = members.map((member) => {
-    //* The Select can only represent a single role that the caller is allowed
-    //* to assign; other members (multi-role, or a role above the caller's
-    //* reach such as the owner) keep their badge and a locked Select
-    const currentRole = member.companyRoles.length === 1 ? member.companyRoles[0] : null;
-    const roleNotAssignable = !currentRole || !assignableRoles.includes(currentRole);
-    //* The API marks a member manageable only when the caller strictly
-    //* outranks every role they hold; the caller's own row is never manageable
-    const isSelf = callerId !== null && member.id === callerId;
-    const outranked = !member.manageable;
-    const rankLockLabel = isSelf ? t('team.locked.self') : t('team.locked.notOutranked');
-
-    const roleLocked = !canManageRoles || isSelf || outranked || roleNotAssignable;
-    const roleLockLabel = !canManageRoles
-      ? t('team.locked.manageRoles')
-      : isSelf || outranked
-        ? rankLockLabel
-        : t('team.locked.roleNotAssignable');
-
-    const removeLocked = !canRemove || isSelf || outranked;
-    const removeLockLabel = !canRemove ? t('team.locked.remove') : rankLockLabel;
+    const { currentRole, roleNotAssignable, roleLocked, roleLockLabel, removeLocked, removeLockLabel } = memberLocks({
+      member,
+      callerId,
+      assignableRoles,
+      capabilities,
+    });
+    const pending = isPending(memberKey(member.id));
 
     return (
       <Table.Tr key={member.id}>
@@ -282,22 +315,23 @@ export function Team() {
         </Table.Td>
         <Table.Td>
           <Group gap="sm" justify="flex-end" wrap="nowrap">
-            <LockedTooltip locked={roleLocked} label={roleLockLabel}>
+            <LockedTooltip locked={roleLocked} label={t(roleLockLabel)}>
               <Select
                 size="xs"
                 w={160}
-                disabled={roleLocked}
+                disabled={roleLocked || pending}
                 data={assignableRoleOptions}
                 value={roleNotAssignable ? null : currentRole}
                 onChange={(roleName) => changeMemberRole(member.id, roleName)}
                 aria-label={t('team.members.roleChange', { email: member.email })}
+                aria-busy={pending}
               />
             </LockedTooltip>
-            <LockedTooltip locked={removeLocked} label={removeLockLabel}>
+            <LockedTooltip locked={removeLocked} label={t(removeLockLabel)}>
               <ActionIcon
                 variant="subtle"
                 color="red"
-                disabled={removeLocked}
+                disabled={removeLocked || pending}
                 aria-label={t('team.members.removeAction', { email: member.email })}
                 onClick={() => setRemoveTarget(member)}
               >
@@ -312,9 +346,8 @@ export function Team() {
 
   const inviteRows = invites.map((invite) => {
     const expired = now !== null && new Date(invite.token_expires).getTime() < now;
-    //* `manageable` = the caller can grant the invite's role
-    const inviteLocked = !canInvite || !invite.manageable;
-    const inviteLockLabel = !canInvite ? t('team.locked.invite') : t('team.locked.inviteRole');
+    const { locked: inviteLocked, lockLabel: inviteLockLabel } = inviteLocks({ invite, capabilities });
+    const pending = isPending(inviteKey(invite.id));
 
     return (
       <Table.Tr key={invite.id}>
@@ -338,22 +371,22 @@ export function Team() {
         </Table.Td>
         <Table.Td>
           <Group gap={0} justify="flex-end" wrap="nowrap">
-            <LockedTooltip locked={inviteLocked} label={inviteLockLabel}>
+            <LockedTooltip locked={inviteLocked} label={t(inviteLockLabel)}>
               <ActionIcon
                 variant="subtle"
                 color="blue"
-                disabled={inviteLocked}
+                disabled={inviteLocked || pending}
                 aria-label={t('team.invites.resend', { email: invite.email })}
                 onClick={() => resendInvite(invite.id)}
               >
                 <IconMailForward size={16} stroke={1.5} />
               </ActionIcon>
             </LockedTooltip>
-            <LockedTooltip locked={inviteLocked} label={inviteLockLabel}>
+            <LockedTooltip locked={inviteLocked} label={t(inviteLockLabel)}>
               <ActionIcon
                 variant="subtle"
                 color="red"
-                disabled={inviteLocked}
+                disabled={inviteLocked || pending}
                 aria-label={t('team.invites.revoke', { email: invite.email })}
                 onClick={() => revokeInvite(invite.id)}
               >
@@ -372,10 +405,10 @@ export function Team() {
 
       <Group justify="space-between" align="flex-start" wrap="wrap">
         <Title order={2}>{t('team.title')}</Title>
-        <LockedTooltip locked={!canInvite} label={t('team.locked.invite')}>
+        <LockedTooltip locked={inviteButton.showLockTooltip} label={t('team.locked.invite')}>
           <Button
             leftSection={<IconUserPlus size={16} />}
-            disabled={!canInvite}
+            disabled={inviteButton.disabled}
             onClick={() => setInviteModalOpened(true)}
           >
             {t('team.inviteButton')}
@@ -385,7 +418,17 @@ export function Team() {
 
       {error ? (
         <Alert color="red" variant="light">
-          {error === 'membership' ? t('team.errors.membershipRequired') : t('team.errors.loadError')}
+          <Stack gap="sm" align="flex-start">
+            <Text size="sm">
+              {error === 'membership' ? t('team.errors.membershipRequired') : t('team.errors.loadError')}
+            </Text>
+            {/* A missing membership will not fix itself - only offer a retry for load failures */}
+            {error === 'load' && (
+              <Button size="xs" variant="light" color="red" onClick={() => loadTeam()}>
+                {t('common.retry')}
+              </Button>
+            )}
+          </Stack>
         </Alert>
       ) : (
         <>
@@ -402,17 +445,17 @@ export function Team() {
                   </Table.Tr>
                 </Table.Thead>
                 <Table.Tbody>
-                  {loading ? (
-                    [1, 2, 3].map((row) => (
-                      <Table.Tr key={row}>
-                        {[1, 2, 3, 4].map((cell) => (
-                          <Table.Td key={cell}>
-                            <Skeleton height={20} />
-                          </Table.Td>
-                        ))}
-                      </Table.Tr>
-                    ))
-                  ) : memberRows}
+                  {loading
+                    ? [1, 2, 3].map((row) => (
+                        <Table.Tr key={row}>
+                          {[1, 2, 3, 4].map((cell) => (
+                            <Table.Td key={cell}>
+                              <Skeleton height={20} />
+                            </Table.Td>
+                          ))}
+                        </Table.Tr>
+                      ))
+                    : memberRows}
                 </Table.Tbody>
               </Table>
             </Table.ScrollContainer>
@@ -436,17 +479,17 @@ export function Team() {
                   </Table.Tr>
                 </Table.Thead>
                 <Table.Tbody>
-                  {loading ? (
-                    [1, 2].map((row) => (
-                      <Table.Tr key={row}>
-                        {[1, 2, 3, 4].map((cell) => (
-                          <Table.Td key={cell}>
-                            <Skeleton height={20} />
-                          </Table.Td>
-                        ))}
-                      </Table.Tr>
-                    ))
-                  ) : inviteRows}
+                  {loading
+                    ? [1, 2].map((row) => (
+                        <Table.Tr key={row}>
+                          {[1, 2, 3, 4].map((cell) => (
+                            <Table.Td key={cell}>
+                              <Skeleton height={20} />
+                            </Table.Td>
+                          ))}
+                        </Table.Tr>
+                      ))
+                    : inviteRows}
                 </Table.Tbody>
               </Table>
             </Table.ScrollContainer>
@@ -462,6 +505,9 @@ export function Team() {
       <Modal
         opened={inviteModalOpened}
         onClose={() => {
+          if (inviting) {
+            return;
+          }
           setInviteModalOpened(false);
           setInviteRoleError(false);
         }}
@@ -474,6 +520,7 @@ export function Team() {
               label={t('team.inviteModal.email')}
               placeholder={t('team.inviteModal.emailPlaceholder')}
               type="email"
+              autoComplete="off"
               required
             />
             <Select
@@ -502,13 +549,15 @@ export function Team() {
 
       <Modal
         opened={removeTarget !== null}
-        onClose={() => setRemoveTarget(null)}
+        onClose={() => {
+          if (!removing) {
+            setRemoveTarget(null);
+          }
+        }}
         title={t('team.members.removeModal.title')}
       >
         <Stack>
-          <Text size="sm">
-            {t('team.members.removeModal.description', { email: removeTarget?.email ?? '' })}
-          </Text>
+          <Text size="sm">{t('team.members.removeModal.description', { email: removeTarget?.email ?? '' })}</Text>
           <Group justify="flex-end">
             <Button variant="default" onClick={() => setRemoveTarget(null)} disabled={removing}>
               {t('team.members.removeModal.cancel')}

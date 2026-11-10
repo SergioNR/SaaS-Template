@@ -1,25 +1,24 @@
-import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Badge } from '@mantine/core';
 import PropTypes from 'prop-types';
+import { subscriptionStatus } from '../../utils/subscriptionStatus.js';
 
-//* Mirrors the backend/client definition of an active subscription:
-//* an existing `expires_at` in the future (null counts as inactive)
+const BADGES = {
+  paid: { color: 'teal', key: 'billing.statusActive' },
+  active: { color: 'teal', key: 'billing.statusActive' },
+  trial: { color: 'yellow', key: 'billing.statusTrial' },
+  inactive: { color: 'red', key: 'billing.statusInactive' },
+};
+
+//* Same rules as SubscriptionContext (utils/subscriptionStatus.js), computed
+//* during render - no first paint with a wrong "inactive" badge
 export const SubscriptionStatusBadge = ({ subscription }) => {
   const { t } = useTranslation();
-  const [now, setNow] = useState(null);
-
-  useEffect(() => {
-    setNow(Date.now());
-  }, []);
-
-  const active = Boolean(
-    subscription?.expires_at && now !== null && new Date(subscription.expires_at).getTime() > now
-  );
+  const badge = BADGES[subscriptionStatus(subscription)];
 
   return (
-    <Badge color={active ? 'teal' : 'red'} variant="light">
-      {active ? t('billing.statusActive') : t('billing.statusInactive')}
+    <Badge color={badge.color} variant="light">
+      {t(badge.key)}
     </Badge>
   );
 };
@@ -27,6 +26,7 @@ export const SubscriptionStatusBadge = ({ subscription }) => {
 SubscriptionStatusBadge.propTypes = {
   subscription: PropTypes.shape({
     expires_at: PropTypes.string,
+    is_paid: PropTypes.bool,
   }),
 };
 

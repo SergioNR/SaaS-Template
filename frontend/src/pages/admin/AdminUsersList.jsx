@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useOutletContext } from 'react-router';
 import {
@@ -14,123 +14,58 @@ import {
   Stack,
   Table,
   Text,
-  TextInput,
   Title,
-  Tooltip,
 } from '@mantine/core';
-import { IconSearch, IconTrash } from '@tabler/icons-react';
-import apiClient from '../../config/API/axiosConfig.mjs';
+import { IconTrash } from '@tabler/icons-react';
+import apiClient from '../../config/API/axiosConfig.js';
 import Seo from '../../components/Seo.jsx';
 import { notifyError, notifySuccess } from '../../utils/notifications.js';
 import { formatDateTime } from '../../utils/formatDate.js';
+import { useCursorList } from '../../hooks/useCursorList.js';
+import DebouncedSearchInput from '../../components/DebouncedSearchInput.jsx';
+import LockedTooltip from '../../components/LockedTooltip.jsx';
 
 const PAGE_SIZE = 25;
-const SEARCH_DEBOUNCE_MS = 400;
 
 const AdminUsersList = () => {
   const { t } = useTranslation();
   //* Provided by AdminDashboardWrapper's <Outlet context>
   const { sessionUser } = useOutletContext();
-  const [users, setUsers] = useState([]);
-  const [userCount, setUserCount] = useState(0);
-  const [nextCursor, setNextCursor] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [error, setError] = useState(false);
-  const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [role, setRole] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
 
-  useEffect(() => {
-    const timer = setTimeout(() => setSearch(searchInput.trim()), SEARCH_DEBOUNCE_MS);
+  const fetchUsers = useCallback(
+    async ({ cursor, signal } = {}) => {
+      const response = await apiClient.get('/api/v1/admin/users', {
+        params: {
+          limit: PAGE_SIZE,
+          ...(search ? { search } : {}),
+          ...(role ? { role } : {}),
+          ...(cursor ? { cursor } : {}),
+        },
+        signal,
+      });
 
-    return () => clearTimeout(timer);
-  }, [searchInput]);
+      return response.data;
+    },
+    [search, role],
+  );
 
-  const fetchUsers = useCallback(async ({ cursor, signal } = {}) => {
-    const response = await apiClient.get('/api/v1/admin/users', {
-      params: {
-        limit: PAGE_SIZE,
-        ...(search ? { search } : {}),
-        ...(role ? { role } : {}),
-        ...(cursor ? { cursor } : {}),
-      },
-      signal,
-    });
+  const onLoadMoreError = useCallback(() => notifyError(t('admin.users.loadMoreError')), [t]);
 
-    return response.data;
-  }, [search, role]);
-
-  //* Every first-page load (filter change, refresh) bumps the request id and
-  //* aborts the previous request, so late responses for stale filters - first
-  //* pages or load-more pages - are discarded instead of mixed into the list
-  const requestIdRef = useRef(0);
-  const abortRef = useRef(null);
-
-  const loadFirstPage = useCallback(async () => {
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
-    const requestId = ++requestIdRef.current;
-
-    setLoading(true);
-    setError(false);
-    setNextCursor(null);
-
-    try {
-      const data = await fetchUsers({ signal: controller.signal });
-
-      if (requestId !== requestIdRef.current) {
-        return;
-      }
-
-      setUsers(data.users);
-      setUserCount(data.userCount);
-      setNextCursor(data.nextCursor ?? null);
-    } catch {
-      if (requestId === requestIdRef.current) {
-        setError(true);
-      }
-    } finally {
-      if (requestId === requestIdRef.current) {
-        setLoading(false);
-      }
-    }
-  }, [fetchUsers]);
-
-  useEffect(() => {
-    loadFirstPage();
-  }, [loadFirstPage]);
-
-  useEffect(() => () => abortRef.current?.abort(), []);
-
-  const loadMore = async () => {
-    const requestId = requestIdRef.current;
-    const signal = abortRef.current?.signal;
-
-    setLoadingMore(true);
-
-    try {
-      const data = await fetchUsers({ cursor: nextCursor, signal });
-
-      if (requestId !== requestIdRef.current) {
-        return;
-      }
-
-      setUsers((previousUsers) => [...previousUsers, ...data.users]);
-      setNextCursor(data.nextCursor ?? null);
-    } catch {
-      if (requestId !== requestIdRef.current) {
-        return;
-      }
-
-      notifyError(t('admin.users.loadMoreError'));
-    } finally {
-      setLoadingMore(false);
-    }
-  };
+  //* Stale-response handling (abort + request id) lives in useCursorList
+  const {
+    rows: users,
+    rowCount: userCount,
+    nextCursor,
+    loading,
+    loadingMore,
+    error,
+    reload,
+    loadMore,
+  } = useCursorList({ fetchPage: fetchUsers, rowsKey: 'users', countKey: 'userCount', onLoadMoreError });
 
   const confirmDelete = async () => {
     if (!deleteTarget) {
@@ -144,7 +79,7 @@ const AdminUsersList = () => {
 
       notifySuccess(t('admin.users.deletedToast', { email: deleteTarget.email }));
       setDeleteTarget(null);
-      await loadFirstPage();
+      await reload();
     } catch (err) {
       const status = err?.response?.status;
       const code = err?.response?.data?.code;
@@ -195,20 +130,17 @@ const AdminUsersList = () => {
         </Table.Td>
         <Table.Td>
           <Group gap={0} justify="flex-end">
-            {/* Disabled controls swallow pointer events - the span keeps the tooltip hoverable */}
-            <Tooltip label={t('admin.users.deleteSelfLocked')} disabled={!isSelf} withArrow>
-              <span style={{ display: 'inline-flex' }}>
-                <ActionIcon
-                  variant="subtle"
-                  color="red"
-                  disabled={isSelf}
-                  aria-label={t('admin.users.deleteAction', { email: user.email })}
-                  onClick={() => setDeleteTarget(user)}
-                >
-                  <IconTrash size={16} stroke={1.5} />
-                </ActionIcon>
-              </span>
-            </Tooltip>
+            <LockedTooltip locked={isSelf} label={t('admin.users.deleteSelfLocked')}>
+              <ActionIcon
+                variant="subtle"
+                color="red"
+                disabled={isSelf}
+                aria-label={t('admin.users.deleteAction', { email: user.email })}
+                onClick={() => setDeleteTarget(user)}
+              >
+                <IconTrash size={16} stroke={1.5} />
+              </ActionIcon>
+            </LockedTooltip>
           </Group>
         </Table.Td>
       </Table.Tr>
@@ -217,23 +149,23 @@ const AdminUsersList = () => {
 
   return (
     <Stack gap="lg">
-      <Seo title={t('seo.pages.admin')} />
+      <Seo title={t('seo.pages.adminUsers')} />
 
       <Title order={2}>{t('admin.users.title')}</Title>
 
       <Group justify="space-between" wrap="wrap">
         <Group gap="sm" wrap="nowrap">
-          <TextInput
-            value={searchInput}
-            onChange={(event) => setSearchInput(event.currentTarget.value)}
+          <DebouncedSearchInput
+            onSearch={setSearch}
+            label={t('admin.users.searchLabel')}
             placeholder={t('admin.users.searchPlaceholder')}
-            leftSection={<IconSearch size={16} stroke={1.5} />}
             w={260}
           />
           <Select
             value={role}
             onChange={setRole}
             data={roleOptions}
+            aria-label={t('admin.users.roleFilterLabel')}
             placeholder={t('admin.users.roleFilterPlaceholder')}
             clearable
             w={180}

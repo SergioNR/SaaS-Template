@@ -6,7 +6,12 @@
 # list of extra connect-src origins the browser talks to directly - e.g. the
 # S3/MinIO origin presigned uploads/downloads go to. It must be defined (even
 # empty) in the image, otherwise envsubst leaves the placeholder in the header.
-add_header Content-Security-Policy "default-src 'self'; script-src 'self' https://eu-assets.i.posthog.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' ${NGINX_CSP_API_ORIGIN} ${NGINX_CSP_CONNECT_EXTRA} https://eu.i.posthog.com https://eu-assets.i.posthog.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" always;
+# ${NGINX_CSP_POSTHOG_ORIGINS} is the space-separated list of PostHog origins
+# (ingestion + assets) the bundle may load scripts from and send events to -
+# it must match the VITE_PUBLIC_POSTHOG_HOST build arg (EU cloud default:
+# "https://eu.i.posthog.com https://eu-assets.i.posthog.com"). Like the other
+# vars it must be defined in the image, even empty when analytics is off.
+add_header Content-Security-Policy "default-src 'self'; script-src 'self' ${NGINX_CSP_POSTHOG_ORIGINS}; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' ${NGINX_CSP_API_ORIGIN} ${NGINX_CSP_CONNECT_EXTRA} ${NGINX_CSP_POSTHOG_ORIGINS}; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" always;
 add_header X-Frame-Options "DENY" always;
 add_header X-Content-Type-Options "nosniff" always;
 add_header Referrer-Policy "no-referrer" always;

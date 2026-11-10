@@ -21,7 +21,9 @@
       "profile": "Cambiar contraseña",
       "plans": "Planes",
       "team": "Equipo"
-    }
+    },
+    "main": "Navegación principal",
+    "skipToContent": "Saltar al contenido principal"
   },
   "footer": {
     "ariaLabel": "Pie de página del sitio",
@@ -103,14 +105,14 @@
         "invalidLink": "El enlace no es válido. Solicita un nuevo enlace para restablecer tu contraseña.",
         "invalid": "La contraseña no cumple los requisitos o las contraseñas no coinciden. Revisa los datos e inténtalo de nuevo.",
         "generic": "No se pudo actualizar la contraseña. Por favor, inténtalo de nuevo más tarde."
-      }
+      },
+      "checkErrorTitle": "No se pudo comprobar el enlace",
+      "checkErrorBody": "No hemos podido verificar el enlace para restablecer la contraseña. Revisa tu conexión e inténtalo de nuevo."
     },
     "passwordUpdate": {
       "title": "Cambiar contraseña",
       "submit": "Cambiar contraseña",
       "success": "La contraseña ha sido modificada con éxito",
-      "username": "nombre de usuario",
-      "usernamePlaceholder": "Introduce tu nombre de usuario",
       "currentPassword": "Contraseña actual",
       "currentPasswordPlaceholder": "Introduce tu contraseña actual",
       "newPassword": "Nueva contraseña",
@@ -508,7 +510,9 @@
         "superadminWarning": "Vas a eliminar una cuenta de superadministrador.",
         "cancel": "Cancelar",
         "confirm": "Eliminar"
-      }
+      },
+      "searchLabel": "Buscar usuarios por email",
+      "roleFilterLabel": "Filtrar por rol"
     },
     "userDetail": {
       "notFound": "El usuario no existe o ha sido eliminado.",
@@ -529,7 +533,8 @@
       },
       "empty": "No hay empresas que coincidan con la búsqueda.",
       "loadMore": "Cargar más",
-      "loadMoreError": "No se pudieron cargar más empresas."
+      "loadMoreError": "No se pudieron cargar más empresas.",
+      "searchLabel": "Buscar empresas por nombre"
     },
     "companyDetail": {
       "notFound": "La empresa no existe o ha sido eliminada.",
@@ -561,10 +566,14 @@
       "dashboard": "Panel de control",
       "profile": "Perfil",
       "billing": "Facturación",
-      "admin": "Administración",
       "notFound": "Página no encontrada",
       "team": "Equipo",
-      "acceptInvite": "Aceptar invitación"
+      "acceptInvite": "Aceptar invitación",
+      "adminOverview": "Resumen · Administración",
+      "adminUsers": "Usuarios · Administración",
+      "adminUserDetail": "Detalle de usuario · Administración",
+      "adminCompanies": "Empresas · Administración",
+      "adminCompanyDetail": "Detalle de empresa · Administración"
     }
   },
   "notFound": {
@@ -575,7 +584,9 @@
   "errorBoundary": {
     "title": "Algo ha ido mal",
     "description": "Se ha producido un error inesperado y no se pudo mostrar esta página. Puedes intentar recargarla.",
-    "reload": "Recargar"
+    "reload": "Recargar",
+    "chunkTitle": "Hay una nueva versión disponible",
+    "chunkDescription": "No se pudo cargar esta página, probablemente porque la aplicación se ha actualizado. Recarga para usar la última versión."
   },
   "team": {
     "title": "Equipo",
@@ -649,5 +660,13 @@
       "generic": "Ha ocurrido un error. Inténtalo de nuevo.",
       "retry": "No se pudo completar la acción por un conflicto. Inténtalo de nuevo."
     }
+  },
+  "consent": {
+    "ariaLabel": "Preferencias de analítica",
+    "body": "Usamos analítica de producto para entender cómo se usa la aplicación y mejorarla. Solo se activa si la aceptas.",
+    "learnMore": "Más información",
+    "accept": "Aceptar",
+    "decline": "Rechazar",
+    "manage": "Preferencias de cookies"
   }
 }

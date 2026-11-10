@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import apiClient from '../../config/API/axiosConfig.mjs';
-import { Container, Stack, Card, Title, Text, Group, Button, SimpleGrid, Alert, Badge, Tooltip } from '@mantine/core';
+import apiClient from '../../config/API/axiosConfig.js';
+import { useCompanyPermissions } from '../../hooks/useCompanyPermissions.js';
+import { Box, Container, Stack, Card, Title, Text, Group, Button, SimpleGrid, Alert, Badge } from '@mantine/core';
+import LockedTooltip from '../../components/LockedTooltip.jsx';
 import { useSubscription } from '../../contexts/useSubscription.js';
 import PageLoader from '../../components/PageLoader.jsx';
 import Seo from '../../components/Seo.jsx';
@@ -44,8 +46,10 @@ const UserBilling = () => {
     hasBillingId,
     refresh,
   } = useSubscription();
-  // null while unknown - the backend still enforces the permission (403)
-  const [canManageBilling, setCanManageBilling] = useState(null);
+  //* Shared session cache (one /api/v1/team fetch per session). While
+  //* loading or after a failed fetch the actions stay enabled - the backend
+  //* still enforces the permission (403 -> toast)
+  const { has: hasPermission, loading: permissionsLoading, failed: permissionsFailed } = useCompanyPermissions();
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [portalLoading, setPortalLoading] = useState(false);
   const [paidPollsLeft, setPaidPollsLeft] = useState(0);
@@ -106,26 +110,7 @@ const UserBilling = () => {
     pollingStartedRef.current = false;
   }, [paidPollsLeft, hasPaidSubscription, t]);
 
-  useEffect(() => {
-    const controller = new AbortController();
-
-    const loadPermissions = async () => {
-      try {
-        const response = await apiClient.get('/api/v1/team', { signal: controller.signal });
-        const permissions = response.data?.callerPermissions ?? [];
-
-        setCanManageBilling(permissions.includes(BILLING_PERMISSION));
-      } catch {
-        // Leave the actions enabled - a 403 on click is handled with a toast
-      }
-    };
-
-    loadPermissions();
-
-    return () => controller.abort();
-  }, []);
-
-  const billingLocked = canManageBilling === false;
+  const billingLocked = !permissionsLoading && !permissionsFailed && !hasPermission(BILLING_PERMISSION);
 
   const handlePriceLink = async (planName, planBillingCycle) => {
     const planData = {
@@ -250,26 +235,20 @@ const UserBilling = () => {
                 <Text size="sm" c="dimmed">{t('billing.monthly.vatIncluded')}</Text>
               </Group>
               <Text c="dimmed" mt="md">{t('billing.monthly.description')}</Text>
-              {/* Disabled buttons swallow pointer events - the span wrapper keeps the tooltip hoverable */}
-              <Tooltip
-                label={t('billing.locked.manage')}
-                disabled={!billingLocked}
-                position="top"
-                withArrow
-              >
-                <span style={{ marginTop: 'auto' }}>
+              <Box mt="auto">
+                <LockedTooltip locked={billingLocked} label={t('billing.locked.manage')} block>
                   <Button
                     mt="md"
                     fullWidth
-                    variant='outline'
+                    variant="outline"
                     disabled={billingLocked}
                     loading={checkoutLoading}
                     onClick={() => handlePriceLink(PLANS.PRO.id, 'monthly')}
                   >
                     {t('billing.monthly.choose')}
                   </Button>
-                </span>
-              </Tooltip>
+                </LockedTooltip>
+              </Box>
             </Card>
           </SimpleGrid>
         }
@@ -280,23 +259,18 @@ const UserBilling = () => {
             {t('billing.invoices.description')}
           </Text>
           <Group mt="md">
-            {/* Disabled buttons swallow pointer events - the span wrapper keeps the tooltip hoverable */}
-            <Tooltip
+            <LockedTooltip
+              locked={billingLocked || !hasBillingId}
               label={billingLocked ? t('billing.locked.manage') : t('billing.invoices.portalDisabled')}
-              disabled={hasBillingId && !billingLocked}
-              position="top"
-              withArrow
             >
-              <span>
-                <Button
-                  onClick={handleBillingCustomerPortal}
-                  disabled={!hasBillingId || billingLocked}
-                  loading={portalLoading}
-                >
-                  {t('billing.invoices.openPortal')}
-                </Button>
-              </span>
-            </Tooltip>
+              <Button
+                onClick={handleBillingCustomerPortal}
+                disabled={!hasBillingId || billingLocked}
+                loading={portalLoading}
+              >
+                {t('billing.invoices.openPortal')}
+              </Button>
+            </LockedTooltip>
           </Group>
         </Card>
       </Stack>

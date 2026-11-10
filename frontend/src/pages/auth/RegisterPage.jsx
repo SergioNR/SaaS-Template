@@ -1,13 +1,11 @@
-import CustomerRegistrationForm from '../../components/auth/CustomerRegistrationForm'
+import CustomerRegistrationForm from '../../components/auth/CustomerRegistrationForm';
 
 const RegisterPage = () => {
+  return (
+    <>
+      <CustomerRegistrationForm />
+    </>
+  );
+};
 
-    return (
-        <>
-        <CustomerRegistrationForm />
-        </>
-
-    )
-}
-
-export default RegisterPage
+export default RegisterPage;

@@ -16,10 +16,11 @@ import {
   Title,
 } from '@mantine/core';
 import { IconAlertCircle, IconArrowLeft } from '@tabler/icons-react';
-import apiClient from '../../config/API/axiosConfig.mjs';
+import apiClient from '../../config/API/axiosConfig.js';
 import PageLoader from '../../components/PageLoader.jsx';
 import Seo from '../../components/Seo.jsx';
 import { notifyError, notifySuccess } from '../../utils/notifications.js';
+import { scrubQueryFromAddressBar } from '../../utils/scrubUrlToken.js';
 
 //* Maps a 400 from the invite check/accept endpoints to an invalid-state key
 const invalidReasonFor400 = (code) => {
@@ -38,12 +39,17 @@ export function AcceptInvitePage() {
   const { t } = useTranslation();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const inviteToken = searchParams.get('inviteToken');
+  //* Read once: the token is then scrubbed from the address bar
+  const [inviteToken] = useState(() => searchParams.get('inviteToken'));
 
   const [loading, setLoading] = useState(Boolean(inviteToken));
   const [inviteData, setInviteData] = useState(null);
   const [invalidReason, setInvalidReason] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    scrubQueryFromAddressBar();
+  }, []);
 
   useEffect(() => {
     let cancelled = false;

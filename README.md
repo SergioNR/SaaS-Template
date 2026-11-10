@@ -60,6 +60,7 @@ The image jobs run in the GitHub **environment** named after the branch (`latest
 | `DOCKERHUB_TOKEN` | Secret (required) | Both image jobs (Docker Hub access token with read/write scope) |
 | `VITE_API_BASE_URL`, `VITE_SITE_BASE_URL` | Variables (required) | Frontend build args |
 | `VITE_PUBLIC_POSTHOG_KEY` | Variable (optional) | Frontend build arg |
+| `VITE_PUBLIC_POSTHOG_HOST` | Variable (optional) | Frontend build arg; defaults to the EU cloud. Changing it also means overriding `NGINX_CSP_POSTHOG_ORIGINS` at container runtime |
 | `NEXT_VITE_API_BASE_URL`, `NEXT_VITE_SITE_BASE_URL`, `NEXT_VITE_PUBLIC_POSTHOG_KEY` | Variables (optional) | Frontend build args for the `next` branch; each falls back to its `VITE_*` counterpart when unset |
 
 The `VITE_*` values are baked into the public JS bundle, so they are Actions *variables*, not secrets.

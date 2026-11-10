@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useRef, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import {
   Anchor,
@@ -13,22 +13,34 @@ import {
   Title,
   Alert,
 } from '@mantine/core';
-import { IconAlertCircle, IconCheck } from '@tabler/icons-react';
+import { IconAlertCircle } from '@tabler/icons-react';
 import classes from './AuthenticationTitle.module.css';
-import apiClient from '../../config/API/axiosConfig.mjs';
+import apiClient from '../../config/API/axiosConfig.js';
 import { Link } from 'react-router';
 import Seo from '../Seo.jsx';
+import { NEXT_PARAM, safeNextPath } from '../../utils/safeNext.js';
+import { invalidateSessionCaches } from '../../utils/sessionCaches.js';
 
 export function LoginForm() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const [loginResponse, setLoginResponse] = useState(null);
+  const [searchParams] = useSearchParams();
+  const [loginError, setLoginError] = useState(null);
+  //* State drives the button spinner; the ref blocks a second submit that
+  //* lands before the re-render (double Enter / double click)
+  const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
 
   const handleLogin = async (e) => {
     e.preventDefault();
 
-    // Reset messages
-    setLoginResponse(null);
+    if (submittingRef.current) {
+      return;
+    }
+
+    submittingRef.current = true;
+    setSubmitting(true);
+    setLoginError(null);
 
     const data = {
       username: e.target.username.value,
@@ -38,36 +50,29 @@ export function LoginForm() {
     try {
       const loginResponse = await apiClient.post('/api/v1/auth/login', data);
 
-      switch (loginResponse.data.user.role) {
-        case 'superadmin':
-          return navigate('/admin');
-        case 'user':
-          return navigate('/dashboard');
-        default:
-          return navigate('/dashboard');
-      }
+      //* A new session must never see the previous one's cached data
+      invalidateSessionCaches();
+
+      //* `next` (set by the 401 redirect) wins when it is a safe same-origin
+      //* path; the area wrappers still bounce a wrong-role target
+      const next = safeNextPath(searchParams.get(NEXT_PARAM));
+      const home = loginResponse.data.user.role === 'superadmin' ? '/admin' : '/dashboard';
+
+      return navigate(next ?? home, { replace: true });
     } catch (error) {
-      console.error(error);
+      submittingRef.current = false;
+      setSubmitting(false);
 
       const status = error.response?.status;
 
       //* 422 = malformed email - from the user's point of view the same as
       //* wrong credentials; 429 = login rate limit
       if (status === 401 || status === 422) {
-        setLoginResponse({
-          type: 'error',
-          message: t('auth.login.errors.invalidCredentials'),
-        });
+        setLoginError(t('auth.login.errors.invalidCredentials'));
       } else if (status === 429) {
-        setLoginResponse({
-          type: 'error',
-          message: t('auth.errors.tooManyAttempts'),
-        });
+        setLoginError(t('auth.errors.tooManyAttempts'));
       } else {
-        setLoginResponse({
-          type: 'error',
-          message: t('auth.login.errors.internal'),
-        });
+        setLoginError(t('auth.login.errors.internal'));
       }
     }
   };
@@ -85,13 +90,9 @@ export function LoginForm() {
         </Anchor>
       </Text>
 
-      {loginResponse && (
-        <Alert
-          icon={loginResponse.type === 'error' ? <IconAlertCircle size={16} /> : <IconCheck size={16} />}
-          color={loginResponse.type === 'error' ? 'red' : 'green'}
-          mt={20}
-        >
-          {loginResponse.message}
+      {loginError && (
+        <Alert icon={<IconAlertCircle size={16} />} color="red" mt={20}>
+          {loginError}
         </Alert>
       )}
 
@@ -118,7 +119,7 @@ export function LoginForm() {
               {t('auth.login.forgotPassword')}
             </Anchor>
           </Group>
-          <Button type="submit" fullWidth mt="xl">
+          <Button type="submit" fullWidth mt="xl" loading={submitting}>
             {t('auth.login.submit')}
           </Button>
         </form>

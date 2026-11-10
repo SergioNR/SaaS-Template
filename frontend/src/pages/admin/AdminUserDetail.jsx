@@ -16,23 +16,11 @@ import {
   Title,
 } from '@mantine/core';
 import { IconArrowLeft, IconDeviceDesktop } from '@tabler/icons-react';
-import PropTypes from 'prop-types';
-import apiClient from '../../config/API/axiosConfig.mjs';
+import apiClient from '../../config/API/axiosConfig.js';
 import Seo from '../../components/Seo.jsx';
+import DetailRow from '../../components/DetailRow.jsx';
 import SubscriptionStatusBadge from '../../components/shared/SubscriptionStatusBadge.jsx';
 import { formatDate, formatDateTime } from '../../utils/formatDate.js';
-
-const DetailRow = ({ label, children }) => (
-  <Group justify="space-between" py="xs" wrap="nowrap">
-    <Text c="dimmed" size="sm">{label}</Text>
-    {children}
-  </Group>
-);
-
-DetailRow.propTypes = {
-  label: PropTypes.string,
-  children: PropTypes.node,
-};
 
 const AdminUserDetail = () => {
   const { userId } = useParams();
@@ -88,7 +76,7 @@ const AdminUserDetail = () => {
   if (loading) {
     return (
       <Stack gap="lg">
-        <Seo title={t('seo.pages.admin')} />
+        <Seo title={t('seo.pages.adminUserDetail')} />
         <Skeleton height={32} width="40%" />
         <SimpleGrid cols={{ base: 1, md: 2 }}>
           <Skeleton height={220} radius="md" />
@@ -101,7 +89,7 @@ const AdminUserDetail = () => {
   if (notFound || error) {
     return (
       <Stack gap="lg">
-        <Seo title={t('seo.pages.admin')} />
+        <Seo title={t('seo.pages.adminUserDetail')} />
         <Anchor component={Link} to="/admin/users" size="sm">
           <Group gap={4}>
             <IconArrowLeft size={14} stroke={1.5} />
@@ -119,7 +107,7 @@ const AdminUserDetail = () => {
 
   return (
     <Stack gap="lg">
-      <Seo title={t('seo.pages.admin')} />
+      <Seo title={t('seo.pages.adminUserDetail')} />
 
       <Anchor component={Link} to="/admin/users" size="sm">
         <Group gap={4}>

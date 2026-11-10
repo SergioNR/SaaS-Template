@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { usePostHog } from 'posthog-js/react';
-import apiClient from '../../config/API/axiosConfig.mjs';
+import { resetAnalyticsUser } from '../../analytics/posthog.js';
+import apiClient from '../../config/API/axiosConfig.js';
 
 import {
   Card,
@@ -14,30 +14,32 @@ import {
   Group,
 } from '@mantine/core';
 import { notifyError, notifySuccess } from '../../utils/notifications.js';
-
-const analyticsEnabled = Boolean(import.meta.env.VITE_PUBLIC_POSTHOG_KEY);
+import { logApiError } from '../../utils/logApiError.js';
+import { invalidateSessionCaches } from '../../utils/sessionCaches.js';
 
 export const AccountActionsForm = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const posthog = usePostHog();
   const [confirmOpened, setConfirmOpened] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
   const deleteUser = async () => {
+    if (deleting) {
+      return;
+    }
+
     setDeleting(true);
 
     try {
       await apiClient.delete('/api/v1/user');
 
-      if (analyticsEnabled) {
-        posthog?.reset();
-      }
+      invalidateSessionCaches();
+      resetAnalyticsUser();
 
       notifySuccess(t('user.accountActions.deletedToast'));
       navigate('/', { replace: true });
     } catch (err) {
-      console.error('Account deletion failed:', err);
+      logApiError('Account deletion failed', err);
 
       //* The last company owner cannot leave while other members remain
       if (err?.response?.status === 409 && err?.response?.data?.code === 'USER_LAST_COMPANY_OWNER') {
@@ -67,9 +69,18 @@ export const AccountActionsForm = () => {
         </Button>
       </Group>
 
+      {/* Not dismissable while the DELETE is in flight - closing it would
+          hide the outcome and re-enable a second attempt */}
       <Modal
         opened={confirmOpened}
-        onClose={() => setConfirmOpened(false)}
+        onClose={() => {
+          if (!deleting) {
+            setConfirmOpened(false);
+          }
+        }}
+        closeOnClickOutside={!deleting}
+        closeOnEscape={!deleting}
+        withCloseButton={!deleting}
         title={t('user.accountActions.deleteConfirmModal.title')}
       >
         <Stack>

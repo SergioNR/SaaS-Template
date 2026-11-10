@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { Box, Container, SimpleGrid, Stack, Group, Divider, Image, Text, Anchor } from '@mantine/core';
 import { Link } from 'react-router';
 import classes from './SiteFooter.module.css';
+import { analyticsEnabled, resetAnalyticsConsent } from '../../analytics/posthog.js';
 
 export const SiteFooter = () => {
   const { t } = useTranslation();
@@ -77,6 +78,12 @@ export const SiteFooter = () => {
           <Text c="dimmed" fz="sm">
             {t('footer.copyright', { year, siteName: t('common.siteName') })}
           </Text>
+          {/* Re-opens the consent banner so the choice can be changed */}
+          {analyticsEnabled && (
+            <Anchor component="button" type="button" c="dimmed" size="sm" underline="hover" onClick={resetAnalyticsConsent}>
+              {t('consent.manage')}
+            </Anchor>
+          )}
         </Group>
       </Container>
     </Box>

@@ -20,30 +20,10 @@ import {
   IconUserPlus,
   IconUsers,
 } from '@tabler/icons-react';
-import PropTypes from 'prop-types';
-import apiClient from '../../config/API/axiosConfig.mjs';
+import apiClient from '../../config/API/axiosConfig.js';
 import Seo from '../../components/Seo.jsx';
 import { formatDateTime } from '../../utils/formatDate.js';
-
-const StatCard = ({ icon, label, children }) => (
-  <Card withBorder p="lg" radius="md">
-    <Group justify="space-between" mb="xs">
-      <Text c="dimmed" size="sm" fw={500}>
-        {label}
-      </Text>
-      <ThemeIcon variant="light" size="lg" radius="md">
-        {icon}
-      </ThemeIcon>
-    </Group>
-    {children}
-  </Card>
-);
-
-StatCard.propTypes = {
-  icon: PropTypes.node,
-  label: PropTypes.string,
-  children: PropTypes.node,
-};
+import StatCard from '../../components/StatCard.jsx';
 
 const AdminOverview = () => {
   const { t } = useTranslation();
@@ -74,7 +54,7 @@ const AdminOverview = () => {
 
   return (
     <Stack gap="lg">
-      <Seo title={t('seo.pages.admin')} />
+      <Seo title={t('seo.pages.adminOverview')} />
 
       <Title order={2}>{t('admin.overview.title')}</Title>
 

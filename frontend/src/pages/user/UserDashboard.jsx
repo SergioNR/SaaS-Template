@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { Link, useNavigate, useOutletContext } from 'react-router';
 import { useTranslation, Trans } from 'react-i18next';
 import PropTypes from 'prop-types';
 import {
@@ -34,11 +34,11 @@ import {
   IconKey,
   IconReceipt2,
 } from '@tabler/icons-react';
-import apiClient from '../../config/API/axiosConfig.mjs';
 import { useSubscription } from '../../contexts/useSubscription.js';
 import NoActiveSubscriptionBanner from '../../components/partials/NoActiveSubscriptionBanner.jsx';
 import Seo from '../../components/Seo.jsx';
 import { formatDate, formatDateTime } from '../../utils/formatDate.js';
+import StatCard from '../../components/StatCard.jsx';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -49,26 +49,6 @@ const formatRelativeDays = (value) => {
     Math.round((new Date(value).getTime() - Date.now()) / DAY_MS),
     'day'
   );
-};
-
-const StatCard = ({ icon, label, children }) => (
-  <Card withBorder p="lg" radius="md">
-    <Group justify="space-between" mb="xs">
-      <Text c="dimmed" size="sm" fw={500}>
-        {label}
-      </Text>
-      <ThemeIcon variant="light" size="lg" radius="md">
-        {icon}
-      </ThemeIcon>
-    </Group>
-    {children}
-  </Card>
-);
-
-StatCard.propTypes = {
-  icon: PropTypes.node,
-  label: PropTypes.string,
-  children: PropTypes.node,
 };
 
 const QuickAction = ({ icon, title, description, action }) => (
@@ -107,27 +87,12 @@ const UserDashboard = () => {
     isTrial,
     loading: subscriptionLoading,
   } = useSubscription();
-  const [user, setUser] = useState(null);
-  const [userLoading, setUserLoading] = useState(true);
+  //* Loaded once by UserWrapper and shared through its outlet context
+  const { user, userLoading } = useOutletContext();
   const [now, setNow] = useState(null);
 
   useEffect(() => {
     setNow(Date.now());
-  }, []);
-
-  useEffect(() => {
-    const fetchUser = async () => {
-      try {
-        const response = await apiClient.get('/api/v1/user');
-        setUser(response.data.user);
-      } catch {
-        setUser(null);
-      } finally {
-        setUserLoading(false);
-      }
-    };
-
-    fetchUser();
   }, []);
 
   const daysRemaining = useMemo(() => {

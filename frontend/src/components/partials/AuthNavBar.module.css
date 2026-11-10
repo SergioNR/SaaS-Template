@@ -1,0 +1,13 @@
+/* Auth area top bar: the brand link, left-aligned */
+.bar {
+  display: flex;
+  align-items: center;
+  min-height: 60px;
+  padding: var(--mantine-spacing-sm) var(--mantine-spacing-md);
+  border-bottom: 1px solid var(--mantine-color-default-border);
+  background-color: var(--mantine-color-body);
+}
+
+.brand {
+  color: var(--mantine-color-text);
+}

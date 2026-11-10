@@ -1,5 +1,5 @@
 import { useTranslation, Trans } from 'react-i18next';
-import apiClient from '../../config/API/axiosConfig.mjs';
+import apiClient from '../../config/API/axiosConfig.js';
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import {
@@ -24,12 +24,23 @@ const CustomerRegistrationForm = () => {
   const [registerError, setRegisterError] = useState(null);
   const navigate = useNavigate();
   const redirectTimerRef = useRef(null);
+  //* Stays true after a successful registration until the redirect fires -
+  //* the form must not be resubmitted (duplicate account attempt) meanwhile
+  const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
 
   // Cancel the pending post-registration redirect if the user leaves first
   useEffect(() => () => clearTimeout(redirectTimerRef.current), []);
 
   const handleRegister = async (e) => {
     e.preventDefault();
+
+    if (submittingRef.current) {
+      return;
+    }
+
+    submittingRef.current = true;
+    setSubmitting(true);
 
     const data = {
       username: e.target.username.value,
@@ -46,6 +57,8 @@ const CustomerRegistrationForm = () => {
 
       redirectTimerRef.current = setTimeout(() => navigate('/auth/login'), 3000);
     } catch (err) {
+      submittingRef.current = false;
+      setSubmitting(false);
       setRegisterResponse(null);
 
       if (err.response?.status === 422) {
@@ -89,12 +102,15 @@ const CustomerRegistrationForm = () => {
           <form onSubmit={handleRegister}>
             <TextInput
               name="username"
+              type="email"
+              autoComplete="username"
               label={t('auth.fields.email')}
               placeholder={t('auth.fields.emailPlaceholderAlt')}
               required
             />
             <TextInput
               name="companyName"
+              autoComplete="organization"
               label={t('auth.fields.companyName')}
               placeholder={t('auth.fields.companyNamePlaceholder')}
               description={t('auth.register.companyNameHint')}
@@ -112,11 +128,11 @@ const CustomerRegistrationForm = () => {
               mt="md"
             />
 
-            <Button type="submit" fullWidth mt="xl">
+            <Button type="submit" fullWidth mt="xl" loading={submitting}>
               {t('auth.register.submit')}
             </Button>
           </form>
-          <Text size="sm" c="dimmed" className="terms-and-conditions" style={{ textAlign: 'center', marginTop: '10px' }}>
+          <Text size="sm" c="dimmed" ta="center" mt={10}>
             <Trans
               i18nKey="auth.register.terms"
               t={t}

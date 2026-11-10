@@ -9,6 +9,7 @@ FROM node:${NODE_VERSION}-alpine AS build
 # Vite bakes VITE_* vars into the bundle at build time - pass them with --build-arg
 ARG VITE_API_BASE_URL
 ARG VITE_PUBLIC_POSTHOG_KEY
+ARG VITE_PUBLIC_POSTHOG_HOST
 ARG VITE_SITE_BASE_URL
 
 # Fail fast when a required build arg is missing
@@ -39,6 +40,10 @@ ENV NGINX_CSP_API_ORIGIN=${VITE_API_BASE_URL}
 # presigned uploads go to). Must be defined - even empty - or envsubst leaves
 # the placeholder in the header.
 ENV NGINX_CSP_CONNECT_EXTRA=""
+# PostHog ingest + assets origins allowed by the CSP (script-src/connect-src).
+# Must be defined or envsubst leaves the placeholder; override at runtime
+# when VITE_PUBLIC_POSTHOG_HOST points elsewhere (e.g. the US cloud)
+ENV NGINX_CSP_POSTHOG_ORIGINS="https://eu.i.posthog.com https://eu-assets.i.posthog.com"
 
 # The image entrypoint renders /etc/nginx/templates/*.template with envsubst
 # into /etc/nginx/conf.d/ on startup
