@@ -59,7 +59,7 @@ Request flow: `server/app.js` → middlewares → routers → controllers → mo
 ## Validation
 
 - One express-validator schema per request shape in `server/utils/validators/`, mounted as `checkSchema(...)` followed by `sanitizerResult` (rejects with 422 before any controller runs).
-- Login, register, invite-accept and the password-reset check/submit (GET/PATCH) routes share the `authLimiter` budget (10 req / 15 min per IP). Login additionally has `loginAccountLimiter` (5 failed attempts / 15 min per normalized username **+ client IP** - the IP in the key keeps an attacker from locking a victim out of their own account by exhausting the budget from elsewhere). The password-reset request route gets its own `passwordResetLimiter` (5 req / 1 hour per IP) so reset emails are throttled independently of login failures. Global limiter (100 req / 15 min) + capped slow-down apply everywhere except local dev, `/webhooks` and docs. `/webhooks` has its own always-on `webhookLimiter` (300 req / 1 min per IP, `webhooks/webhookRateLimiter.js`, also active in local dev) - far above Stripe's delivery rate, but a ceiling on what can be pushed through signature verification. Custom `keyGenerator`s that include the client IP must pass it through `ipKeyGenerator(req.ip)` from `express-rate-limit` (IPv6 addresses are collapsed to their /56 subnet), never raw `req.ip`. Limiters are in-memory per process.
+- Login, register, invite check/accept (`GET /auth/invite`, `POST /auth/invite-accept`) and the password-reset check/submit (GET/PATCH) routes share the `authLimiter` budget (10 req / 15 min per IP). Login additionally has `loginAccountLimiter` (5 failed attempts / 15 min per normalized username **+ client IP** - the IP in the key keeps an attacker from locking a victim out of their own account by exhausting the budget from elsewhere). The password-reset request route gets its own `passwordResetLimiter` (5 req / 1 hour per IP) so reset emails are throttled independently of login failures. Global limiter (100 req / 15 min) + capped slow-down apply everywhere except local dev, `/webhooks` and docs. `/webhooks` has its own always-on `webhookLimiter` (300 req / 1 min per IP, `webhooks/webhookRateLimiter.js`, also active in local dev) - far above Stripe's delivery rate, but a ceiling on what can be pushed through signature verification. Custom `keyGenerator`s that include the client IP must pass it through `ipKeyGenerator(req.ip)` from `express-rate-limit` (IPv6 addresses are collapsed to their /56 subnet), never raw `req.ip`. Limiters are in-memory per process.
 - Don't `escape` emails, passwords or filenames in validators — it corrupts stored data (`o'brien@x.com`); escape on output instead.
 
 ## Sessions & auth
@@ -85,7 +85,7 @@ Request flow: `server/app.js` → middlewares → routers → controllers → mo
 
 ## Logging
 
-- Use `logInfo` / `logWarn` / `logError` from `config/loggerFunctions.js` (pino + Telegram). No `console.log` in server code (only `app.js` startup lines with `eslint-disable`).
+- Use `logInfo` / `logWarn` / `logError` from `config/loggerFunctions.js` (pino + Telegram). Telegram sends time out after 5 s and identical alerts (message + error name/message) are sent at most once per minute per process (`integrations/telegram/sendLogsToTelegram.js`); pino still logs every occurrence. No `console.log` in server code (only `app.js` startup lines with `eslint-disable`).
 - Explanatory "why" comments use the `//*` prefix — follow it for rationale comments.
 
 ## Testing

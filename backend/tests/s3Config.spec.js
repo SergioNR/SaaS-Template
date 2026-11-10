@@ -12,6 +12,7 @@ const {
   isBlockedMimeType,
   MAX_PENDING_UPLOADS_PER_COMPANY,
   S3_ALLOWED_MIME_TYPES,
+  S3_UPLOAD_URL_TTL_SECONDS,
 } = await import('../server/config/s3.js');
 
 describe('S3_ALLOWED_MIME_TYPES', () => {
@@ -25,6 +26,10 @@ describe('S3_ALLOWED_MIME_TYPES', () => {
     expect(isBlockedMimeType('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')).toBe(true);
     expect(isBlockedMimeType('application/pdf')).toBe(false);
     expect(isBlockedMimeType('image/png')).toBe(false);
+  });
+
+  it('keeps presigned upload URLs short-lived (well inside the confirm window)', () => {
+    expect(S3_UPLOAD_URL_TTL_SECONDS).toBeLessThanOrEqual(300);
   });
 
   it('caps the unconfirmed uploads per company', () => {

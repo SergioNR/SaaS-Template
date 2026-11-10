@@ -18,8 +18,6 @@ jest.unstable_mockModule('../server/models/teamInvitesModel.js', () => ({
 }));
 
 jest.unstable_mockModule('../server/models/roleModel.js', () => ({
-  getAllPermissionNames: jest.fn(),
-  getAllRolesWithPermissions: jest.fn(),
   getUserCompanyPermissions: jest.fn(),
   getUserCompanyRoleNames: jest.fn(),
   getRoleByName: jest.fn(),
@@ -70,7 +68,6 @@ const {
   rotateTeamInviteTokenInDb,
 } = await import('../server/models/teamInvitesModel.js');
 const {
-  getAllPermissionNames,
   getUserCompanyPermissions,
   getUserCompanyRoleNames,
   getRoleByName,
@@ -207,7 +204,6 @@ describe('getTeamData', () => {
 
     await getTeamData({ user: { ...caller, role: 'superadmin' } }, res);
 
-    expect(getAllPermissionNames).not.toHaveBeenCalled();
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
       callerPermissions: ['team.view'],
       assignableRoles: ['company_member'],

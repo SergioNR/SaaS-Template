@@ -117,7 +117,7 @@ See `.env.example` for the full list. Key variables:
 | `BREVO_RESET_PASSWORD_TEMPLATE_ID` / `BREVO_TEAM_INVITE_TEMPLATE_ID` | Brevo template ids for the password reset and team invite emails - **required** at startup (`.env.example` ships the historical defaults `2` and `3`). Every template receives `appOrigin` (= `FRONT_WEB_APP_ORIGIN_URL`) plus its own params (`passwordResetToken`; `inviteToken`, `companyName`, `inviterEmail`) so the link is built in the template body |
 | `BREVO_ACCOUNT_EXISTS_TEMPLATE_ID` | Template id for the duplicate-registration notice (optional - notice is skipped when unset) |
 | `POSTHOG_API_KEY` | Product analytics |
-| `TELEGRAM_BOT_API_KEY` / `TELEGRAM_ERRORS_CHAT_ID` | Telegram alerts for `logError` only (info/warn stay in pino). Optional - sending is a no-op when the bot key is unset |
+| `TELEGRAM_BOT_API_KEY` / `TELEGRAM_ERRORS_CHAT_ID` | Telegram alerts for `logError` only (info/warn stay in pino). Optional - sending is a no-op when the bot key is unset. Each send times out after 5 s and the same alert is sent at most once per minute per process |
 | `FRONT_WEB_APP_ORIGIN_URL` | Front-end origin (CORS allowlist, CSRF Origin check + Stripe redirects). **Required** outside `DEPLOY_ENVIRONMENT=localhost` |
 | `PORT` | HTTP port (defaults to `3000`) |
 | `API_PUBLIC_ORIGIN_URL` | Optional. Server URL written into the OpenAPI spec (Swagger UI "Try it out" target), e.g. a tunnel in front of the local API. Defaults to `http://localhost:<PORT>` |
@@ -126,7 +126,7 @@ See `.env.example` for the full list. Key variables:
 
 - **JSON only** — every `/api` request with a body must send `Content-Type: application/json` (other body types get `415`). Form/urlencoded bodies are not parsed.
 - **Origin check (CSRF)** — non-`GET`/`HEAD`/`OPTIONS` requests must carry an `Origin` (or, failing that, `Referer`) header matching `FRONT_WEB_APP_ORIGIN_URL` (plus `localhost` dev-server ports when `DEPLOY_ENVIRONMENT=localhost`) or the API's own origin; otherwise `403`. Browsers send it automatically; for curl/Postman add e.g. `-H "Origin: http://localhost:5173"`. `/webhooks` is exempt.
-- **Rate limits** — global 100 req / 15 min per IP plus progressive slow-down after 30 req / 5 min (capped at 2 s delay), disabled on localhost; credential endpoints share a 10 req / 15 min per-IP budget; login additionally allows 5 failed attempts / 15 min per account; password-reset emails 5 / hour per IP; `/webhooks` has its own 300 req / min per-IP budget (always on); `/health` is never limited.
+- **Rate limits** — global 100 req / 15 min per IP plus progressive slow-down after 30 req / 5 min (capped at 2 s delay), disabled on localhost; credential endpoints (login, register, invite check/accept, password-reset check/submit) share a 10 req / 15 min per-IP budget; login additionally allows 5 failed attempts / 15 min per account; password-reset emails 5 / hour per IP; `/webhooks` has its own 300 req / min per-IP budget (always on); `/health` is never limited.
 
 ## API overview
 
@@ -139,7 +139,7 @@ All routes are versioned under `/api/v1`. Interactive documentation is served by
 | Auth | `POST /api/v1/auth/login`, `POST /api/v1/auth/register`, `POST /api/v1/auth/logout`, `GET /api/v1/auth/session`, password reset (`GET/POST/PATCH /api/v1/auth/password-reset`), `PATCH /api/v1/auth/update-user-password`, team invites (`GET /api/v1/auth/invite`, `POST /api/v1/auth/invite-accept`) |
 | User | `GET /api/v1/user`, `DELETE /api/v1/user` |
 | Billing | `GET/POST /api/v1/billing`, `POST /api/v1/billing/checkout-session`, `POST /api/v1/billing/customer-portal` |
-| Files | `POST /api/v1/files` (register + presigned upload URL), `GET /api/v1/files` (cursor-paginated list), `GET /api/v1/files/:fileId/download` (presigned download URL), `DELETE /api/v1/files/:fileId` — only mounted when `S3_BUCKET` is set |
+| Files | `POST /api/v1/files` (register + presigned upload URL, valid 5 min), `POST /api/v1/files/:fileId/confirm` (uploader only - verifies the stored object, then publishes it), `GET /api/v1/files` (cursor-paginated list), `GET /api/v1/files/:fileId/download` (presigned download URL), `DELETE /api/v1/files/:fileId` — only mounted when `S3_BUCKET` is set |
 | Team | `GET /api/v1/team`, `POST /api/v1/team/invites`, `POST /api/v1/team/invites/:inviteId/resend`, `DELETE /api/v1/team/invites/:inviteId`, `DELETE/PATCH /api/v1/team/members/:userId` |
 | Admin | `GET /api/v1/admin/users`, `GET /api/v1/admin/users/:userId`, `DELETE /api/v1/admin/users/:userId`, `GET /api/v1/admin/companies`, `GET /api/v1/admin/companies/:companyId`, `GET /api/v1/admin/stats` |
 | Webhooks | `POST /webhooks/v1/stripe` |

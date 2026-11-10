@@ -1,6 +1,6 @@
 import { jest } from '@jest/globals';
 
-const { sendTelegramMessage, isTelegramConfigured } = await import('../server/config/telegramBotConfig.js');
+const { sendTelegramMessage, isTelegramConfigured, TELEGRAM_REQUEST_TIMEOUT_MS } = await import('../server/config/telegramBotConfig.js');
 
 describe('sendTelegramMessage', () => {
   const originalKey = process.env.TELEGRAM_BOT_API_KEY;
@@ -44,6 +44,16 @@ describe('sendTelegramMessage', () => {
     expect(url).toBe('https://api.telegram.org/botbot-key/sendMessage');
     expect(options.method).toBe('POST');
     expect(JSON.parse(options.body)).toEqual({ chat_id: 'chat-1', text: '<b>hi</b>', parse_mode: 'HTML' });
+  });
+
+  it('bounds every request with an abort timeout', async () => {
+    process.env.TELEGRAM_BOT_API_KEY = 'bot-key';
+
+    await sendTelegramMessage('chat-1', 'hello');
+
+    const [, options] = fetchSpy.mock.calls[0];
+    expect(options.signal).toBeInstanceOf(AbortSignal);
+    expect(TELEGRAM_REQUEST_TIMEOUT_MS).toBe(5000);
   });
 
   it('never throws on network failures', async () => {

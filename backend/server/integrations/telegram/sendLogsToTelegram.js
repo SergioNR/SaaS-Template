@@ -36,9 +36,50 @@ export const escapeHtml = (value) => {
   return truncated.replace(/[&<>"]/g, (char) => HTML_ENTITIES[char]);
 };
 
+//* The same alert at most once per window per process: an error raised on
+//* every request (database down, provider outage) must page once, not flood
+//* the chat and hit Telegram's rate limits. pino still logs every occurrence
+export const ALERT_DEDUPE_WINDOW_MS = 60 * 1000;
+const MAX_TRACKED_ALERTS = 500;
+const lastSentAtByAlert = new Map();
+
+//* Exported for the spec - returns true when the alert may be sent now
+export const shouldSendAlert = (alertKey, now = Date.now()) => {
+  const lastSentAt = lastSentAtByAlert.get(alertKey);
+
+  if (lastSentAt !== undefined && now - lastSentAt < ALERT_DEDUPE_WINDOW_MS) {
+    return false;
+  }
+
+  //* Bounded memory: expired entries are pruned, and if every entry is
+  //* still fresh the oldest one goes
+  if (lastSentAtByAlert.size >= MAX_TRACKED_ALERTS) {
+    for (const [key, sentAt] of lastSentAtByAlert) {
+      if (now - sentAt >= ALERT_DEDUPE_WINDOW_MS) {
+        lastSentAtByAlert.delete(key);
+      }
+    }
+
+    if (lastSentAtByAlert.size >= MAX_TRACKED_ALERTS) {
+      lastSentAtByAlert.delete(lastSentAtByAlert.keys().next().value);
+    }
+  }
+
+  lastSentAtByAlert.set(alertKey, now);
+
+  return true;
+};
+
+export const resetAlertDedupe = () => lastSentAtByAlert.clear();
+
 //* Only errors reach Telegram - info and warnings stay in pino (see
 //* config/loggerFunctions.js), so there is no info chat sender anymore
 export const sendErrorLogsToTelegram = async (errorMessage, error = {}, additionalInfo = 'N/A') => {
+  //* Keyed on what identifies the incident - not the timestamp or details
+  if (!shouldSendAlert(`${errorMessage}|${error?.name ?? ''}|${error?.message ?? ''}`)) {
+    return;
+  }
+
   const telegramMessage = `
   🚨 <b>New error logged at ${new Date().toISOString()}</b> 🚨
   \n<b>Error Name</b>: ${escapeHtml(error.name ?? 'N/A')}
