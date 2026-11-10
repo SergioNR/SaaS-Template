@@ -2,6 +2,7 @@ import { paginationQueryFields, searchQueryField } from './listQueryFields.js';
 
 export const adminUserListQueryValidationSchema = {
   role: {
+    in: ['query'],
     optional: true,
     isIn: {
       options: [['user', 'superadmin']],

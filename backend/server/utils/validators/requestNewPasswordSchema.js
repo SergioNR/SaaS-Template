@@ -1,5 +1,6 @@
 export const requestNewPasswordSchema = {
   email: {
+    in: ['body'],
     //* First and bailing: `["a@b.co"]` would otherwise pass isEmail per
     //* element and reach Prisma as an array
     isString: {

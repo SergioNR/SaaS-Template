@@ -1,4 +1,4 @@
-import { runQuerySchema, failedPaths } from './helpers/checkQuerySchema.js';
+import { runQuerySchema, runSchema, failedPaths } from './helpers/checkQuerySchema.js';
 import { adminUserListQueryValidationSchema } from '../server/utils/validators/adminUserListQuerySchema.js';
 import { adminCompanyListQueryValidationSchema } from '../server/utils/validators/adminCompanyListQuerySchema.js';
 import { filesListQueryValidationSchema } from '../server/utils/validators/filesListQuerySchema.js';
@@ -73,5 +73,20 @@ describe('admin user role filter', () => {
     const { errors } = await runQuerySchema(adminUserListQueryValidationSchema, { role: 'company_owner' });
 
     expect(failedPaths(errors)).toEqual(['role']);
+  });
+});
+
+describe('list filters read only the query string', () => {
+  it.each(LIST_SCHEMAS)('%s list ignores a limit sent in a JSON body', async (_label, schema) => {
+    const { req, errors } = await runSchema(schema, { body: { limit: '0', cursor: 'not-a-uuid' }, query: {} });
+
+    expect(errors).toEqual([]);
+    expect(req.query.limit).toBeUndefined();
+  });
+
+  it('admin users ignores a role filter sent in a JSON body', async () => {
+    const { errors } = await runSchema(adminUserListQueryValidationSchema, { body: { role: 'bogus' }, query: {} });
+
+    expect(errors).toEqual([]);
   });
 });

@@ -2,6 +2,7 @@ import { passwordByteLengthValidator } from './passwordByteLength.js';
 
 export const createUserValidationSchema = {
   username: {
+    in: ['body'],
     //* First and bailing: `["a@b.co"]` would otherwise pass isEmail per
     //* element and reach Prisma as an array
     isString: {
@@ -50,6 +51,7 @@ export const createUserValidationSchema = {
   //* Optional so clients built before onboarding asked for it keep working -
   //* without it the company is created unnamed. When sent it must be valid
   companyName: {
+    in: ['body'],
     optional: {
       options: {
         values: 'null',
@@ -69,6 +71,7 @@ export const createUserValidationSchema = {
     },
   },
   password: {
+    in: ['body'],
     isString: {
       errorMessage: 'Password must be a string',
       bail: true,

@@ -37,6 +37,15 @@ const prismaMock = {
   session: {
     update: jest.fn().mockResolvedValue({}),
   },
+  userRole: {
+    findMany: jest.fn().mockResolvedValue([]),
+  },
+};
+
+const stripeCalls = {
+  checkoutSessionsCreate: jest.fn(),
+  checkoutSessionsList: jest.fn(),
+  subscriptionsList: jest.fn(),
 };
 
 const constructEvent = jest.fn(() => {
@@ -50,6 +59,8 @@ jest.unstable_mockModule('../server/config/prismaClient.js', () => ({
 jest.unstable_mockModule('../server/config/stripe.js', () => ({
   stripeInstance: {
     webhooks: { constructEvent },
+    checkout: { sessions: { create: stripeCalls.checkoutSessionsCreate, list: stripeCalls.checkoutSessionsList } },
+    subscriptions: { list: stripeCalls.subscriptionsList },
   },
 }));
 
@@ -248,6 +259,73 @@ describe('session cookie', () => {
     expect(prismaMock.session.update).toHaveBeenCalledWith(expect.objectContaining({
       data: { user_id: '00000000-0000-4000-8000-000000000001' },
     }));
+  });
+});
+
+const OWNER = {
+  id: '00000000-0000-4000-8000-000000000001',
+  email: 'owner@acme.test',
+  role: 'user',
+  company_id: '00000000-0000-4000-8000-0000000000c0',
+};
+
+//* Logs the seeded-like owner in and returns its session cookie. Counts
+//* against authLimiter like any login
+const loginAsOwner = async () => {
+  prismaMock.user.findUnique.mockResolvedValueOnce({
+    ...OWNER,
+    password: await bcrypt.hash('Password123!', 4),
+  });
+
+  authLimiterHits += 1;
+  const response = await request(app)
+    .post('/api/v1/auth/login')
+    .set('Origin', FRONT_ORIGIN)
+    .set('X-Forwarded-Proto', 'https')
+    .send({ username: OWNER.email, password: 'Password123!' });
+
+  expect(response.status).toBe(200);
+
+  return response.headers['set-cookie'].find((cookie) => cookie.startsWith('app.sid=')).split(';')[0];
+};
+
+describe('validated fields come from one location', () => {
+  it('rejects login credentials sent only in the query string with 422, before any account lookup', async () => {
+    prismaMock.user.findUnique.mockClear();
+
+    authLimiterHits += 1;
+    const response = await request(app)
+      .post('/api/v1/auth/login?username=owner%40acme.test&password=Password123!')
+      .set('Origin', FRONT_ORIGIN);
+
+    expect(response.status).toBe(422);
+    expect(prismaMock.user.findUnique).not.toHaveBeenCalled();
+    expect(response.headers['set-cookie']).toBeUndefined();
+  });
+
+  it('answers 422 (never 500) for checkout plan fields sent only in the query string', async () => {
+    const cookie = await loginAsOwner();
+
+    prismaMock.user.findUnique.mockResolvedValue(OWNER);
+    prismaMock.userRole.findMany.mockResolvedValue([{
+      Role: { name: 'company_owner', RolePermissions: [{ Permission: { name: 'billing.manage' } }] },
+    }]);
+    Object.values(stripeCalls).forEach((mock) => mock.mockClear());
+
+    try {
+      const response = await request(app)
+        .post('/api/v1/billing/checkout-session?planName=pro&planBillingCycle=monthly')
+        .set('Origin', FRONT_ORIGIN)
+        .set('X-Forwarded-Proto', 'https')
+        .set('Cookie', cookie)
+        .send({});
+
+      expect(response.status).toBe(422);
+      Object.values(stripeCalls).forEach((mock) => expect(mock).not.toHaveBeenCalled());
+    } finally {
+      prismaMock.user.findUnique.mockReset();
+      prismaMock.userRole.findMany.mockResolvedValue([]);
+    }
   });
 });
 

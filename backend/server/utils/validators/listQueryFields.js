@@ -4,6 +4,7 @@
 //* entity-specific fields (e.g. `role`) local
 
 export const searchQueryField = {
+  in: ['query'],
   optional: true,
   isString: {
     errorMessage: 'Search term must be a string',
@@ -18,6 +19,7 @@ export const searchQueryField = {
 };
 
 export const limitQueryField = {
+  in: ['query'],
   optional: true,
   isInt: {
     options: {
@@ -29,6 +31,7 @@ export const limitQueryField = {
 };
 
 export const cursorQueryField = {
+  in: ['query'],
   optional: true,
   isUUID: {
     errorMessage: 'Cursor must be a valid UUID',
