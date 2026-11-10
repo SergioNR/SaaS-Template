@@ -13,22 +13,10 @@ import { canGrantRole, outranksAllRoles, rolesGrantableBy } from '../utils/compa
 
 const COMPANY_OWNER_ROLE = 'company_owner';
 
-const getCompanyRoleNamesInTx = async (tx, userId) => {
-  const userRoles = await tx.userRole.findMany({
-    where: {
-      user_id: userId,
-    },
-    select: {
-      Role: {
-        select: {
-          name: true,
-        },
-      },
-    },
-  });
-
-  return userRoles.map((userRole) => userRole.Role.name);
-};
+//* Transaction-scoped advisory lock serializing superadmin deletions -
+//* superadmins have no company row to lock, and two concurrent deletions of
+//* the last two superadmins must not both pass the last-superadmin check
+const SUPERADMIN_DELETION_LOCK_KEY = 4815162342;
 
 //* The caller's roles are only meaningful while they are still a member of
 //* the company - resolves to null when they are not (removed concurrently)
@@ -442,7 +430,8 @@ export const countUsersInDb = async (filters = {}) => {
 //*   role rows are re-read under the lock - outranks every role the user
 //*   holds (a stale pre-check outside the lock can never be trusted)
 //*
-//* Resolves to { status: 'not_found' | 'last_owner' | 'forbidden' } or
+//* Resolves to { status: 'not_found' | 'last_owner' | 'last_superadmin' |
+//* 'forbidden' } or
 //* { status: 'deleted', deletedUser, companyDeleted, subscription, fileKeys }
 //* (plus companyId and stripeCustomerId when the company was deleted)
 export const deleteUserWithCompanyDataInDb = async (userId, options = {}) => {
@@ -460,6 +449,7 @@ export const deleteUserWithCompanyDataInDb = async (userId, options = {}) => {
       },
       select: {
         id: true,
+        role: true,
         company_id: true,
       },
     });
@@ -470,9 +460,37 @@ export const deleteUserWithCompanyDataInDb = async (userId, options = {}) => {
 
     const { company_id: userCompanyId } = user;
 
-    //* Superadmins belong to no company: no lock, no owner checks and no
-    //* company cleanup (`company_id: null` would match every superadmin)
+    //* Superadmins belong to no company: no company lock, no owner checks and
+    //* no company cleanup (`company_id: null` would match every superadmin).
+    //* The platform must keep at least one superadmin - checked under an
+    //* advisory lock so concurrent deletions cannot both pass it
     if (!userCompanyId) {
+      if (user.role === 'superadmin') {
+        await tx.$queryRaw`SELECT pg_advisory_xact_lock(${SUPERADMIN_DELETION_LOCK_KEY})`;
+
+        //* A concurrent deletion of the same account may have committed
+        //* while this one waited for the lock
+        const stillExists = await tx.user.count({
+          where: {
+            id: userId,
+          },
+        });
+
+        if (stillExists === 0) {
+          return { status: 'not_found' };
+        }
+
+        const superadminCount = await tx.user.count({
+          where: {
+            role: 'superadmin',
+          },
+        });
+
+        if (superadminCount <= 1) {
+          return { status: 'last_superadmin' };
+        }
+      }
+
       const deletedUser = await tx.user.delete({
         where: {
           id: userId,
@@ -499,8 +517,14 @@ export const deleteUserWithCompanyDataInDb = async (userId, options = {}) => {
 
     await lockCompanyForUpdateInDb(tx, userCompanyId);
 
-    //* Role rows are read after the lock so they reflect committed changes
-    const userRoleNames = await getCompanyRoleNamesInTx(tx, userId);
+    //* Membership and role rows are re-read after the lock so they reflect
+    //* committed changes - a concurrent removal of the same member resolves
+    //* to not_found instead of a P2025 on the delete below
+    const userRoleNames = await getMemberRoleNamesInTx(tx, userId, userCompanyId);
+
+    if (!userRoleNames) {
+      return { status: 'not_found' };
+    }
 
     if (callerId) {
       const callerRoleNames = await getMemberRoleNamesInTx(tx, callerId, userCompanyId);

@@ -220,7 +220,7 @@ describe('acceptTeamInvite', () => {
     expect(deleteTeamInviteByIdSafe).not.toHaveBeenCalled();
   });
 
-  it('returns 409 and voids the invite when the email registered on its own', async () => {
+  it('returns 409 and keeps the invite row when the email registered on its own', async () => {
     getTeamInviteByTokenInDb.mockResolvedValue(validInvite);
     getUserByEmail.mockResolvedValue({ id: 'existing-user' });
     const res = mockRes();
@@ -228,7 +228,8 @@ describe('acceptTeamInvite', () => {
     await acceptTeamInvite({ body: { inviteToken: 'invite-token', password: 'Password123' } }, res);
 
     expect(res.status).toHaveBeenCalledWith(409);
-    expect(deleteTeamInviteByIdSafe).toHaveBeenCalledWith('invite-1');
+    //* Deleting it would leak the registration to the inviting company
+    expect(deleteTeamInviteByIdSafe).not.toHaveBeenCalled();
     expect(createUserInDB).not.toHaveBeenCalled();
   });
 
@@ -255,7 +256,7 @@ describe('acceptTeamInvite', () => {
     expect(res.json).toHaveBeenCalledWith({});
   });
 
-  it('maps a concurrent-registration P2002 to 409 and voids the invite', async () => {
+  it('maps a concurrent-registration P2002 to 409 and keeps the invite row', async () => {
     getTeamInviteByTokenInDb.mockResolvedValue(validInvite);
     getUserByEmail.mockResolvedValue(null);
     createUserInDB.mockRejectedValue(Object.assign(new Error('unique'), { code: 'P2002' }));
@@ -264,6 +265,7 @@ describe('acceptTeamInvite', () => {
     await acceptTeamInvite({ body: { inviteToken: 'invite-token', password: 'Password123' } }, res);
 
     expect(res.status).toHaveBeenCalledWith(409);
-    expect(deleteTeamInviteByIdSafe).toHaveBeenCalledWith('invite-1');
+    //* Deleting it would leak the registration to the inviting company
+    expect(deleteTeamInviteByIdSafe).not.toHaveBeenCalled();
   });
 });

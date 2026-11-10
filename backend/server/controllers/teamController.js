@@ -9,7 +9,7 @@ import {
   createTeamInviteInDb,
   deleteTeamInviteInDb,
   getCompanyPendingInvitesInDb,
-  getTeamInviteByCompanyAndEmailInDb,
+  getPendingTeamInviteByCompanyAndEmailInDb,
   getTeamInviteByIdInDb,
   rotateTeamInviteTokenInDb,
 } from '../models/teamInvitesModel.js';
@@ -118,7 +118,7 @@ export const createTeamInvite = async (req, res) => {
 
   //* Every check that can change the response is company-scoped or about the
   //* caller - nothing here depends on the invited account existing
-  const existingInvite = await getTeamInviteByCompanyAndEmailInDb(companyId, email);
+  const existingInvite = await getPendingTeamInviteByCompanyAndEmailInDb(companyId, email);
 
   if (existingInvite) {
     return res.status(409).json(PENDING_INVITE_CONFLICT);

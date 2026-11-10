@@ -18,6 +18,7 @@ import {
   countActiveSessionsByUserInDb,
 } from '../models/sessionModel.js';
 import { deleteUserAndCleanup } from '../utils/userDeletionCleanup.js';
+import { logInfo } from '../config/loggerFunctions.js';
 
 const DEFAULT_PAGE_SIZE = 50;
 const MAX_PAGE_SIZE = 100;
@@ -128,6 +129,20 @@ export const deleteOneUserById = async (req, res) => {
       code: 'LAST_COMPANY_OWNER',
     });
   }
+
+  if (deletionResult.status === 'last_superadmin') {
+    return res.status(409).json({
+      message: 'The platform must keep at least one superadmin',
+      code: 'LAST_SUPERADMIN',
+    });
+  }
+
+  //* Admin deletions are privileged actions - the actor is always recorded
+  logInfo(`Superadmin ${req.user.id} deleted user ${deletionResult.deletedUser.id}`, {
+    actorId: req.user.id,
+    deletedUserId: deletionResult.deletedUser.id,
+    companyDeleted: deletionResult.companyDeleted,
+  });
 
   return res.status(200).json({
     userId: deletionResult.deletedUser.id,

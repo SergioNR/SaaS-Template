@@ -49,6 +49,13 @@ export const deleteUser = async (req, res) => {
     });
   }
 
+  if (deletionResult.status === 'last_superadmin') {
+    return res.status(409).json({
+      message: 'You are the last superadmin - promote another superadmin before deleting your account',
+      code: 'LAST_SUPERADMIN',
+    });
+  }
+
   //* Best-effort destruction of the (now revoked) current session
   return req.session.destroy(() => {
     res.clearCookie(SESSION_COOKIE_NAME, SESSION_COOKIE_OPTIONS); //* Same attributes it was set with, or the browser keeps it
