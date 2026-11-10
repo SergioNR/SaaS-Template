@@ -97,7 +97,9 @@ jobs:
       - name: Login to Docker Hub
         uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          # The namespace is public (it is in every image name) - a variable,
+          # not a secret, so it is not masked out of the build logs
+          username: ${{ vars.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Set up Docker Buildx
@@ -111,7 +113,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
-          images: ${{ secrets.DOCKERHUB_USERNAME }}/expressjs-template
+          images: ${{ vars.DOCKERHUB_USERNAME }}/expressjs-template
           # The sha tag pins a deploy to an exact commit (rollbacks, audits)
           tags: |
             type=raw,value=${{ github.ref_name }}
@@ -145,7 +147,7 @@ jobs:
       - name: Login to Docker Hub
         uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          username: ${{ vars.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Set up Docker Buildx
@@ -159,7 +161,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
-          images: ${{ secrets.DOCKERHUB_USERNAME }}/expressjs-template-front
+          images: ${{ vars.DOCKERHUB_USERNAME }}/expressjs-template-front
           tags: |
             type=raw,value=${{ github.ref_name }}
             type=raw,value=${{ github.ref_name }}-${{ steps.date.outputs.date }}
@@ -175,8 +177,11 @@ jobs:
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,mode=max,scope=frontend
           # Vite bakes these into the bundle - configure them as GitHub
-          # Actions variables (not secrets: they ship to every browser)
+          # Actions variables (not secrets: they ship to every browser). The
+          # `next` build reads the NEXT_VITE_* variables (staging origins),
+          # each falling back to the shared VITE_* value when unset - so a
+          # single set of variables (or per-environment ones) still works
           build-args: |
-            VITE_API_BASE_URL=${{ vars.VITE_API_BASE_URL }}
-            VITE_SITE_BASE_URL=${{ vars.VITE_SITE_BASE_URL }}
-            VITE_PUBLIC_POSTHOG_KEY=${{ vars.VITE_PUBLIC_POSTHOG_KEY }}
+            VITE_API_BASE_URL=${{ github.ref_name == 'next' && vars.NEXT_VITE_API_BASE_URL || vars.VITE_API_BASE_URL }}
+            VITE_SITE_BASE_URL=${{ github.ref_name == 'next' && vars.NEXT_VITE_SITE_BASE_URL || vars.VITE_SITE_BASE_URL }}
+            VITE_PUBLIC_POSTHOG_KEY=${{ github.ref_name == 'next' && vars.NEXT_VITE_PUBLIC_POSTHOG_KEY || vars.VITE_PUBLIC_POSTHOG_KEY }}
