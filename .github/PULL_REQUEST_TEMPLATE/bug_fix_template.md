@@ -29,6 +29,7 @@
 ## Repo rules
 <!-- See AGENTS.md - the CI PR gate must pass before merging -->
 - [ ] Commits follow Conventional Commits with a scope (`feat(frontend): ...`, `fix(auth): ...`, `feat(db)!: ...` for breaking changes)
+- [ ] Behaviour changes carry an OpenSpec change (`openspec/changes/<name>/`) with its spec delta and ticked tasks; `openspec validate --specs --changes --strict` passes
 - [ ] `prisma/schema.prisma` changes ship with a migration (`npx prisma migrate dev --name <change>`) and a `prisma/seed.js` update when models changed
 - [ ] New environment variables are in the package's `.env.example` **and** README table
 - [ ] `npm test` and `npx eslint .` pass in `backend/`; `npx eslint .`, `npm test` and `npm run build` pass in `frontend/` (the CI PR gate runs all of them)

@@ -5,5 +5,8 @@
 node_modules/
 dist/
 .kilo/plans/
-# Claude Code worktrees/session files
-.claude/
+# Local Claude Code state (worktrees, settings) stays out; the shared
+# OpenSpec skills and commands are committed
+.claude/*
+!.claude/skills/
+!.claude/commands/
