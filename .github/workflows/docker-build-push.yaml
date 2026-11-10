@@ -125,6 +125,12 @@ jobs:
           platforms: linux/amd64 # amd64 only - the target server is amd64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
+          # Ephemeral runners cannot reuse the Dockerfile's npm cache mounts -
+          # persist image layers in the GitHub Actions cache instead, so a push
+          # that leaves the lockfile alone skips the `npm ci` layer. One scope
+          # per image keeps the two builds from evicting each other's layers
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
 
   frontend:
     name: Frontend image
@@ -166,6 +172,8 @@ jobs:
           platforms: linux/amd64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
           # Vite bakes these into the bundle - configure them as GitHub
           # Actions variables (not secrets: they ship to every browser)
           build-args: |
