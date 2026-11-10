@@ -1,3 +1,6 @@
+//* Must stay the first import - throws before any module reads
+//* DEPLOY_ENVIRONMENT when production is booted in localhost mode
+import './config/environmentGuard.js';
 import express from 'express';
 import passport from 'passport';
 import { createServer } from 'http';
@@ -43,9 +46,10 @@ app.use('/health', healthRouter);
 //* (signature verification needs the raw body)
 app.use('/webhooks', webhookLimiter, webhookRouter);
 
-//* API documentation (Swagger UI + raw OpenAPI spec) - mounted before rate limiters
-//* so the documentation static assets are not throttled in production
-app.use('/api', docsRouter);
+//* API documentation (Swagger UI + raw OpenAPI spec) - local development
+//* only, deployed environments do not publish the API map. Mounted before
+//* the rate limiters so the documentation static assets are not throttled
+if (process.env.DEPLOY_ENVIRONMENT === 'localhost') app.use('/api', docsRouter);
 
 //* Global limiter first so requests over budget are rejected immediately
 //* instead of being held by the slow-down delay

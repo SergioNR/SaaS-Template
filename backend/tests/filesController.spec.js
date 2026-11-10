@@ -204,6 +204,17 @@ describe('confirmFileUpload', () => {
     expect(headS3Object).not.toHaveBeenCalled();
   });
 
+  it('answers 404 to a company member who did not upload the pending file', async () => {
+    getFileByIdInDb.mockResolvedValue(pendingFile({ uploaded_by: 'other-member' }));
+
+    const res = await confirm();
+
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(headS3Object).not.toHaveBeenCalled();
+    expect(markFileReadyInDb).not.toHaveBeenCalled();
+    expect(deleteFileInDb).not.toHaveBeenCalled();
+  });
+
   it('is idempotent for an already ready file', async () => {
     getFileByIdInDb.mockResolvedValue(fileRecord());
 

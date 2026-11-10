@@ -1,4 +1,4 @@
-import bcrypt from 'bcryptjs';
+import bcrypt from 'bcrypt';
 import { BCRYPT_SALT_ROUNDS, SESSION_COOKIE_NAME, SESSION_COOKIE_OPTIONS } from '../config/security.js';
 import { logError } from '../config/loggerFunctions.js';
 import passport from '../auth/passportjs.js';
@@ -173,9 +173,10 @@ export const acceptTeamInvite = async (req, res) => {
   const existingUser = await getUserByEmail(inviteData.email);
 
   if (existingUser) {
-    //* The invitee registered on their own in the meantime - the invite is void
-    await deleteTeamInviteByIdSafe(inviteData.id);
-
+    //* The invitee registered on their own in the meantime. The row is kept
+    //* (it expires and is cleaned up like any other): deleting it would make
+    //* the invite vanish from GET /team and tell the inviting company that
+    //* the address now has an account
     return res.status(409).json({
       message: 'Email is already registered - Please log in instead',
     });
@@ -204,10 +205,9 @@ export const acceptTeamInvite = async (req, res) => {
     });
   } catch (error) {
     //* Concurrent self-registration with the same email can beat the check
-    //* above - the unique constraint resolves the race
+    //* above - the unique constraint resolves the race (the invite row is
+    //* kept for the same reason as above; the transaction rolled back)
     if (error.code === 'P2002') {
-      await deleteTeamInviteByIdSafe(inviteData.id);
-
       return res.status(409).json({
         message: 'Email is already registered - Please log in instead',
       });

@@ -3,7 +3,6 @@ import {
   highestRankOf,
   outranksAllRoles,
   rolesGrantableBy,
-  rolesManageableBy,
 } from '../server/utils/companyRoleHierarchy.js';
 
 describe('rolesGrantableBy / canGrantRole (at or below own rank)', () => {
@@ -22,19 +21,12 @@ describe('rolesGrantableBy / canGrantRole (at or below own rank)', () => {
   });
 });
 
-describe('rolesManageableBy / outranksAllRoles (strictly below own rank)', () => {
+describe('outranksAllRoles (strictly below own rank)', () => {
   it('ranks owner > admin > member and 0 for anything else', () => {
     expect(highestRankOf(['company_member', 'company_owner'])).toBe(3);
     expect(highestRankOf(['company_admin'])).toBe(2);
     expect(highestRankOf([])).toBe(0);
     expect(highestRankOf(['made_up'])).toBe(0);
-  });
-
-  it('only lists roles strictly below the caller rank', () => {
-    expect(rolesManageableBy(['company_owner'])).toEqual(['company_admin', 'company_member']);
-    expect(rolesManageableBy(['company_admin'])).toEqual(['company_member']);
-    expect(rolesManageableBy(['company_member'])).toEqual([]);
-    expect(rolesManageableBy([])).toEqual([]);
   });
 
   it('refuses peers - an admin does not outrank another admin, an owner not another owner', () => {

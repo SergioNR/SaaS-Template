@@ -1,29 +1,34 @@
 import LocalStrategy from 'passport-local';
-import bcrypt from 'bcryptjs';
-import { getUserByEmail } from '../../models/userModel.js';
+import bcrypt from 'bcrypt';
+import { getUserForLogin } from '../../models/userModel.js';
 import { BCRYPT_SALT_ROUNDS } from '../../config/security.js';
 
 //* Constant invalid hash used to equalize response times for nonexistent users,
 //* preventing user enumeration through login response timing
-const DUMMY_PASSWORD_HASH = bcrypt.hashSync('timing-attack-mitigation-dummy-hash', BCRYPT_SALT_ROUNDS);
+export const DUMMY_PASSWORD_HASH = bcrypt.hashSync('timing-attack-mitigation-dummy-hash', BCRYPT_SALT_ROUNDS);
 
-export const localStrategy = new LocalStrategy(async (userEmail, password, done) => {
+export const verifyLocalCredentials = async (userEmail, password, done) => {
   try {
-    const user = await getUserByEmail(userEmail);
+    const user = await getUserForLogin(userEmail);
 
     if (!user) {
       await bcrypt.compare(password, DUMMY_PASSWORD_HASH);
       return done(null, false);
     }
 
-    const passwordMatches = await bcrypt.compare(password, user.password);
+    const { password: passwordHash, ...userWithoutPassword } = user;
+
+    const passwordMatches = await bcrypt.compare(password, passwordHash);
 
     if (!passwordMatches) {
       return done(null, false);
     }
 
-    return done(null, user);
+    //* The hash never travels past the strategy
+    return done(null, userWithoutPassword);
   } catch (err) {
     return done(err);
   }
-});
+};
+
+export const localStrategy = new LocalStrategy(verifyLocalCredentials);

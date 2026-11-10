@@ -2,6 +2,10 @@
 //* no-op so local development and test environments never hit the network
 export const isTelegramConfigured = () => Boolean(process.env.TELEGRAM_BOT_API_KEY);
 
+//* Alerts are fire-and-forget: a hung Telegram API must never pile up
+//* pending requests (and sockets) behind every logError
+export const TELEGRAM_REQUEST_TIMEOUT_MS = 5000;
+
 export const sendTelegramMessage = async (chatId, message) => {
   if (!isTelegramConfigured() || !chatId) {
     return false;
@@ -18,6 +22,7 @@ export const sendTelegramMessage = async (chatId, message) => {
         text: message,
         parse_mode: 'HTML',
       }),
+      signal: AbortSignal.timeout(TELEGRAM_REQUEST_TIMEOUT_MS),
     });
 
     return response.ok;

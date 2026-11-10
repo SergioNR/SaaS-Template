@@ -99,7 +99,7 @@ export const createFileUpload = async (req, res) => {
 export const confirmFileUpload = async (req, res) => {
   const { fileId } = req.params;
 
-  const { company_id: companyId } = req.user;
+  const { company_id: companyId, id: callerId } = req.user;
 
   const file = await getFileByIdInDb(fileId, companyId);
 
@@ -113,6 +113,16 @@ export const confirmFileUpload = async (req, res) => {
     //* Idempotent - a retried confirm returns the same result
     return res.status(200).json({
       file: toFileShape(file),
+    });
+  }
+
+  //* Only the uploader holds the presigned URL, so only they can confirm (and
+  //* by that publish) a pending upload - another member must not flip, or
+  //* trigger the mismatch-discard of, someone else's in-flight upload.
+  //* Answered like a missing file so pending uploads of others stay invisible
+  if (file.uploaded_by !== callerId) {
+    return res.status(404).json({
+      message: 'File does not exist',
     });
   }
 

@@ -2,20 +2,34 @@ import { prisma } from '../config/prismaClient.js';
 import { lockCompanyForUpdateInDb } from './companyModel.js';
 
 const subscriptionStateFields = {
-  id: true,
+  stripe_subscription_id: true,
+  stripe_status: true,
+  stripe_synced_at: true,
   expires_at: true,
 };
 
-//* The Stripe call inside the lock can take a while, so the interactive
-//* transaction gets more than Prisma's 5s default before it is rolled back
-const SUBSCRIPTION_SYNC_TIMEOUT_MS = 20000;
+//* Nothing slow runs inside the lock any more (the Stripe read happens
+//* before it), but waiting for a concurrent holder of the company lock still
+//* counts against the interactive transaction, so it keeps some headroom
+//* over Prisma's 5s default
+const SUBSCRIPTION_SYNC_TIMEOUT_MS = 10000;
 
-//* Serializes every subscription write of a company behind its row lock. Stripe
-//* delivers events concurrently and out of order, so `resolveSubscriptionWrite`
-//* runs inside the lock: it receives the currently stored row, fetches the
-//* fresh Stripe state itself and returns the write to apply (or null to skip).
-//* Two overlapping deliveries therefore both end up writing the latest state
-//* instead of the slower one clobbering the newer one.
+//* A write is stale when it is based on a Stripe read of the SAME
+//* subscription taken before the read that produced the stored state
+const isStaleSubscriptionWrite = (storedSubscription, subscriptionWrite) => Boolean(
+  storedSubscription?.stripe_synced_at
+  && storedSubscription.stripe_subscription_id === subscriptionWrite.stripeSubscriptionId
+  && new Date(storedSubscription.stripe_synced_at) > subscriptionWrite.syncedAt,
+);
+
+//* Serializes every subscription write of a company behind its row lock.
+//* Stripe delivers events concurrently and out of order, so the caller reads
+//* the Stripe subscription BEFORE locking (a slow Stripe call must never hold
+//* the company lock) and `resolveSubscriptionWrite` decides under the lock,
+//* against the stored row, what to write (or null to skip). The write carries
+//* `syncedAt` - when its Stripe read started - and is dropped when the
+//* stored state of the same subscription came from a later read, so the
+//* freshest read always wins regardless of commit order.
 //* Resolves to true when a write happened
 export const syncSubscriptionWithCompanyLockInDb = async (companyId, resolveSubscriptionWrite) => {
   const written = await prisma.$transaction(async (tx) => {
@@ -28,11 +42,18 @@ export const syncSubscriptionWithCompanyLockInDb = async (companyId, resolveSubs
       select: subscriptionStateFields,
     });
 
-    const subscriptionWrite = await resolveSubscriptionWrite(storedSubscription);
+    const subscriptionWrite = resolveSubscriptionWrite(storedSubscription);
 
-    if (!subscriptionWrite) {
+    if (!subscriptionWrite || isStaleSubscriptionWrite(storedSubscription, subscriptionWrite)) {
       return false;
     }
+
+    const subscriptionData = {
+      stripe_subscription_id: subscriptionWrite.stripeSubscriptionId,
+      stripe_status: subscriptionWrite.status,
+      stripe_synced_at: subscriptionWrite.syncedAt,
+      expires_at: subscriptionWrite.expiresAt,
+    };
 
     //* Upsert so Stripe event retries and the first checkout of a company
     //* without a Subscription row are both handled idempotently. The row is
@@ -42,14 +63,10 @@ export const syncSubscriptionWithCompanyLockInDb = async (companyId, resolveSubs
       where: {
         company_id: companyId,
       },
-      update: {
-        id: subscriptionWrite.subscriptionId,
-        expires_at: subscriptionWrite.expiresAt,
-      },
+      update: subscriptionData,
       create: {
-        id: subscriptionWrite.subscriptionId,
+        ...subscriptionData,
         company_id: companyId,
-        expires_at: subscriptionWrite.expiresAt,
       },
     });
 
@@ -128,18 +145,17 @@ export const getSubscriptionDataInDb = async (companyId) => {
   return subscriptionData;
 };
 
-//* Public shape returned to clients - deliberately excludes the row id (for
-//* paid subscriptions it is the internal Stripe `sub_` id), the Stripe
-//* customer id and any other Company fields. Both ids are exposed as booleans
-//* so the client can gate portal access and tell trials from paid plans
-//* without ever seeing an id
+//* Public shape returned to clients - deliberately excludes the row id, the
+//* Stripe subscription and customer ids and any other Company fields. Both
+//* Stripe ids are exposed as booleans so the client can gate portal access
+//* and tell trials from paid plans without ever seeing an id
 export const getSubscriptionPublicDataInDb = async (companyId) => {
   const subscriptionData = await prisma.subscription.findUnique({
     where: {
       company_id: companyId,
     },
     select: {
-      id: true,
+      stripe_subscription_id: true,
       expires_at: true,
       created_at: true,
       updated_at: true,
@@ -155,11 +171,11 @@ export const getSubscriptionPublicDataInDb = async (companyId) => {
     return null;
   }
 
-  const { Company, id, ...publicData } = subscriptionData;
+  const { Company, stripe_subscription_id: stripeSubscriptionId, ...publicData } = subscriptionData;
 
   return {
     ...publicData,
-    is_paid: Boolean(id?.startsWith('sub_')),
+    is_paid: Boolean(stripeSubscriptionId),
     has_billing_id: Boolean(Company?.stripe_id),
   };
 };

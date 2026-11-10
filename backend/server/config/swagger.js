@@ -11,12 +11,15 @@ const swaggerOptions = {
     },
     servers: [
       {
-        url: `http://localhost:${process.env.PORT || 3000}`,
-        description: 'Local server',
+        //* Public origin the "Try it out" requests target (e.g. a tunnel or a
+        //* reverse proxy in front of the local API) - localhost otherwise
+        url: process.env.API_PUBLIC_ORIGIN_URL || `http://localhost:${process.env.PORT || 3000}`,
+        description: process.env.API_PUBLIC_ORIGIN_URL ? 'Public server' : 'Local server',
       },
     ],
     tags: [
       { name: 'Health', description: 'Server health check' },
+      { name: 'Docs', description: 'API documentation (local development only)' },
       { name: 'Auth', description: 'Authentication and password management' },
       { name: 'User', description: 'Logged-in user profile management' },
       { name: 'Team', description: 'Company team and invite management' },
@@ -252,6 +255,7 @@ const swaggerOptions = {
   },
   apis: [
     './server/routers/indexRouter.js',
+    './server/routers/docsRouter.js',
     './server/API/v1/routes/*.js',
     './server/webhooks/webhooksRouter.js',
   ],

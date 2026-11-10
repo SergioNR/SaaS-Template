@@ -89,7 +89,7 @@ describe('stripeEventHandler', () => {
     getCompanyIdByStripeCustomerIdInDb.mockResolvedValue('company-1');
     retrieveStripeSubscription.mockResolvedValue(stripeSubscription());
     syncSubscriptionWithCompanyLockInDb.mockImplementation(async (companyId, resolveSubscriptionWrite) => {
-      const write = await resolveSubscriptionWrite(storedSubscription);
+      const write = resolveSubscriptionWrite(storedSubscription);
 
       if (!write) {
         return false;
@@ -116,7 +116,7 @@ describe('stripeEventHandler', () => {
   });
 
   it.each(['paid', 'no_payment_required'])('stores the retrieved subscription and its item period end on checkout.session.completed (%s)', async (paymentStatus) => {
-    givenStoredSubscription({ id: 'trial-uuid', expires_at: FUTURE });
+    givenStoredSubscription({ stripe_subscription_id: null, expires_at: FUTURE });
     givenEvent('checkout.session.completed', {
       id: 'cs_1',
       payment_status: paymentStatus,
@@ -128,24 +128,80 @@ describe('stripeEventHandler', () => {
     const res = await run();
 
     expect(retrieveStripeSubscription).toHaveBeenCalledWith('sub_new');
-    expect(getCompanyIdByStripeCustomerIdInDb).not.toHaveBeenCalled();
+    //* Resolved from the customer this API linked, never from client_reference_id
+    expect(getCompanyIdByStripeCustomerIdInDb).toHaveBeenCalledWith('cus_1');
     expect(syncSubscriptionWithCompanyLockInDb).toHaveBeenCalledWith('company-1', expect.any(Function));
     expect(upsertCalls).toEqual([{
       companyId: 'company-1',
-      subscriptionId: 'sub_new',
+      stripeSubscriptionId: 'sub_new',
+      status: 'active',
       expiresAt: new Date(PERIOD_END * 1000),
+      syncedAt: expect.any(Date),
     }]);
     expect(res.status).toHaveBeenCalledWith(200);
   });
 
-  it('reads Stripe only inside the company lock', async () => {
+  it('reads Stripe once, before taking the company lock', async () => {
     givenEvent('customer.subscription.updated', { id: 'sub_new', customer: 'cus_1' });
 
     await run();
 
     expect(retrieveStripeSubscription).toHaveBeenCalledTimes(1);
-    expect(syncSubscriptionWithCompanyLockInDb.mock.invocationCallOrder[0])
-      .toBeLessThan(retrieveStripeSubscription.mock.invocationCallOrder[0]);
+    expect(retrieveStripeSubscription.mock.invocationCallOrder[0])
+      .toBeLessThan(syncSubscriptionWithCompanyLockInDb.mock.invocationCallOrder[0]);
+  });
+
+  it('stamps the write with a syncedAt taken before the Stripe read', async () => {
+    let readStartedAt;
+    retrieveStripeSubscription.mockImplementation(async () => {
+      readStartedAt = Date.now();
+      return stripeSubscription();
+    });
+    givenEvent('customer.subscription.updated', { id: 'sub_new', customer: 'cus_1' });
+
+    await run();
+
+    expect(upsertCalls[0].syncedAt.getTime()).toBeLessThanOrEqual(readStartedAt);
+  });
+
+  it('syncs customer.subscription.created (subscriptions created outside Checkout)', async () => {
+    givenEvent('customer.subscription.created', { id: 'sub_new', customer: 'cus_1' });
+
+    await run();
+
+    expect(upsertCalls).toEqual([expect.objectContaining({ companyId: 'company-1', stripeSubscriptionId: 'sub_new' })]);
+  });
+
+  it('refuses a checkout whose client_reference_id disagrees with the customer mapping', async () => {
+    givenEvent('checkout.session.completed', {
+      id: 'cs_1',
+      payment_status: 'paid',
+      subscription: 'sub_new',
+      customer: 'cus_1',
+      client_reference_id: 'company-other',
+    });
+
+    const res = await run();
+
+    expect(syncSubscriptionWithCompanyLockInDb).not.toHaveBeenCalled();
+    expect(logError).toHaveBeenCalledWith(expect.stringContaining('company-other'), expect.any(Error), 'checkout.session.completed');
+    expect(res.status).toHaveBeenCalledWith(200);
+  });
+
+  it('refuses a checkout whose customer does not own the subscription', async () => {
+    givenEvent('checkout.session.completed', {
+      id: 'cs_1',
+      payment_status: 'paid',
+      subscription: 'sub_new',
+      customer: 'cus_other',
+      client_reference_id: 'company-1',
+    });
+
+    await run();
+
+    expect(getCompanyIdByStripeCustomerIdInDb).not.toHaveBeenCalled();
+    expect(syncSubscriptionWithCompanyLockInDb).not.toHaveBeenCalled();
+    expect(logError).toHaveBeenCalled();
   });
 
   it('skips checkout.session.completed while the payment is still unpaid (async methods)', async () => {
@@ -168,12 +224,13 @@ describe('stripeEventHandler', () => {
       id: 'cs_1',
       payment_status: 'paid',
       subscription: 'sub_new',
+      customer: 'cus_1',
       client_reference_id: 'company-1',
     });
 
     await run();
 
-    expect(upsertCalls[0]).toEqual(expect.objectContaining({ subscriptionId: 'sub_new' }));
+    expect(upsertCalls[0]).toEqual(expect.objectContaining({ stripeSubscriptionId: 'sub_new' }));
   });
 
   it('falls back to the top-level current_period_end for older API versions', async () => {
@@ -189,7 +246,7 @@ describe('stripeEventHandler', () => {
   });
 
   it('renews expires_at on invoice.paid using the invoice parent subscription and customer', async () => {
-    givenStoredSubscription({ id: 'sub_new', expires_at: PAST });
+    givenStoredSubscription({ stripe_subscription_id: 'sub_new', expires_at: PAST });
     givenEvent('invoice.paid', {
       id: 'in_1',
       customer: 'cus_1',
@@ -201,17 +258,19 @@ describe('stripeEventHandler', () => {
     expect(getCompanyIdByStripeCustomerIdInDb).toHaveBeenCalledWith('cus_1');
     expect(upsertCalls).toEqual([{
       companyId: 'company-1',
-      subscriptionId: 'sub_new',
+      stripeSubscriptionId: 'sub_new',
+      status: 'active',
       expiresAt: new Date(PERIOD_END * 1000),
+      syncedAt: expect.any(Date),
     }]);
   });
 
-  it('resolves the customer from Stripe when the payload carries none', async () => {
+  it('resolves the company from the fetched subscription customer, not the payload', async () => {
     givenEvent('customer.subscription.updated', { id: 'sub_new' });
 
     await run();
 
-    expect(retrieveStripeSubscription).toHaveBeenCalledTimes(2);
+    expect(retrieveStripeSubscription).toHaveBeenCalledTimes(1);
     expect(getCompanyIdByStripeCustomerIdInDb).toHaveBeenCalledWith('cus_1');
     expect(upsertCalls).toHaveLength(1);
   });
@@ -227,7 +286,7 @@ describe('stripeEventHandler', () => {
 
   it('keeps the row and expires it on customer.subscription.deleted', async () => {
     const endedAt = 1700000000;
-    givenStoredSubscription({ id: 'sub_new', expires_at: FUTURE });
+    givenStoredSubscription({ stripe_subscription_id: 'sub_new', expires_at: FUTURE });
     retrieveStripeSubscription.mockResolvedValue(stripeSubscription({ status: 'canceled', ended_at: endedAt }));
     givenEvent('customer.subscription.deleted', { id: 'sub_new', customer: 'cus_1' });
 
@@ -235,13 +294,15 @@ describe('stripeEventHandler', () => {
 
     expect(upsertCalls).toEqual([{
       companyId: 'company-1',
-      subscriptionId: 'sub_new',
+      stripeSubscriptionId: 'sub_new',
+      status: 'canceled',
       expiresAt: new Date(endedAt * 1000),
+      syncedAt: expect.any(Date),
     }]);
   });
 
   it('expires the subscription immediately when it becomes unpaid', async () => {
-    givenStoredSubscription({ id: 'sub_new', expires_at: FUTURE });
+    givenStoredSubscription({ stripe_subscription_id: 'sub_new', expires_at: FUTURE });
     retrieveStripeSubscription.mockResolvedValue(stripeSubscription({ status: 'unpaid' }));
     givenEvent('customer.subscription.updated', { id: 'sub_new', customer: 'cus_1' });
 
@@ -254,7 +315,7 @@ describe('stripeEventHandler', () => {
   });
 
   it('alerts (logError) with redacted ids when a second active subscription shows up for a company', async () => {
-    givenStoredSubscription({ id: 'sub_current_1234', expires_at: FUTURE });
+    givenStoredSubscription({ stripe_subscription_id: 'sub_current_1234', expires_at: FUTURE });
     retrieveStripeSubscription.mockResolvedValue(stripeSubscription({ id: 'sub_other_5678', status: 'active' }));
     givenEvent('customer.subscription.updated', { id: 'sub_other_5678', customer: 'cus_1' });
 
@@ -272,7 +333,7 @@ describe('stripeEventHandler', () => {
   });
 
   it('does not let a canceled old subscription overwrite a trial row (info only)', async () => {
-    givenStoredSubscription({ id: 'trial-uuid', expires_at: FUTURE });
+    givenStoredSubscription({ stripe_subscription_id: null, expires_at: FUTURE });
     retrieveStripeSubscription.mockResolvedValue(stripeSubscription({ id: 'sub_old', status: 'canceled', ended_at: 1700000000 }));
     givenEvent('customer.subscription.deleted', { id: 'sub_old', customer: 'cus_1' });
 
@@ -294,26 +355,45 @@ describe('stripeEventHandler', () => {
   });
 
   it('lets a resubscription replace an ended stored subscription', async () => {
-    givenStoredSubscription({ id: 'sub_old', expires_at: PAST });
+    givenStoredSubscription({ stripe_subscription_id: 'sub_old', expires_at: PAST });
     givenEvent('checkout.session.completed', {
       id: 'cs_2',
       payment_status: 'paid',
       subscription: 'sub_new',
+      customer: 'cus_1',
       client_reference_id: 'company-1',
     });
 
     await run();
 
-    expect(upsertCalls[0]).toEqual(expect.objectContaining({ subscriptionId: 'sub_new' }));
+    expect(upsertCalls[0]).toEqual(expect.objectContaining({ stripeSubscriptionId: 'sub_new' }));
   });
 
-  it('acknowledges events for an unknown Stripe customer without writing', async () => {
+  it('acknowledges an ended subscription of an unknown customer with a warning only', async () => {
     getCompanyIdByStripeCustomerIdInDb.mockResolvedValue(null);
-    givenEvent('customer.subscription.updated', { id: 'sub_new', customer: 'cus_unknown' });
+    retrieveStripeSubscription.mockResolvedValue(stripeSubscription({ status: 'canceled', ended_at: 1700000000 }));
+    givenEvent('customer.subscription.deleted', { id: 'sub_new', customer: 'cus_unknown' });
 
     const res = await run();
 
     expect(syncSubscriptionWithCompanyLockInDb).not.toHaveBeenCalled();
+    expect(logWarn).toHaveBeenCalled();
+    expect(logError).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(200);
+  });
+
+  it('pages (logError with full ids) on an access-granting subscription without a company', async () => {
+    getCompanyIdByStripeCustomerIdInDb.mockResolvedValue(null);
+    givenEvent('customer.subscription.created', { id: 'sub_new', customer: 'cus_1' });
+
+    const res = await run();
+
+    expect(syncSubscriptionWithCompanyLockInDb).not.toHaveBeenCalled();
+    expect(logError).toHaveBeenCalledWith(
+      expect.stringContaining('no matching company'),
+      expect.any(Error),
+      expect.objectContaining({ stripeSubscriptionId: 'sub_new', stripeCustomerId: 'cus_1' }),
+    );
     expect(res.status).toHaveBeenCalledWith(200);
   });
 
@@ -323,7 +403,8 @@ describe('stripeEventHandler', () => {
       id: 'cs_1',
       payment_status: 'paid',
       subscription: 'sub_new',
-      client_reference_id: 'deleted-company',
+      customer: 'cus_1',
+      client_reference_id: 'company-1',
     });
 
     const res = await run();

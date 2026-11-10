@@ -55,6 +55,18 @@ describe('deleteUser', () => {
     expect(req.session.destroy).not.toHaveBeenCalled();
   });
 
+  it('refuses to delete the last superadmin with 409 LAST_SUPERADMIN', async () => {
+    deleteUserAndCleanup.mockResolvedValue({ status: 'last_superadmin' });
+    const req = mockReq();
+    const res = mockRes();
+
+    await deleteUser(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(409);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'LAST_SUPERADMIN' }));
+    expect(req.session.destroy).not.toHaveBeenCalled();
+  });
+
   it('maps an FK violation of the deletion transaction to 409', async () => {
     deleteUserAndCleanup.mockRejectedValue(Object.assign(new Error('fk'), { code: 'P2003' }));
     const req = mockReq();

@@ -294,7 +294,7 @@ authRouter.patch('/password-reset', authLimiter, checkSchema(recoverPasswordSche
  *             schema:
  *               $ref: '#/components/schemas/ErrorMessage'
  */
-authRouter.get('/invite', checkSchema(teamInviteTokenQuerySchema), sanitizerResult, checkTeamInviteValidity);
+authRouter.get('/invite', authLimiter, checkSchema(teamInviteTokenQuerySchema), sanitizerResult, checkTeamInviteValidity);
 
 /**
  * @openapi

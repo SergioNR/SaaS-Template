@@ -18,10 +18,19 @@ const inviteOmit = {
   token_hash: true,
 };
 
+//* Only invites whose token has not expired are pending - expired rows stay
+//* until the nightly cleanup but must never block, list or count as pending
+const pendingInviteWhere = () => ({
+  token_expires: {
+    gt: new Date(),
+  },
+});
+
 //* Returns the created row together with the raw token. The raw token only
 //* ever goes into the invite email; the row stores its sha256 digest.
-//* A pending invite for the same company+email makes the create fail with
-//* P2002 (unique company_id+email) - callers map it to 409
+//* An EXPIRED invite for the same company+email is replaced in the same
+//* transaction; a pending one makes the create fail with P2002 (unique
+//* company_id+email) - callers map it to 409
 export const createTeamInviteInDb = async (inviteData) => {
   const {
     email,
@@ -32,16 +41,28 @@ export const createTeamInviteInDb = async (inviteData) => {
 
   const inviteToken = generateSecureToken();
 
-  const createTeamInviteQuery = await prisma.teamInvites.create({
-    data: {
-      email,
-      company_id: companyId,
-      role_id: roleId,
-      invited_by: invitedBy,
-      token_hash: hashSecureToken(inviteToken),
-      token_expires: new Date(Date.now() + INVITE_EXPIRY_DURATION_MS),
-    },
-    omit: inviteOmit,
+  const createTeamInviteQuery = await prisma.$transaction(async (tx) => {
+    await tx.teamInvites.deleteMany({
+      where: {
+        company_id: companyId,
+        email,
+        token_expires: {
+          lte: new Date(),
+        },
+      },
+    });
+
+    return tx.teamInvites.create({
+      data: {
+        email,
+        company_id: companyId,
+        role_id: roleId,
+        invited_by: invitedBy,
+        token_hash: hashSecureToken(inviteToken),
+        token_expires: new Date(Date.now() + INVITE_EXPIRY_DURATION_MS),
+      },
+      omit: inviteOmit,
+    });
   });
 
   return {
@@ -117,13 +138,12 @@ export const getTeamInviteByIdInDb = async (inviteId, companyId) => {
   return getTeamInviteQuery;
 };
 
-export const getTeamInviteByCompanyAndEmailInDb = async (companyId, email) => {
-  const getTeamInviteQuery = await prisma.teamInvites.findUnique({
+export const getPendingTeamInviteByCompanyAndEmailInDb = async (companyId, email) => {
+  const getTeamInviteQuery = await prisma.teamInvites.findFirst({
     where: {
-      company_id_email: {
-        company_id: companyId,
-        email,
-      },
+      company_id: companyId,
+      email,
+      ...pendingInviteWhere(),
     },
     omit: inviteOmit,
   });
@@ -135,6 +155,7 @@ export const getCompanyPendingInvitesInDb = async (companyId) => {
   const getCompanyInvitesQuery = await prisma.teamInvites.findMany({
     where: {
       company_id: companyId,
+      ...pendingInviteWhere(),
     },
     include: {
       Role: {

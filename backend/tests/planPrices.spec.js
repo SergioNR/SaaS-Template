@@ -69,6 +69,44 @@ describe('planPrices', () => {
     expect(() => getStripePriceId('basic', 'monthly')).toThrow(/No Stripe price id configured/);
   });
 
+  describe('assertPlanPricesConfigured (boot check)', () => {
+    const originalDeployEnvironment = process.env.DEPLOY_ENVIRONMENT;
+
+    afterEach(() => {
+      if (originalDeployEnvironment === undefined) {
+        delete process.env.DEPLOY_ENVIRONMENT;
+      } else {
+        process.env.DEPLOY_ENVIRONMENT = originalDeployEnvironment;
+      }
+    });
+
+    it('throws outside localhost when a plan has neither its own price nor the fallback', async () => {
+      process.env.DEPLOY_ENVIRONMENT = 'production';
+      process.env.STRIPE_PRICE_ID_PRO_MONTHLY = 'price_pro_monthly';
+
+      const { assertPlanPricesConfigured } = await import('../server/config/planPrices.js');
+
+      expect(() => assertPlanPricesConfigured()).toThrow(/STRIPE_PRICE_ID_BASIC_MONTHLY/);
+    });
+
+    it('passes when the fallback covers every plan', async () => {
+      process.env.DEPLOY_ENVIRONMENT = 'production';
+      process.env.STRIPE_PRICE_ID = 'price_fallback';
+
+      const { assertPlanPricesConfigured } = await import('../server/config/planPrices.js');
+
+      expect(() => assertPlanPricesConfigured()).not.toThrow();
+    });
+
+    it('only warns on localhost', async () => {
+      process.env.DEPLOY_ENVIRONMENT = 'localhost';
+
+      const { assertPlanPricesConfigured } = await import('../server/config/planPrices.js');
+
+      expect(() => assertPlanPricesConfigured()).not.toThrow();
+    });
+  });
+
   it('exposes the supported plans and billing cycles used by the checkout validator', async () => {
     process.env.STRIPE_PRICE_ID = 'price_fallback';
 

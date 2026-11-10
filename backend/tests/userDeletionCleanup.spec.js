@@ -10,7 +10,7 @@ jest.unstable_mockModule('../server/models/userModel.js', () => ({
 }));
 
 jest.unstable_mockModule('../server/integrations/stripe/subscription.js', () => ({
-  cancelCompanySubscriptionInStripe: jest.fn(async () => { callOrder.push('stripe'); }),
+  cancelCompanyBillingInStripe: jest.fn(async () => { callOrder.push('stripe'); }),
 }));
 
 jest.unstable_mockModule('../server/integrations/s3/deleteS3Objects.js', () => ({
@@ -23,7 +23,7 @@ jest.unstable_mockModule('../server/config/loggerFunctions.js', () => ({
 
 const { cleanupAfterUserDeletion, deleteUserAndCleanup } = await import('../server/utils/userDeletionCleanup.js');
 const { deleteUserWithCompanyDataInDb } = await import('../server/models/userModel.js');
-const { cancelCompanySubscriptionInStripe } = await import('../server/integrations/stripe/subscription.js');
+const { cancelCompanyBillingInStripe } = await import('../server/integrations/stripe/subscription.js');
 const { deleteS3Objects } = await import('../server/integrations/s3/deleteS3Objects.js');
 const { logError } = await import('../server/config/loggerFunctions.js');
 
@@ -31,7 +31,9 @@ const companyDeletion = {
   status: 'deleted',
   deletedUser: { id: 'user-1', company_id: 'company-1' },
   companyDeleted: true,
-  subscription: { id: 'sub_stripe123', expires_at: null },
+  companyId: 'company-1',
+  stripeCustomerId: 'cus_1',
+  subscription: { stripe_subscription_id: 'sub_stripe123', expires_at: null },
   fileKeys: ['company-1/file-1/report.pdf', 'company-1/file-2/data.csv'],
 };
 
@@ -54,7 +56,7 @@ describe('deleteUserAndCleanup', () => {
 
     await deleteUserAndCleanup('user-1');
 
-    expect(cancelCompanySubscriptionInStripe).not.toHaveBeenCalled();
+    expect(cancelCompanyBillingInStripe).not.toHaveBeenCalled();
     expect(deleteS3Objects).not.toHaveBeenCalled();
   });
 
@@ -68,7 +70,12 @@ describe('deleteUserAndCleanup', () => {
 
     expect(result).toBe(companyDeletion);
     expect(callOrder).toEqual(['db-transaction', 'stripe', 's3']);
-    expect(cancelCompanySubscriptionInStripe).toHaveBeenCalledWith({ id: 'sub_stripe123', expires_at: null });
+    //* The whole customer is cleaned up, not only the stored subscription
+    expect(cancelCompanyBillingInStripe).toHaveBeenCalledWith({
+      companyId: 'company-1',
+      stripeCustomerId: 'cus_1',
+      stripeSubscriptionId: 'sub_stripe123',
+    });
     expect(deleteS3Objects).toHaveBeenCalledWith(['company-1/file-1/report.pdf', 'company-1/file-2/data.csv']);
   });
 
@@ -78,7 +85,7 @@ describe('deleteUserAndCleanup', () => {
     const result = await deleteUserAndCleanup('user-1', { protectLastOwner: true });
 
     expect(result).toEqual({ status: 'last_owner' });
-    expect(cancelCompanySubscriptionInStripe).not.toHaveBeenCalled();
+    expect(cancelCompanyBillingInStripe).not.toHaveBeenCalled();
     expect(deleteS3Objects).not.toHaveBeenCalled();
   });
 
@@ -86,7 +93,7 @@ describe('deleteUserAndCleanup', () => {
     deleteUserWithCompanyDataInDb.mockRejectedValueOnce(Object.assign(new Error('fk'), { code: 'P2003' }));
 
     await expect(deleteUserAndCleanup('user-1')).rejects.toThrow('fk');
-    expect(cancelCompanySubscriptionInStripe).not.toHaveBeenCalled();
+    expect(cancelCompanyBillingInStripe).not.toHaveBeenCalled();
     expect(deleteS3Objects).not.toHaveBeenCalled();
   });
 });
@@ -96,15 +103,21 @@ describe('cleanupAfterUserDeletion', () => {
     jest.clearAllMocks();
   });
 
-  it('skips Stripe when no subscription row existed but still cleans the bucket', async () => {
+  it('still cleans up the Stripe customer when no subscription row existed', async () => {
     await cleanupAfterUserDeletion({ ...companyDeletion, subscription: null });
 
-    expect(cancelCompanySubscriptionInStripe).not.toHaveBeenCalled();
+    //* A checkout completed in another tab may have created a subscription
+    //* the deleted row never knew about
+    expect(cancelCompanyBillingInStripe).toHaveBeenCalledWith({
+      companyId: 'company-1',
+      stripeCustomerId: 'cus_1',
+      stripeSubscriptionId: null,
+    });
     expect(deleteS3Objects).toHaveBeenCalledWith(companyDeletion.fileKeys);
   });
 
   it('never throws when a provider fails after the commit', async () => {
-    cancelCompanySubscriptionInStripe.mockRejectedValueOnce(new Error('stripe down'));
+    cancelCompanyBillingInStripe.mockRejectedValueOnce(new Error('stripe down'));
     deleteS3Objects.mockRejectedValueOnce(new Error('s3 down'));
 
     await expect(cleanupAfterUserDeletion(companyDeletion)).resolves.toBeUndefined();

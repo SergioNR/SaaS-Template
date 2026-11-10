@@ -11,15 +11,13 @@ jest.unstable_mockModule('../server/models/userModel.js', () => ({
 jest.unstable_mockModule('../server/models/teamInvitesModel.js', () => ({
   createTeamInviteInDb: jest.fn(),
   getTeamInviteByIdInDb: jest.fn(),
-  getTeamInviteByCompanyAndEmailInDb: jest.fn(),
+  getPendingTeamInviteByCompanyAndEmailInDb: jest.fn(),
   getCompanyPendingInvitesInDb: jest.fn(),
   deleteTeamInviteInDb: jest.fn(),
   rotateTeamInviteTokenInDb: jest.fn(),
 }));
 
 jest.unstable_mockModule('../server/models/roleModel.js', () => ({
-  getAllPermissionNames: jest.fn(),
-  getAllRolesWithPermissions: jest.fn(),
   getUserCompanyPermissions: jest.fn(),
   getUserCompanyRoleNames: jest.fn(),
   getRoleByName: jest.fn(),
@@ -64,13 +62,12 @@ const {
 const {
   createTeamInviteInDb,
   getTeamInviteByIdInDb,
-  getTeamInviteByCompanyAndEmailInDb,
+  getPendingTeamInviteByCompanyAndEmailInDb,
   getCompanyPendingInvitesInDb,
   deleteTeamInviteInDb,
   rotateTeamInviteTokenInDb,
 } = await import('../server/models/teamInvitesModel.js');
 const {
-  getAllPermissionNames,
   getUserCompanyPermissions,
   getUserCompanyRoleNames,
   getRoleByName,
@@ -207,7 +204,6 @@ describe('getTeamData', () => {
 
     await getTeamData({ user: { ...caller, role: 'superadmin' } }, res);
 
-    expect(getAllPermissionNames).not.toHaveBeenCalled();
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
       callerPermissions: ['team.view'],
       assignableRoles: ['company_member'],
@@ -237,7 +233,7 @@ describe('createTeamInvite', () => {
   };
 
   const allowCreation = () => {
-    getTeamInviteByCompanyAndEmailInDb.mockResolvedValue(null);
+    getPendingTeamInviteByCompanyAndEmailInDb.mockResolvedValue(null);
     getRoleByName.mockResolvedValue({ id: 'role-member', name: 'company_member' });
     getUserCompanyRoleNames.mockResolvedValue(['company_owner']);
   };
@@ -249,7 +245,7 @@ describe('createTeamInvite', () => {
   });
 
   it('returns 409 when an invite is already pending for the email (company-scoped, not an enumeration)', async () => {
-    getTeamInviteByCompanyAndEmailInDb.mockResolvedValue({ id: 'invite-1' });
+    getPendingTeamInviteByCompanyAndEmailInDb.mockResolvedValue({ id: 'invite-1' });
     const res = mockRes();
 
     await createTeamInvite({ user: caller, body: inviteBody }, res);
@@ -260,7 +256,7 @@ describe('createTeamInvite', () => {
   });
 
   it('returns 404 when the role does not exist', async () => {
-    getTeamInviteByCompanyAndEmailInDb.mockResolvedValue(null);
+    getPendingTeamInviteByCompanyAndEmailInDb.mockResolvedValue(null);
     getRoleByName.mockResolvedValue(null);
     const res = mockRes();
 
@@ -270,7 +266,7 @@ describe('createTeamInvite', () => {
   });
 
   it('returns 403 when the caller invites to a role they do not hold', async () => {
-    getTeamInviteByCompanyAndEmailInDb.mockResolvedValue(null);
+    getPendingTeamInviteByCompanyAndEmailInDb.mockResolvedValue(null);
     getRoleByName.mockResolvedValue({ id: 'role-owner', name: 'company_owner' });
     getUserCompanyRoleNames.mockResolvedValue(['company_member']);
     const res = mockRes();
@@ -282,7 +278,7 @@ describe('createTeamInvite', () => {
   });
 
   it('does not let superadmins grant company roles they do not hold', async () => {
-    getTeamInviteByCompanyAndEmailInDb.mockResolvedValue(null);
+    getPendingTeamInviteByCompanyAndEmailInDb.mockResolvedValue(null);
     getRoleByName.mockResolvedValue({ id: 'role-owner', name: 'company_owner' });
     getUserCompanyRoleNames.mockResolvedValue([]);
     const res = mockRes();

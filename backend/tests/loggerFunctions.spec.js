@@ -17,7 +17,12 @@ jest.unstable_mockModule('../server/config/telegramBotConfig.js', () => ({
 const {
   logError, logInfo, logWarn, serializeError,
 } = await import('../server/config/loggerFunctions.js');
-const { escapeHtml } = await import('../server/integrations/telegram/sendLogsToTelegram.js');
+const {
+  ALERT_DEDUPE_WINDOW_MS,
+  escapeHtml,
+  resetAlertDedupe,
+  shouldSendAlert,
+} = await import('../server/integrations/telegram/sendLogsToTelegram.js');
 const { sendTelegramMessage } = await import('../server/config/telegramBotConfig.js');
 
 describe('serializeError', () => {
@@ -80,6 +85,37 @@ describe('log functions', () => {
     expect(message).not.toContain('<script>');
     expect(message).toContain('&lt;script&gt;');
     expect(message).toContain('a &lt; b &amp; &quot;c&quot;');
+  });
+});
+
+describe('Telegram alert dedupe', () => {
+  beforeEach(() => {
+    resetAlertDedupe();
+    jest.clearAllMocks();
+  });
+
+  it('sends the same alert at most once per window', () => {
+    logError('database unreachable', new Error('ECONNREFUSED'));
+    logError('database unreachable', new Error('ECONNREFUSED'));
+
+    expect(sendTelegramMessage).toHaveBeenCalledTimes(1);
+    //* Every occurrence is still logged
+    expect(loggerMock.error).toHaveBeenCalledTimes(2);
+  });
+
+  it('lets different alerts through', () => {
+    logError('database unreachable', new Error('ECONNREFUSED'));
+    logError('stripe unreachable', new Error('ETIMEDOUT'));
+
+    expect(sendTelegramMessage).toHaveBeenCalledTimes(2);
+  });
+
+  it('sends the alert again once the window passed', () => {
+    const start = 1_000_000;
+
+    expect(shouldSendAlert('k', start)).toBe(true);
+    expect(shouldSendAlert('k', start + ALERT_DEDUPE_WINDOW_MS - 1)).toBe(false);
+    expect(shouldSendAlert('k', start + ALERT_DEDUPE_WINDOW_MS)).toBe(true);
   });
 });
 

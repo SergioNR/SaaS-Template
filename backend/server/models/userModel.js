@@ -6,6 +6,7 @@ import {
   logInfo,
 } from '../config/loggerFunctions.js';
 import { lockCompanyForUpdateInDb } from './companyModel.js';
+import { ADVISORY_LOCK_KEYS } from '../config/advisoryLockKeys.js';
 import { deleteUserSessionsInTx } from './sessionModel.js';
 import { deleteUserPasswordResetTokensInTx } from './passwordResetTokensModel.js';
 import { hashSecureToken } from '../utils/secureToken.js';
@@ -13,22 +14,6 @@ import { canGrantRole, outranksAllRoles, rolesGrantableBy } from '../utils/compa
 
 const COMPANY_OWNER_ROLE = 'company_owner';
 
-const getCompanyRoleNamesInTx = async (tx, userId) => {
-  const userRoles = await tx.userRole.findMany({
-    where: {
-      user_id: userId,
-    },
-    select: {
-      Role: {
-        select: {
-          name: true,
-        },
-      },
-    },
-  });
-
-  return userRoles.map((userRole) => userRole.Role.name);
-};
 
 //* The caller's roles are only meaningful while they are still a member of
 //* the company - resolves to null when they are not (removed concurrently)
@@ -231,9 +216,32 @@ export const getUserByEmail = async (userEmail) => {
 
   const getUserByEmailQuery = await prisma.user.findUnique({
     where: whereClause,
+    omit: {
+      password: true,
+    },
   });
 
   return getUserByEmailQuery;
+};
+
+//* The ONLY email lookup that selects the password hash - used exclusively by
+//* the passport local strategy, which drops the hash before handing the user
+//* to the session layer
+export const getUserForLogin = async (userEmail) => {
+  const getUserForLoginQuery = await prisma.user.findUnique({
+    where: {
+      email: userEmail,
+    },
+    select: {
+      id: true,
+      email: true,
+      role: true,
+      company_id: true,
+      password: true,
+    },
+  });
+
+  return getUserForLoginQuery;
 };
 
 export const updateUserLastLoginDate = async (userId) => {
@@ -243,11 +251,15 @@ export const updateUserLastLoginDate = async (userId) => {
       data: {
         last_login_at: new Date(),
       },
+      omit: {
+        password: true,
+      },
     });
 
     return queryResult;
   } catch (error) {
-    return logError(`could not update last login date for userid ${userId}`, error);
+    logError(`could not update last login date for userid ${userId}`, error);
+    return null;
   }
 };
 
@@ -415,8 +427,10 @@ export const countUsersInDb = async (filters = {}) => {
 //*   role rows are re-read under the lock - outranks every role the user
 //*   holds (a stale pre-check outside the lock can never be trusted)
 //*
-//* Resolves to { status: 'not_found' | 'last_owner' | 'forbidden' } or
+//* Resolves to { status: 'not_found' | 'last_owner' | 'last_superadmin' |
+//* 'forbidden' } or
 //* { status: 'deleted', deletedUser, companyDeleted, subscription, fileKeys }
+//* (plus companyId and stripeCustomerId when the company was deleted)
 export const deleteUserWithCompanyDataInDb = async (userId, options = {}) => {
   const {
     companyId,
@@ -432,6 +446,7 @@ export const deleteUserWithCompanyDataInDb = async (userId, options = {}) => {
       },
       select: {
         id: true,
+        role: true,
         company_id: true,
       },
     });
@@ -442,9 +457,38 @@ export const deleteUserWithCompanyDataInDb = async (userId, options = {}) => {
 
     const { company_id: userCompanyId } = user;
 
-    //* Superadmins belong to no company: no lock, no owner checks and no
-    //* company cleanup (`company_id: null` would match every superadmin)
+    //* Superadmins belong to no company: no company lock, no owner checks and
+    //* no company cleanup (`company_id: null` would match every superadmin).
+    //* The platform must keep at least one superadmin - checked under a
+    //* transaction-scoped advisory lock (superadmins have no company row to
+    //* lock) so concurrent deletions of the last two cannot both pass it
     if (!userCompanyId) {
+      if (user.role === 'superadmin') {
+        await tx.$queryRaw`SELECT pg_advisory_xact_lock(${ADVISORY_LOCK_KEYS.superadminDeletion}::bigint)`;
+
+        //* A concurrent deletion of the same account may have committed
+        //* while this one waited for the lock
+        const stillExists = await tx.user.count({
+          where: {
+            id: userId,
+          },
+        });
+
+        if (stillExists === 0) {
+          return { status: 'not_found' };
+        }
+
+        const superadminCount = await tx.user.count({
+          where: {
+            role: 'superadmin',
+          },
+        });
+
+        if (superadminCount <= 1) {
+          return { status: 'last_superadmin' };
+        }
+      }
+
       const deletedUser = await tx.user.delete({
         where: {
           id: userId,
@@ -471,8 +515,14 @@ export const deleteUserWithCompanyDataInDb = async (userId, options = {}) => {
 
     await lockCompanyForUpdateInDb(tx, userCompanyId);
 
-    //* Role rows are read after the lock so they reflect committed changes
-    const userRoleNames = await getCompanyRoleNamesInTx(tx, userId);
+    //* Membership and role rows are re-read after the lock so they reflect
+    //* committed changes - a concurrent removal of the same member resolves
+    //* to not_found instead of a P2025 on the delete below
+    const userRoleNames = await getMemberRoleNamesInTx(tx, userId, userCompanyId);
+
+    if (!userRoleNames) {
+      return { status: 'not_found' };
+    }
 
     if (callerId) {
       const callerRoleNames = await getMemberRoleNamesInTx(tx, callerId, userCompanyId);
@@ -538,8 +588,19 @@ export const deleteUserWithCompanyDataInDb = async (userId, options = {}) => {
         company_id: userCompanyId,
       },
       select: {
-        id: true,
+        stripe_subscription_id: true,
         expires_at: true,
+      },
+    });
+
+    //* The Stripe customer is needed after the commit to clean up every
+    //* subscription and open checkout it holds, not only the stored one
+    const company = await tx.company.findUnique({
+      where: {
+        id: userCompanyId,
+      },
+      select: {
+        stripe_id: true,
       },
     });
 
@@ -576,6 +637,8 @@ export const deleteUserWithCompanyDataInDb = async (userId, options = {}) => {
       status: 'deleted',
       deletedUser,
       companyDeleted: true,
+      companyId: userCompanyId,
+      stripeCustomerId: company?.stripe_id ?? null,
       subscription,
       fileKeys: companyFiles.map((file) => file.s3_key),
     };

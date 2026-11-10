@@ -4,6 +4,9 @@ import { jest } from '@jest/globals';
 const prismaMock = {
   teamInvites: {
     create: jest.fn(),
+    deleteMany: jest.fn(),
+    findFirst: jest.fn(),
+    findMany: jest.fn(),
     update: jest.fn(),
     findUnique: jest.fn(),
   },
@@ -37,6 +40,8 @@ const {
 } = await import('../server/utils/secureToken.js');
 const {
   createTeamInviteInDb,
+  getCompanyPendingInvitesInDb,
+  getPendingTeamInviteByCompanyAndEmailInDb,
   getTeamInviteByTokenInDb,
   rotateTeamInviteTokenInDb,
 } = await import('../server/models/teamInvitesModel.js');
@@ -73,6 +78,7 @@ describe('teamInvitesModel tokens', () => {
   });
 
   it('stores only the digest of the generated token and returns the raw token separately', async () => {
+    prismaMock.$transaction.mockImplementation((callback) => callback(prismaMock));
     prismaMock.teamInvites.create.mockImplementation(async ({ data }) => ({ id: 'invite-1', email: data.email }));
 
     const { invite, inviteToken } = await createTeamInviteInDb({
@@ -85,6 +91,43 @@ describe('teamInvitesModel tokens', () => {
     expect(JSON.stringify(data)).not.toContain(inviteToken);
     expect(omit).toEqual({ token_hash: true });
     expect(invite).toEqual({ id: 'invite-1', email: 'new@acme.test' });
+  });
+
+  it('replaces only an EXPIRED invite for the same address, in the same transaction as the create', async () => {
+    prismaMock.$transaction.mockImplementation((callback) => callback(prismaMock));
+    prismaMock.teamInvites.create.mockResolvedValue({ id: 'invite-2' });
+
+    await createTeamInviteInDb({
+      email: 'new@acme.test', companyId: 'company-1', roleId: 'role-member', invitedBy: 'owner-1',
+    });
+
+    expect(prismaMock.teamInvites.deleteMany).toHaveBeenCalledWith({
+      where: {
+        company_id: 'company-1',
+        email: 'new@acme.test',
+        token_expires: { lte: expect.any(Date) },
+      },
+    });
+    expect(prismaMock.teamInvites.deleteMany.mock.invocationCallOrder[0])
+      .toBeLessThan(prismaMock.teamInvites.create.mock.invocationCallOrder[0]);
+  });
+
+  it('never treats an expired invite as pending', async () => {
+    prismaMock.teamInvites.findFirst.mockResolvedValue(null);
+    prismaMock.teamInvites.findMany.mockResolvedValue([]);
+
+    await getPendingTeamInviteByCompanyAndEmailInDb('company-1', 'new@acme.test');
+    await getCompanyPendingInvitesInDb('company-1');
+
+    expect(prismaMock.teamInvites.findFirst.mock.calls[0][0].where).toEqual({
+      company_id: 'company-1',
+      email: 'new@acme.test',
+      token_expires: { gt: expect.any(Date) },
+    });
+    expect(prismaMock.teamInvites.findMany.mock.calls[0][0].where).toEqual({
+      company_id: 'company-1',
+      token_expires: { gt: expect.any(Date) },
+    });
   });
 
   it('looks invites up by the digest of the presented token', async () => {

@@ -1,13 +1,15 @@
 import { SECURE_TOKEN_PATTERN } from '../secureToken.js';
+import { passwordByteLengthValidator } from './passwordByteLength.js';
 
 export const acceptTeamInviteSchema = {
   inviteToken: {
     in: ['body'],
-    notEmpty: {
-      errorMessage: 'Team invite token is required',
-    },
     isString: {
       errorMessage: 'Team invite token must be a string',
+      bail: true,
+    },
+    notEmpty: {
+      errorMessage: 'Team invite token is required',
     },
     matches: {
       options: SECURE_TOKEN_PATTERN,
@@ -16,10 +18,13 @@ export const acceptTeamInviteSchema = {
   },
   password: {
     in: ['body'],
+    isString: {
+      errorMessage: 'Password must be a string',
+      bail: true,
+    },
     notEmpty: {
       errorMessage: 'Password is required',
     },
-    isString: true,
     isLength: {
       options: {
         min: 8,
@@ -27,6 +32,7 @@ export const acceptTeamInviteSchema = {
       },
       errorMessage: 'Password must be between 8-64 characters long',
     },
+    isWithinBcryptByteLimit: passwordByteLengthValidator,
     //* Same strength rules as self-registration
     isStrongPassword: {
       options: {

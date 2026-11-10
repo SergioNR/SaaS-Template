@@ -1,16 +1,16 @@
 import { CronJob } from 'cron';
-import { logError } from '../config/loggerFunctions.js';
+import { ADVISORY_LOCK_KEYS } from '../config/advisoryLockKeys.js';
 import { deleteExpiredPasswordResetTokens } from '../models/passwordResetTokensModel.js';
+import { runExclusiveCronTick } from './exclusiveCronTick.js';
 
-//* waitForCompletion: a tick still running is never overlapped by the next one
+//* waitForCompletion: a tick still running is never overlapped by the next
+//* one; the advisory lock keeps other replicas from running it concurrently
 export const deletePasswordResetTokensScheduler = CronJob.from({
   cronTime: '0 3 * * *',
-  onTick: async () => {
-    try {
-      await deleteExpiredPasswordResetTokens();
-    } catch (error) {
-      logError('Error deleting expired password reset tokens:', error);
-    }
-  },
+  onTick: () => runExclusiveCronTick(
+    'deleteExpiredPasswordResetTokens',
+    ADVISORY_LOCK_KEYS.cronPasswordResetTokens,
+    deleteExpiredPasswordResetTokens,
+  ),
   waitForCompletion: true,
 });

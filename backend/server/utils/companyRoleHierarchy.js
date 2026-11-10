@@ -38,14 +38,6 @@ export const canGrantRole = (heldRoleNames, targetRoleName) => rolesGrantableBy(
 //* stricter than granting: the caller must OUTRANK every role the target
 //* holds, so peers can never remove or demote each other (an admin cannot
 //* touch another admin, an owner cannot touch another owner)
-export const rolesManageableBy = (heldRoleNames) => {
-  const callerRank = highestRankOf(heldRoleNames);
-
-  return Object.keys(COMPANY_ROLE_RANK)
-    .filter((roleName) => rankOf(roleName) < callerRank)
-    .sort();
-};
-
 export const outranksAllRoles = (heldRoleNames, targetRoleNames) => {
   const callerRank = highestRankOf(heldRoleNames);
 

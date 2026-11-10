@@ -12,14 +12,7 @@ import {
   getSubscriptionPublicDataInDb,
   storeBillingCompanyIdInDb,
 } from '../models/subscriptionModel.js';
-
-//* A company is actively subscribed only through a real Stripe subscription
-//* (`sub_` id) that has not expired yet - trial rows carry a random uuid
-const hasActiveStoredSubscription = (subscriptionData) => Boolean(
-  subscriptionData?.id?.startsWith('sub_')
-  && subscriptionData.expires_at
-  && new Date(subscriptionData.expires_at) > new Date(),
-);
+import { isStoredSubscriptionActive } from '../config/stripeSubscriptionStatuses.js';
 
 //* Creates the Stripe customer and stores it with a conditional write. When a
 //* concurrent request stored a customer first, the stored id is reused
@@ -92,7 +85,8 @@ export const getBillingCheckoutSessionUrl = async (req, res) => {
 
   //* A second checkout would create a duplicate Stripe subscription - plan
   //* changes go through the customer portal instead
-  if (hasActiveStoredSubscription(subscriptionData)) {
+  //* (shared predicate: a Stripe-backed row that has not expired yet)
+  if (isStoredSubscriptionActive(subscriptionData)) {
     return subscriptionActiveResponse(res);
   }
 

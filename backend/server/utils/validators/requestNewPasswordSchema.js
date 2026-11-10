@@ -1,5 +1,11 @@
 export const requestNewPasswordSchema = {
   email: {
+    //* First and bailing: `["a@b.co"]` would otherwise pass isEmail per
+    //* element and reach Prisma as an array
+    isString: {
+      errorMessage: 'Email must be a string',
+      bail: true,
+    },
     notEmpty: {
       errorMessage: 'Username is required',
     },
@@ -17,6 +23,13 @@ export const requestNewPasswordSchema = {
         yahoo_remove_subaddress: true,
         icloud_remove_subaddress: true,
       },
+    },
+    isLength: {
+      options: {
+        max: 254,
+        min: 3,
+      },
+      errorMessage: 'Email must not exceed 254 characters',
     },
   },
 };

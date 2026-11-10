@@ -19,17 +19,6 @@ export const getRoleByName = async (roleName) => {
   return getRoleByNameQuery;
 };
 
-export const getAllRolesWithPermissions = async () => {
-  const getAllRolesQuery = await prisma.role.findMany({
-    include: roleWithPermissionsInclude,
-    orderBy: {
-      name: 'asc',
-    },
-  });
-
-  return getAllRolesQuery;
-};
-
 //* Users are single-company in v1 (User.company_id FK), so the user's role
 //* rows are implicitly scoped to their company
 export const getUserCompanyRoles = async (userId) => {
@@ -61,17 +50,4 @@ export const getUserCompanyPermissions = async (userId) => {
   );
 
   return [...new Set(permissionNames)];
-};
-
-export const getAllPermissionNames = async () => {
-  const getAllPermissionsQuery = await prisma.permission.findMany({
-    select: {
-      name: true,
-    },
-    orderBy: {
-      name: 'asc',
-    },
-  });
-
-  return getAllPermissionsQuery.map((permission) => permission.name);
 };

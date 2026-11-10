@@ -27,6 +27,14 @@ jest.unstable_mockModule('../server/utils/userDeletionCleanup.js', () => ({
   deleteUserAndCleanup: jest.fn(),
 }));
 
+jest.unstable_mockModule('../server/config/loggerFunctions.js', () => ({
+  logInfo: jest.fn(),
+  logError: jest.fn(),
+  logWarn: jest.fn(),
+}));
+
+const { logInfo } = await import('../server/config/loggerFunctions.js');
+
 const {
   deleteOneUserById,
   getAdminStats,
@@ -204,6 +212,23 @@ describe('deleteOneUserById', () => {
     expect(deleteUserAndCleanup).toHaveBeenCalledWith('user-1', { protectLastOwner: true });
     expect(res.status).toHaveBeenCalledWith(200);
     expect(res.json).toHaveBeenCalledWith({ userId: 'user-1' });
+    //* The acting superadmin is recorded with every admin deletion
+    expect(logInfo).toHaveBeenCalledWith(
+      expect.stringContaining('admin-1'),
+      expect.objectContaining({ actorId: 'admin-1', deletedUserId: 'user-1' }),
+    );
+  });
+
+  it('returns 409 LAST_SUPERADMIN when the target is the last superadmin', async () => {
+    getUserById.mockResolvedValue({ id: 'staff-2' });
+    deleteUserAndCleanup.mockResolvedValue({ status: 'last_superadmin' });
+    const res = mockRes();
+
+    await deleteOneUserById({ params: { userId: 'staff-2' }, user: { id: 'admin-1' } }, res);
+
+    expect(res.status).toHaveBeenCalledWith(409);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'LAST_SUPERADMIN' }));
+    expect(logInfo).not.toHaveBeenCalled();
   });
 
   it('returns 409 with a stable code when the user is the last owner of a company with other members', async () => {
