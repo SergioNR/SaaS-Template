@@ -32,3 +32,11 @@ Options:
 
 - Include `cleanup_failed_at` in any API payload? Recommended: no - pending rows are never listed to clients.
 - Exact minute offset for the session job; any value not colliding with `*/15` and the nightly 03:00 / 03:15 jobs works.
+
+## Decisions taken at implementation
+
+- Option 1 (per-row `File.cleanup_failed_at`) and the lock-guarded session job were taken. Migration: `20261111000001_file_cleanup_failed_at` (hand-written, checked against `prisma migrate diff --from-schema <previous schema> --to-schema prisma/schema.prisma --script`).
+- `cleanup_failed_at` is not exposed in any API payload.
+- Session job cadence: `7-59/15 * * * *` (minutes 7, 22, 37, 52), lock key `cronExpiredSessions = 7300004`.
+- The sweep logs before writing the marker: if the marker write fails, the tick errors and the next run alerts again (one alert too many rather than a missed one).
+- `getStalePendingFileKeysInDb` was renamed `getStalePendingFilesInDb` since it now returns `{ key, cleanupFailedAt }` objects.
