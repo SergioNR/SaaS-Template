@@ -231,9 +231,32 @@ export const getUserByEmail = async (userEmail) => {
 
   const getUserByEmailQuery = await prisma.user.findUnique({
     where: whereClause,
+    omit: {
+      password: true,
+    },
   });
 
   return getUserByEmailQuery;
+};
+
+//* The ONLY email lookup that selects the password hash - used exclusively by
+//* the passport local strategy, which drops the hash before handing the user
+//* to the session layer
+export const getUserForLogin = async (userEmail) => {
+  const getUserForLoginQuery = await prisma.user.findUnique({
+    where: {
+      email: userEmail,
+    },
+    select: {
+      id: true,
+      email: true,
+      role: true,
+      company_id: true,
+      password: true,
+    },
+  });
+
+  return getUserForLoginQuery;
 };
 
 export const updateUserLastLoginDate = async (userId) => {
@@ -243,11 +266,15 @@ export const updateUserLastLoginDate = async (userId) => {
       data: {
         last_login_at: new Date(),
       },
+      omit: {
+        password: true,
+      },
     });
 
     return queryResult;
   } catch (error) {
-    return logError(`could not update last login date for userid ${userId}`, error);
+    logError(`could not update last login date for userid ${userId}`, error);
+    return null;
   }
 };
 
