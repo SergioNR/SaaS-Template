@@ -15,6 +15,7 @@ import { buildFileS3Key, sanitizeFilename } from '../utils/s3Key.js';
 import { MAX_PENDING_UPLOADS_PER_COMPANY } from '../config/s3.js';
 import { PENDING_FILE_CONFIRM_MAX_AGE_MS } from '../config/pendingFileUploads.js';
 import { logAudit, logWarn } from '../config/loggerFunctions.js';
+import { computeNextCursor, parsePagination } from '../utils/cursorPagination.js';
 
 //* The catalog row is the source of truth and is already gone when this runs:
 //* an orphaned object is harmless and reclaimable, a dangling row is not, so a
@@ -30,16 +31,6 @@ const deleteS3ObjectBestEffort = async (s3Key) => {
 const uploadExpiredResponse = (res) => res.status(409).json({
   message: 'The upload is too old to be confirmed - upload the file again',
   code: 'FILE_UPLOAD_EXPIRED',
-});
-
-const DEFAULT_PAGE_SIZE = 50;
-const MAX_PAGE_SIZE = 100;
-
-const parsePagination = (query) => ({
-  limit: Math.min(Number.parseInt(query.limit, 10) || DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE),
-  cursor: typeof query.cursor === 'string' && query.cursor.length > 0
-    ? query.cursor
-    : undefined,
 });
 
 const toFileShape = (file) => ({
@@ -201,13 +192,9 @@ export const getFiles = async (req, res) => {
 
   const files = await getFilesInDb(companyId, { limit, cursor });
 
-  const nextCursor = files.length === limit && files.length > 0
-    ? files[files.length - 1].id
-    : undefined;
-
   return res.status(200).json({
     files: files.map(toFileShape),
-    nextCursor,
+    nextCursor: computeNextCursor(files, limit),
   });
 };
 

@@ -1,4 +1,5 @@
 import { prisma } from '../config/prismaClient.js';
+import { listPaginationArgs } from '../utils/cursorPagination.js';
 
 //* No `id` - for paid rows it is the Stripe subscription id, which is never exposed
 const subscriptionPublicFields = {
@@ -42,14 +43,8 @@ export const getAllCompaniesInDb = async (filters = {}, pagination = {}) => {
         select: subscriptionPublicFields,
       },
     },
-    //* id tiebreaker keeps the cursor order total when created_at collides
-    orderBy: [
-      { created_at: 'desc' },
-      { id: 'desc' },
-    ],
-    take: pagination.limit,
-    skip: pagination.cursor ? 1 : undefined,
-    cursor: pagination.cursor ? { id: pagination.cursor } : undefined,
+    //* Newest first with the id tiebreaker - the order the cursor walk relies on
+    ...listPaginationArgs(pagination),
   });
 
   //* The Stripe customer id is destructured away so it never reaches the

@@ -19,17 +19,9 @@ import {
 } from '../models/sessionModel.js';
 import { deleteUserAndCleanup } from '../utils/userDeletionCleanup.js';
 import { logAudit } from '../config/loggerFunctions.js';
+import { computeNextCursor, parsePagination } from '../utils/cursorPagination.js';
 
-const DEFAULT_PAGE_SIZE = 50;
-const MAX_PAGE_SIZE = 100;
 const WEEK_IN_MS = 7 * 24 * 60 * 60 * 1000;
-
-const parsePagination = (query) => ({
-  limit: Math.min(Number.parseInt(query.limit, 10) || DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE),
-  cursor: typeof query.cursor === 'string' && query.cursor.length > 0
-    ? query.cursor
-    : undefined,
-});
 
 export const getAllUsers = async (req, res) => {
   const filters = {};
@@ -49,18 +41,16 @@ export const getAllUsers = async (req, res) => {
 
   const { limit, cursor } = parsePagination(req.query);
 
-  const users = await getAllUsersInDb(filters, { limit, cursor });
-
-  const nextCursor = users.length === limit && users.length > 0
-    ? users[users.length - 1].id
-    : undefined;
-
-  const totalUserCount = await countUsersInDb(filters);
+  //* Page and total are independent reads - issued together
+  const [users, totalUserCount] = await Promise.all([
+    getAllUsersInDb(filters, { limit, cursor }),
+    countUsersInDb(filters),
+  ]);
 
   return res.status(200).json({
     userCount: totalUserCount,
     users: users,
-    nextCursor: nextCursor,
+    nextCursor: computeNextCursor(users, limit),
   });
 };
 
@@ -164,18 +154,16 @@ export const getAllCompanies = async (req, res) => {
 
   const { limit, cursor } = parsePagination(req.query);
 
-  const companies = await getAllCompaniesInDb(filters, { limit, cursor });
-
-  const nextCursor = companies.length === limit && companies.length > 0
-    ? companies[companies.length - 1].id
-    : undefined;
-
-  const totalCompanyCount = await countCompaniesInDb(filters);
+  //* Page and total are independent reads - issued together
+  const [companies, totalCompanyCount] = await Promise.all([
+    getAllCompaniesInDb(filters, { limit, cursor }),
+    countCompaniesInDb(filters),
+  ]);
 
   return res.status(200).json({
     companyCount: totalCompanyCount,
     companies: companies,
-    nextCursor: nextCursor,
+    nextCursor: computeNextCursor(companies, limit),
   });
 };
 

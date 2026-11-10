@@ -1,4 +1,5 @@
 import { prisma } from '../config/prismaClient.js';
+import { listPaginationArgs } from '../utils/cursorPagination.js';
 
 export const createFileInDb = async (fileData) => {
   const {
@@ -34,14 +35,8 @@ export const getFilesInDb = async (companyId, pagination = {}) => {
       company_id: companyId,
       status: 'ready',
     },
-    //* id tiebreaker keeps the cursor order total when created_at collides
-    orderBy: [
-      { created_at: 'desc' },
-      { id: 'desc' },
-    ],
-    take: pagination.limit,
-    skip: pagination.cursor ? 1 : undefined,
-    cursor: pagination.cursor ? { id: pagination.cursor } : undefined,
+    //* Newest first with the id tiebreaker - the order the cursor walk relies on
+    ...listPaginationArgs(pagination),
   });
 
   return getFilesQuery;
