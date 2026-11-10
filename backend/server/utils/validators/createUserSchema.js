@@ -47,19 +47,18 @@ export const createUserValidationSchema = {
       errorMessage: 'Email must not exceed 254 characters',
     },
   },
-  //* Optional so clients built before onboarding asked for it keep working -
-  //* without it the company is created unnamed. When sent it must be valid
+  //* Required - every self-registered company is named (admin lists and
+  //* invite emails show it). `bail` keeps arrays/null from reaching trim
   companyName: {
-    optional: {
-      options: {
-        values: 'null',
-      },
-    },
     isString: {
       errorMessage: 'Company name must be a string',
       bail: true,
     },
     trim: true,
+    notEmpty: {
+      errorMessage: 'Company name is required',
+      bail: true,
+    },
     isLength: {
       options: {
         min: 2,

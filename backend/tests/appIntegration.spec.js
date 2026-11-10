@@ -58,6 +58,7 @@ jest.unstable_mockModule('../server/integrations/brevo/transactionalEmails/brevo
   companyEmails: { support: 'support@acme.test', billing: 'support@acme.test', hello: 'support@acme.test' },
   templateIds: { resetPassword: 2, teamInvite: 3 },
   commonTemplateParams: () => ({ appOrigin: FRONT_ORIGIN }),
+  frontendUrl: (path) => `${FRONT_ORIGIN}${path}`,
 }));
 
 //* The real express-session runs on an in-memory store instead of Postgres
@@ -248,6 +249,85 @@ describe('session cookie', () => {
     expect(prismaMock.session.update).toHaveBeenCalledWith(expect.objectContaining({
       data: { user_id: '00000000-0000-4000-8000-000000000001' },
     }));
+  });
+});
+
+//* Logs the seeded-shaped owner in and returns the Cookie header to replay -
+//* the cookie is Secure, so it is forwarded by hand over the test transport.
+//* Counts against authLimiter like any login
+const OWNER = {
+  id: '00000000-0000-4000-8000-000000000001',
+  email: 'owner@acme.test',
+  role: 'user',
+  company_id: '00000000-0000-4000-8000-0000000000c0',
+};
+
+const loginAsOwner = async () => {
+  const passwordHash = await bcrypt.hash('Password123!', 4);
+  prismaMock.user.findUnique.mockResolvedValueOnce({ ...OWNER, password: passwordHash });
+
+  authLimiterHits += 1;
+  const response = await request(app)
+    .post('/api/v1/auth/login')
+    .set('Origin', FRONT_ORIGIN)
+    .set('X-Forwarded-Proto', 'https')
+    .send({ username: OWNER.email, password: 'Password123!' });
+
+  expect(response.status).toBe(200);
+
+  const sessionCookie = (response.headers['set-cookie'] ?? []).find((cookie) => cookie.startsWith('app.sid='));
+
+  return sessionCookie.split(';')[0];
+};
+
+describe('auth router gating', () => {
+  const ROUTE_NOT_FOUND = { message: 'The requested route is not available or does not exist' };
+
+  it('answers 404 to an unknown auth path without a session', async () => {
+    const getResponse = await request(app).get('/api/v1/auth/nope');
+    const postResponse = await request(app)
+      .post('/api/v1/auth/registr')
+      .set('Origin', FRONT_ORIGIN)
+      .send({});
+
+    expect(getResponse.status).toBe(404);
+    expect(getResponse.body).toEqual(ROUTE_NOT_FOUND);
+    expect(postResponse.status).toBe(404);
+    expect(postResponse.body).toEqual(ROUTE_NOT_FOUND);
+  });
+
+  it('still answers 401 to the private auth routes without a session', async () => {
+    const sessionCheck = await request(app).get('/api/v1/auth/session');
+    const logout = await request(app)
+      .post('/api/v1/auth/logout')
+      .set('Origin', FRONT_ORIGIN)
+      .send({});
+
+    expect(sessionCheck.status).toBe(401);
+    expect(sessionCheck.body).toEqual({});
+    expect(logout.status).toBe(401);
+    expect(logout.body).toEqual({});
+  });
+
+  it('answers 404 to an unknown auth path with a session, and 200 to the session check', async () => {
+    const cookie = await loginAsOwner();
+    prismaMock.user.findUnique.mockResolvedValue(OWNER);
+
+    const unknown = await request(app)
+      .get('/api/v1/auth/nope')
+      .set('X-Forwarded-Proto', 'https')
+      .set('Cookie', cookie);
+    const sessionCheck = await request(app)
+      .get('/api/v1/auth/session')
+      .set('X-Forwarded-Proto', 'https')
+      .set('Cookie', cookie);
+
+    prismaMock.user.findUnique.mockReset();
+
+    expect(unknown.status).toBe(404);
+    expect(unknown.body).toEqual(ROUTE_NOT_FOUND);
+    expect(sessionCheck.status).toBe(200);
+    expect(sessionCheck.body).toEqual({ user: { id: OWNER.id, role: 'user' } });
   });
 });
 

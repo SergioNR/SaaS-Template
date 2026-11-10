@@ -180,7 +180,7 @@ const swaggerOptions = {
         },
         RegisterRequest: {
           type: 'object',
-          required: ['username', 'password'],
+          required: ['username', 'password', 'companyName'],
           properties: {
             username: {
               type: 'string',
@@ -191,7 +191,7 @@ const swaggerOptions = {
               type: 'string',
               minLength: 2,
               maxLength: 100,
-              description: 'Name of the company created for the registrant (trimmed). The registrant becomes its company owner. Optional for backwards compatibility - when omitted (or null) the company is created unnamed',
+              description: 'Name of the company created for the registrant (trimmed). The registrant becomes its company owner. Required - a missing, empty or non-string name answers 422',
               example: 'Acme Corp',
             },
             password: {

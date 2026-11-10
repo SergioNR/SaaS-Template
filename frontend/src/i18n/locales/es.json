@@ -102,7 +102,6 @@
       "requestNewLink": "Solicitar nuevo enlace",
       "errors": {
         "expired": "El enlace ha caducado o ya se ha usado. Solicita un nuevo enlace para restablecer tu contraseña.",
-        "invalidLink": "El enlace no es válido. Solicita un nuevo enlace para restablecer tu contraseña.",
         "invalid": "La contraseña no cumple los requisitos o las contraseñas no coinciden. Revisa los datos e inténtalo de nuevo.",
         "generic": "No se pudo actualizar la contraseña. Por favor, inténtalo de nuevo más tarde."
       },

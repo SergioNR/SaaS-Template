@@ -78,9 +78,33 @@ describe('password byte length (bcrypt truncates at 72 bytes)', () => {
   });
 
   test('register accepts an ASCII password within the limits', async () => {
-    const { errors } = await run(createUserValidationSchema, { body: { username: 'a@b.co', password: VALID_PASSWORD } });
+    const { errors } = await run(createUserValidationSchema, { body: { username: 'a@b.co', password: VALID_PASSWORD, companyName: 'Acme' } });
 
     expect(errors).toEqual([]);
+  });
+});
+
+describe('register companyName is required', () => {
+  const body = { username: 'a@b.co', password: VALID_PASSWORD };
+
+  test.each([
+    ['missing', {}],
+    ['blank', { companyName: '   ' }],
+    ['null', { companyName: null }],
+    ['an array', { companyName: ['Acme'] }],
+    ['too short after trimming', { companyName: ' A ' }],
+    ['too long', { companyName: 'A'.repeat(101) }],
+  ])('rejects a company name that is %s', async (_label, extra) => {
+    const { errors } = await run(createUserValidationSchema, { body: { ...body, ...extra } });
+
+    expect(failedPaths(errors)).toContain('companyName');
+  });
+
+  test('accepts and trims a valid company name', async () => {
+    const { req, errors } = await run(createUserValidationSchema, { body: { ...body, companyName: '  Acme Corp ' } });
+
+    expect(errors).toEqual([]);
+    expect(req.body.companyName).toBe('Acme Corp');
   });
 });
 

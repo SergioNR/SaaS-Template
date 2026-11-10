@@ -28,12 +28,15 @@ import { teamInviteTokenQuerySchema } from '../../../utils/validators/teamInvite
 import { acceptTeamInviteSchema } from '../../../utils/validators/acceptTeamInviteSchema.js';
 
 //* Public (unauthenticated) routes - session establishment, credential
-//* recovery and invite consumption. The gate is scoped by composition at the
-//* bottom of the file, not by file position
+//* recovery and invite consumption
 const authPublicRouter = Router();
 
-//* Gated routes - mounted behind checkAuthentication() below
+//* Gated routes - every route carries `requireSession` in its own chain, so
+//* what a route requires is visible at its definition and paths that match
+//* no route still reach the 404 fallback without a session (a router-level
+//* gate would answer 401 to every typo under /api/v1/auth)
 const authPrivateRouter = Router();
+const requireSession = checkAuthentication();
 
 export const authRouter = Router();
 
@@ -93,7 +96,7 @@ authPublicRouter.post('/login', authLimiter, checkSchema(userLoginValidationSche
  *     summary: Register a new user and their company (onboarding)
  *     description: |
  *       Self-service onboarding. In one transaction it creates:
- *       - a new company named `companyName` (unnamed when omitted), with a 7-day free trial subscription
+ *       - a new company named `companyName` (required, 2-100 characters after trimming), with a 7-day free trial subscription
  *       - the user, with the global `user` role, as that company's first member
  *       - a `company_owner` role assignment for the user, which grants every company permission, billing included
  *
@@ -351,7 +354,7 @@ authPublicRouter.post('/invite-accept', authLimiter, checkSchema(acceptTeamInvit
  *             schema:
  *               $ref: '#/components/schemas/ErrorMessage'
  */
-authPrivateRouter.post('/logout', logoutUser);
+authPrivateRouter.post('/logout', requireSession, logoutUser);
 
 /**
  * @openapi
@@ -403,7 +406,7 @@ authPrivateRouter.post('/logout', logoutUser);
  */
 //* Deprecated alias of PATCH /api/v1/user/password (same handler) - remove once
 //* every client calls the user route
-authPrivateRouter.patch('/update-user-password', checkSchema(updatePasswordSchema), sanitizerResult, updateUserPassword);
+authPrivateRouter.patch('/update-user-password', requireSession, checkSchema(updatePasswordSchema), sanitizerResult, updateUserPassword);
 
 /**
  * @openapi
@@ -438,17 +441,15 @@ authPrivateRouter.patch('/update-user-password', checkSchema(updatePasswordSchem
  *             schema:
  *               $ref: '#/components/schemas/ErrorMessage'
  */
-authPrivateRouter.get('/session', checkSession);
+authPrivateRouter.get('/session', requireSession, checkSession);
 
-//* Composition: the authentication gate is attached to the private router
-//* itself, so what a route requires is visible at its definition - not at its
-//* file position. Public routes first so unauthenticated traffic never hits
-//* the gate
+//* Composition: public routes first, then the private ones (each gated at its
+//* own definition), then the fallback - reachable with or without a session
 authRouter.use(authPublicRouter);
-authRouter.use(checkAuthentication(), authPrivateRouter);
+authRouter.use(authPrivateRouter);
 
 authRouter.use('/*fallback', (req, res) => {
   res.status(404).json({
     message: 'The requested route is not available or does not exist',
-  }); //* Will catch failed requests even though they are authenticated & have the appropiate role
+  }); //* Catches every unmatched auth path, authenticated or not
 });

@@ -2,6 +2,7 @@ import {
   brevoClient,
   commonTemplateParams,
   companyEmails,
+  frontendUrl,
   templateIds,
 } from './brevo.js';
 import { logError } from '../../../config/loggerFunctions.js';
@@ -17,10 +18,12 @@ export const sendTeamInviteToUser = async (userEmail, inviteToken, companyName, 
         email: userEmail,
       }],
       templateId: templateIds.teamInvite, //* Brevo dashboard --> https://my.brevo.com/camp/template/<id>/setup
-      //* The clickable link to {{ params.appOrigin }}/auth/accept-invite?inviteToken=...
-      //* is built inside the Brevo template body, not in code
+      //* The template links to {{ params.acceptInviteUrl }} - built here so the
+      //* path always matches the SPA's accept-invite page. The raw token stays
+      //* available for templates that still build the link themselves
       params: {
         ...commonTemplateParams(),
+        acceptInviteUrl: frontendUrl('/auth/accept-invite', { inviteToken }),
         inviteToken: inviteToken,
         companyName: companyName,
         inviterEmail: inviterEmail,
