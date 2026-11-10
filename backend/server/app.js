@@ -23,7 +23,8 @@ import { trustProxySetting } from './config/trustProxy.js';
 import { prisma } from './config/prismaClient.js';
 import { client as posthogClient } from './config/posthog-node.js';
 import { logger } from './config/logger.js';
-import { logError, logInfo } from './config/loggerFunctions.js';
+import { logError, logInfo, logWarn } from './config/loggerFunctions.js';
+import { markShuttingDown, waitForBackgroundTasks } from './utils/processLifecycle.js';
 import { requestLogger } from './middlewares/requestLogger.js';
 
 const app = express();
@@ -92,13 +93,13 @@ app.use(globalErrorHandler);
 const PORT = Number.parseInt(process.env.PORT, 10);
 
 if (!Number.isInteger(PORT) || PORT <= 0) {
-  // eslint-disable-next-line no-console
-  console.warn('PORT environment variable is not set or invalid - defaulting to 3000');
+  logWarn('PORT environment variable is not set or invalid - defaulting to 3000');
 }
 
-server.listen(Number.isInteger(PORT) && PORT > 0 ? PORT : 3000, () => {
-  // eslint-disable-next-line no-console
-  console.log('Server running');
+const listenPort = Number.isInteger(PORT) && PORT > 0 ? PORT : 3000;
+
+server.listen(listenPort, () => {
+  logInfo(`Server running on port ${listenPort}`);
 });
 
 startCronJobs();
@@ -113,7 +114,29 @@ const flushLogs = () => {
   }
 };
 
+const crashProcess = (message, error) => {
+  logError(message, error);
+  flushLogs();
+  process.exit(1);
+};
+
+//* Node's default for both events is to crash with a bare stderr print - keep
+//* the crash semantics (the process state is unknown afterwards) but log the
+//* cause through pino/Telegram first
+process.on('unhandledRejection', (reason) => {
+  crashProcess('Unhandled promise rejection - crashing', reason);
+});
+
+process.on('uncaughtException', (error) => {
+  crashProcess('Uncaught exception - crashing', error);
+});
+
+//* Hard ceiling for the whole shutdown - container runtimes SIGKILL shortly
+//* after SIGTERM (Docker: 10 s by default)
 const SHUTDOWN_TIMEOUT_MS = 10000;
+//* Detached work (emails, registration, analytics) gets most of that budget;
+//* what is still pending afterwards is logged and abandoned
+const BACKGROUND_TASKS_DRAIN_TIMEOUT_MS = 8000;
 let isShuttingDown = false;
 
 const closeResources = async () => {
@@ -127,9 +150,16 @@ const closeResources = async () => {
     .forEach((result) => logError('Error closing resources during shutdown', result.reason));
 };
 
-const gracefulShutdown = (signal) => {
+const closeServer = () => new Promise((resolve) => {
+  server.close(() => resolve());
+});
+
+const gracefulShutdown = async (signal) => {
   if (isShuttingDown) return;
   isShuttingDown = true;
+
+  //* /health answers 503 from here on so traffic drains away from this replica
+  markShuttingDown();
 
   logInfo(`Received ${signal}, closing server`);
 
@@ -142,12 +172,22 @@ const gracefulShutdown = (signal) => {
     process.exit(1);
   }, SHUTDOWN_TIMEOUT_MS).unref();
 
-  server.close(async () => {
-    await closeResources();
-    logInfo('Server closed gracefully');
-    flushLogs();
-    process.exit(0);
-  });
+  //* In-flight requests and detached background work drain in parallel;
+  //* resources (database, PostHog) close only once both are done, because the
+  //* background tasks still use them
+  const [, backgroundDrained] = await Promise.all([
+    closeServer(),
+    waitForBackgroundTasks(BACKGROUND_TASKS_DRAIN_TIMEOUT_MS),
+  ]);
+
+  if (!backgroundDrained) {
+    logWarn('Background tasks still pending at shutdown - abandoning them');
+  }
+
+  await closeResources();
+  logInfo('Server closed gracefully');
+  flushLogs();
+  process.exit(0);
 };
 
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));

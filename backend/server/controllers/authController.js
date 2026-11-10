@@ -20,6 +20,7 @@ import { getTeamInviteByTokenInDb, deleteTeamInviteByIdSafe } from '../models/te
 import { linkSessionToUser } from '../models/sessionModel.js';
 import { sendResetPasswordTokenToUser } from '../integrations/brevo/transactionalEmails/sendResetPasswordTokenToUser.js';
 import { sendExistingAccountNoticeToUser } from '../integrations/brevo/transactionalEmails/sendExistingAccountNoticeToUser.js';
+import { trackBackground } from '../utils/processLifecycle.js';
 
 //* Detached from the request: the lookup, token creation and email all run
 //* after the response was sent, so neither the body nor the timing of the
@@ -44,7 +45,7 @@ const issuePasswordResetToken = async (email) => {
 export const requestPasswordResetToken = async (req, res) => {
   const { email } = req.body;
 
-  issuePasswordResetToken(email); // Fire-and-forget
+  trackBackground(issuePasswordResetToken(email)); // Fire-and-forget - tracked so a shutdown waits for it
 
   //* Enumeration-safe logging mirrors the uniform response - no email, no
   //* user id, so the logs cannot reveal whether the account exists either
@@ -279,9 +280,9 @@ export const loginLocal = (req, res, next) => passport.authenticate('local', (er
       return req.session.destroy(() => next(linkErr));
     }
 
-    posthogUserSuccessLoggedIn(user.id, 'local'); // Fire-and-forget function
+    trackBackground(posthogUserSuccessLoggedIn(user.id, 'local')); // Fire-and-forget function
 
-    updateUserLastLoginDate(user.id); // Fire-and-forget function
+    trackBackground(updateUserLastLoginDate(user.id)); // Fire-and-forget function
 
     logAudit(req, 'auth.login.succeeded', { entity: 'user', entityId: user.id });
 
@@ -331,7 +332,7 @@ const registerUserInBackground = async (email, password, companyName) => {
 export const registerUser = async (req, res) => {
   const { username, password, companyName } = req.body;
 
-  registerUserInBackground(username, password, companyName); // Fire-and-forget
+  trackBackground(registerUserInBackground(username, password, companyName)); // Fire-and-forget - tracked so a shutdown waits for it
 
   //* Enumeration-safe logging mirrors the uniform response - the create runs
   //* detached and may not happen (already-registered email), so the action

@@ -23,6 +23,7 @@ import { deleteUserAndCleanup } from '../utils/userDeletionCleanup.js';
 import { canGrantRole, outranksAllRoles, rolesGrantableBy } from '../utils/companyRoleHierarchy.js';
 import { logAudit, logError } from '../config/loggerFunctions.js';
 import { sendTeamInviteToUser } from '../integrations/brevo/transactionalEmails/sendTeamInviteToUser.js';
+import { trackBackground } from '../utils/processLifecycle.js';
 
 const targetRoleNames = (targetMember) => targetMember.UserRoles.map((userRole) => userRole.Role.name);
 
@@ -167,7 +168,7 @@ export const createTeamInvite = async (req, res) => {
 
   const { invite, inviteToken } = creation;
 
-  deliverInviteInBackground(invite, inviteToken, companyId, inviterEmail); // Fire-and-forget
+  trackBackground(deliverInviteInBackground(invite, inviteToken, companyId, inviterEmail)); // Fire-and-forget
 
   logAudit(req, 'team.invite.created', { entity: 'invite', entityId: invite.id });
 
@@ -240,7 +241,7 @@ export const resendTeamInvite = async (req, res) => {
 
   //* The row is never deleted here, registered invitee or not - the same
   //* detached delivery as on creation decides whether an email goes out
-  deliverInviteInBackground(rotatedInvite, inviteToken, companyId, inviterEmail); // Fire-and-forget
+  trackBackground(deliverInviteInBackground(rotatedInvite, inviteToken, companyId, inviterEmail)); // Fire-and-forget
 
   logAudit(req, 'team.invite.resent', { entity: 'invite', entityId: inviteId });
 

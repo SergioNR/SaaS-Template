@@ -12,7 +12,7 @@ export const healthRouter = Router();
  *   get:
  *     tags: [Health]
  *     summary: Health check (database included)
- *     description: Returns 200 when the server is up and the database answers a `SELECT 1`, 503 otherwise. Not rate limited - intended for container/orchestrator health probes.
+ *     description: Returns 200 when the server is up and the database answers a `SELECT 1`, 503 otherwise - also once a graceful shutdown started, so traffic drains away from the replica. Not rate limited and not access-logged - intended for container/orchestrator health probes.
  *     responses:
  *       200:
  *         description: Server and database are healthy
@@ -27,7 +27,7 @@ export const healthRouter = Router();
  *             example:
  *               status: ok
  *       503:
- *         description: Database unreachable
+ *         description: Database unreachable, or the server is shutting down
  *         content:
  *           application/json:
  *             schema:
