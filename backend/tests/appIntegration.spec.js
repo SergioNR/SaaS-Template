@@ -76,10 +76,19 @@ jest.unstable_mockModule('@quixo3/prisma-session-store', () => ({
   PrismaSessionStore: class extends session.MemoryStore {},
 }));
 
-//* Silent logger - the access log middleware still runs, nothing is printed
+//* Captured logger - nothing is printed, every JSON line is kept so specs can
+//* assert on access/error lines
+const logLines = [];
 jest.unstable_mockModule('../server/config/logger.js', () => ({
-  logger: pino({ level: 'silent' }),
+  logger: pino({ level: 'info' }, { write: (line) => logLines.push(JSON.parse(line)) }),
 }));
+
+//* pino-http writes the access line on response finish - give it a tick
+const findAccessLine = async (requestId) => {
+  await new Promise((resolve) => { setImmediate(resolve); });
+
+  return logLines.find((line) => line.reqId === requestId && line.res !== undefined);
+};
 
 const { createApp } = await import('../server/createApp.js');
 const { markShuttingDown, resetProcessLifecycle } = await import('../server/utils/processLifecycle.js');
@@ -326,6 +335,40 @@ describe('validated fields come from one location', () => {
       prismaMock.user.findUnique.mockReset();
       prismaMock.userRole.findMany.mockResolvedValue([]);
     }
+  });
+});
+
+describe('access line request id', () => {
+  it('carries the response X-Request-Id as reqId', async () => {
+    const response = await request(app).get('/');
+    const accessLine = await findAccessLine(response.headers['x-request-id']);
+
+    expect(accessLine).toBeDefined();
+    expect(accessLine.reqId).toMatch(UUID_PATTERN);
+    expect(accessLine.res.statusCode).toBe(200);
+  });
+
+  it('matches the error-handler line requestId on a 500', async () => {
+    const cookie = await loginAsOwner();
+
+    //* The session's user lookup fails -> passport forwards the error -> 500
+    prismaMock.user.findUnique.mockRejectedValueOnce(new Error('database exploded'));
+
+    const response = await request(app)
+      .get('/api/v1/user')
+      .set('X-Forwarded-Proto', 'https')
+      .set('Cookie', cookie);
+
+    expect(response.status).toBe(500);
+
+    const requestId = response.headers['x-request-id'];
+    const accessLine = await findAccessLine(requestId);
+    const errorLine = logLines.find((line) => line.context?.additionalInfo?.requestId === requestId);
+
+    expect(accessLine).toBeDefined();
+    expect(accessLine.res.statusCode).toBe(500);
+    expect(errorLine).toBeDefined();
+    expect(errorLine.context.additionalInfo.requestId).toBe(accessLine.reqId);
   });
 });
 
