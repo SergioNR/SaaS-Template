@@ -2,7 +2,7 @@ import { Router } from 'express';
 
 import { userRouter } from './v1/routes/userRouter.js';
 import { authRouter } from './v1/routes/authRouter.js';
-import { adminRouter } from './v1/routes/adminRouter.js';
+import { adminRouter } from './v1/routes/admin/index.js';
 import { billingRouter } from './v1/routes/billingRouter.js';
 import { teamRouter } from './v1/routes/teamRouter.js';
 import { filesRouter } from './v1/routes/filesRouter.js';

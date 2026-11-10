@@ -1,12 +1,9 @@
 import { jest } from '@jest/globals';
-import bcrypt from 'bcrypt';
 
 jest.unstable_mockModule('../server/models/userModel.js', () => ({
   getUserByEmail: jest.fn(),
   canCompanyMemberGrantRoleInDb: jest.fn(),
   createUserInDB: jest.fn(),
-  getUserPassword: jest.fn(),
-  updateUserPasswordInDB: jest.fn(),
   updateUserLastLoginDate: jest.fn(),
 }));
 
@@ -55,13 +52,10 @@ const {
   registerUser,
   requestPasswordResetToken,
   updateRecoveredUserPassword,
-  updateUserPassword,
 } = await import('../server/controllers/authController.js');
 const {
   getUserByEmail,
   createUserInDB,
-  getUserPassword,
-  updateUserPasswordInDB,
 } = await import('../server/models/userModel.js');
 const { SESSION_COOKIE_NAME, SESSION_COOKIE_OPTIONS } = await import('../server/config/security.js');
 const {
@@ -276,45 +270,6 @@ describe('registerUser', () => {
     expect(res.json).toHaveBeenCalledWith({});
     expect(sendExistingAccountNoticeToUser).toHaveBeenCalledWith('stored@acme.test');
     expect(createUserInDB).not.toHaveBeenCalled();
-  });
-});
-
-const currentHash = await bcrypt.hash('OldPassword1', 4);
-
-describe('updateUserPassword', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    getUserPassword.mockResolvedValue({ password: currentHash });
-  });
-
-  it('answers 400 with a stable code when the current password does not match', async () => {
-    const res = mockRes();
-
-    await updateUserPassword({ user: { id: 'user-1' }, sessionID: 'sid-1', body: { currentPassword: 'Wrong1234', newPassword: 'NewPassword1' } }, res);
-
-    expect(res.status).toHaveBeenCalledWith(400);
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'AUTH_CURRENT_PASSWORD_INCORRECT' }));
-    expect(updateUserPasswordInDB).not.toHaveBeenCalled();
-  });
-
-  it('updates the hash and revokes tokens and other sessions in one model transaction, keeping the current session', async () => {
-    updateUserPasswordInDB.mockResolvedValue({ id: 'user-1' });
-    const res = mockRes();
-
-    await updateUserPassword({ user: { id: 'user-1' }, sessionID: 'sid-1', body: { currentPassword: 'OldPassword1', newPassword: 'NewPassword1' } }, res);
-
-    expect(updateUserPasswordInDB).toHaveBeenCalledWith('user-1', expect.stringMatching(/^\$2[aby]\$/), { keepSessionId: 'sid-1' });
-    expect(res.status).toHaveBeenCalledWith(200);
-    expect(res.json).toHaveBeenCalledWith({ userId: 'user-1' });
-    expect(logAudit).toHaveBeenCalledWith(expect.anything(), 'user.password.updated', { entity: 'user', entityId: 'user-1' });
-    expect(JSON.stringify(logAudit.mock.calls.map((call) => call.slice(1)))).not.toContain('NewPassword1');
-  });
-
-  it('propagates transaction errors instead of swallowing them', async () => {
-    updateUserPasswordInDB.mockRejectedValue(new Error('db down'));
-    const res = mockRes();
-
-    await expect(updateUserPassword({ user: { id: 'user-1' }, sessionID: 'sid-1', body: { currentPassword: 'OldPassword1', newPassword: 'NewPassword1' } }, res)).rejects.toThrow('db down');
   });
 });
 

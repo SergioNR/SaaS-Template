@@ -2,37 +2,23 @@ import { Router } from 'express';
 import { checkSchema, param } from 'express-validator';
 import {
   deleteOneUserById,
-  getAdminStats,
-  getAllCompanies,
   getAllUsers,
-  getOneCompanyById,
   getOneUserById,
-} from '../../../controllers/adminController.js';
-import { sanitizerResult } from '../../../middlewares/sanitizerResult.js';
-import { adminUserListQueryValidationSchema } from '../../../utils/validators/adminUserListQuerySchema.js';
-import { adminCompanyListQueryValidationSchema } from '../../../utils/validators/adminCompanyListQuerySchema.js';
+} from '../../../../controllers/adminController.js';
+import { sanitizerResult } from '../../../../middlewares/sanitizerResult.js';
+import { adminUserListQueryValidationSchema } from '../../../../utils/validators/adminUserListQuerySchema.js';
 
-export const adminRouter = Router();
-
-//* Role enforcement happens once, at the apiRouter mounting level
+//* Mounted on /users by admin/index.js - the superadmin gate rides the
+//* single /v1/admin mount in apiRouter
+export const usersRouter = Router();
 
 const userIdParamValidation = [
   param('userId').isUUID().withMessage('User id must be a valid UUID'),
   sanitizerResult,
 ];
 
-const companyIdParamValidation = [
-  param('companyId').isUUID().withMessage('Company id must be a valid UUID'),
-  sanitizerResult,
-];
-
 const userListQueryValidation = [
   checkSchema(adminUserListQueryValidationSchema),
-  sanitizerResult,
-];
-
-const companyListQueryValidation = [
-  checkSchema(adminCompanyListQueryValidationSchema),
   sanitizerResult,
 ];
 
@@ -112,7 +98,7 @@ const companyListQueryValidation = [
  *             schema:
  *               $ref: '#/components/schemas/ValidationError'
  */
-adminRouter.get('/users', userListQueryValidation, getAllUsers);
+usersRouter.get('/', userListQueryValidation, getAllUsers);
 
 /**
  * @openapi
@@ -182,7 +168,7 @@ adminRouter.get('/users', userListQueryValidation, getAllUsers);
  *             schema:
  *               $ref: '#/components/schemas/ValidationError'
  */
-adminRouter.get('/users/:userId', userIdParamValidation, getOneUserById);
+usersRouter.get('/:userId', userIdParamValidation, getOneUserById);
 
 /**
  * @openapi
@@ -248,198 +234,4 @@ adminRouter.get('/users/:userId', userIdParamValidation, getOneUserById);
  *             schema:
  *               $ref: '#/components/schemas/ValidationError'
  */
-adminRouter.delete('/users/:userId', userIdParamValidation, deleteOneUserById);
-
-/**
- * @openapi
- * /api/v1/admin/companies:
- *   get:
- *     tags: [Admin]
- *     summary: List all companies (superadmin only)
- *     description: Returns the companies in the database, newest first, with cursor-based pagination, their user count and their subscription (public fields). The Stripe customer id is never exposed - only a `stripeLinked` boolean.
- *     security:
- *       - sessionCookie: []
- *     parameters:
- *       - in: query
- *         name: search
- *         required: false
- *         schema:
- *           type: string
- *           maxLength: 100
- *         description: Optional case-insensitive partial match on the company name.
- *       - in: query
- *         name: limit
- *         required: false
- *         schema:
- *           type: integer
- *           default: 50
- *           maximum: 100
- *         description: Page size.
- *       - in: query
- *         name: cursor
- *         required: false
- *         schema:
- *           type: string
- *           format: uuid
- *         description: Company id to paginate after (the `nextCursor` value of the previous page).
- *     responses:
- *       200:
- *         description: Companies retrieved successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 companyCount:
- *                   type: integer
- *                   description: Total number of companies matching the filter
- *                 companies:
- *                   type: array
- *                   items:
- *                     type: object
- *                 nextCursor:
- *                   type: string
- *                   nullable: true
- *       401:
- *         description: Not authenticated
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorMessage'
- *       403:
- *         description: Missing permissions
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorMessage'
- *       422:
- *         description: Validation errors
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ValidationError'
- */
-adminRouter.get('/companies', companyListQueryValidation, getAllCompanies);
-
-/**
- * @openapi
- * /api/v1/admin/companies/{companyId}:
- *   get:
- *     tags: [Admin]
- *     summary: Get a single company with related data (superadmin only)
- *     description: Returns the company plus its users (safe fields only) and its subscription (public fields). The Stripe customer id is never exposed - only a `stripeLinked` boolean.
- *     security:
- *       - sessionCookie: []
- *     parameters:
- *       - in: path
- *         name: companyId
- *         required: true
- *         schema:
- *           type: string
- *         description: Id of the company to retrieve
- *     responses:
- *       200:
- *         description: Company retrieved successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 company:
- *                   type: object
- *                   properties:
- *                     id:
- *                       type: string
- *                     name:
- *                       type: string
- *                       nullable: true
- *                     stripeLinked:
- *                       type: boolean
- *                     subscription:
- *                       type: object
- *                       nullable: true
- *                     users:
- *                       type: array
- *                       items:
- *                         type: object
- *       404:
- *         description: Company not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorMessage'
- *       401:
- *         description: Not authenticated
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorMessage'
- *       403:
- *         description: Missing permissions
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorMessage'
- *       422:
- *         description: Validation errors
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ValidationError'
- */
-adminRouter.get('/companies/:companyId', companyIdParamValidation, getOneCompanyById);
-
-/**
- * @openapi
- * /api/v1/admin/stats:
- *   get:
- *     tags: [Admin]
- *     summary: Platform counters for the admin overview (superadmin only)
- *     description: Returns aggregated counts - users (total, superadmins, new in the last 7 days), companies, subscriptions (total and active) and active sessions. A subscription is active when its `expires_at` is in the future.
- *     security:
- *       - sessionCookie: []
- *     responses:
- *       200:
- *         description: Stats retrieved successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 stats:
- *                   type: object
- *                   properties:
- *                     totalUsers:
- *                       type: integer
- *                     totalSuperadmins:
- *                       type: integer
- *                     newUsersLastWeek:
- *                       type: integer
- *                     totalCompanies:
- *                       type: integer
- *                     totalSubscriptions:
- *                       type: integer
- *                     activeSubscriptions:
- *                       type: integer
- *                     activeSessions:
- *                       type: integer
- *       401:
- *         description: Not authenticated
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorMessage'
- *       403:
- *         description: Missing permissions
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorMessage'
- */
-adminRouter.get('/stats', getAdminStats);
-
-adminRouter.use('/*fallback', (req, res) => {
-  res.status(404).json({
-    message: 'The requested route is not available or does not exist',
-  }); //* Will catch failed requests even though they are authenticated & have the appropiate role
-});
+usersRouter.delete('/:userId', userIdParamValidation, deleteOneUserById);

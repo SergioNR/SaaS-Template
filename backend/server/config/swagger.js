@@ -256,7 +256,7 @@ const swaggerOptions = {
   apis: [
     './server/routers/indexRouter.js',
     './server/routers/docsRouter.js',
-    './server/API/v1/routes/*.js',
+    './server/API/v1/routes/**/*.js',
     './server/webhooks/webhooksRouter.js',
   ],
 };

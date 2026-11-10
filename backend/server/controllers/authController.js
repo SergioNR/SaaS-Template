@@ -6,9 +6,7 @@ import { posthogUserSuccessLoggedIn } from '../models/posthogModel.js';
 import {
   getUserByEmail,
   canCompanyMemberGrantRoleInDb,
-  updateUserPasswordInDB,
   createUserInDB,
-  getUserPassword,
   updateUserLastLoginDate,
 } from '../models/userModel.js';
 import {
@@ -343,57 +341,6 @@ export const registerUser = async (req, res) => {
   //* Same shape & status for new and already-registered emails so the
   //* endpoint cannot be used to enumerate registered emails
   return res.status(201).json({});
-};
-
-export const updateUserPassword = async (req, res) => {
-  const {
-    currentPassword,
-    newPassword,
-  } = req.body;
-
-  const { id: userId } = req.user;
-
-  const currentHashedPasswordQuery = await getUserPassword(userId);
-
-  if (!currentHashedPasswordQuery) {
-    return res.status(404).json({});
-  }
-
-  const { password: currentHashedPassword } = currentHashedPasswordQuery;
-
-  // Compare current password with stored hash
-  const isMatch = await bcrypt.compare(currentPassword, currentHashedPassword);
-
-  if (!isMatch) {
-    //* Both 400s carry a stable code - the SPA maps it to user-facing copy
-    return res.status(400).json({
-      message: 'Current password is incorrect',
-      code: 'AUTH_CURRENT_PASSWORD_INCORRECT',
-    });
-  }
-
-  if (currentPassword === newPassword) {
-    return res.status(400).json({
-      message: 'New password must be different from the current password',
-      code: 'AUTH_PASSWORD_UNCHANGED',
-    });
-  }
-
-  // Hash the new password
-  const newHashedPassword = await bcrypt.hash(newPassword, BCRYPT_SALT_ROUNDS);
-
-  //* One transaction: new hash, every outstanding reset token revoked and
-  //* every other session revoked - the current one is kept alive. A failure
-  //* throws (500) instead of leaving a half-applied credential change
-  const updatedUser = await updateUserPasswordInDB(userId, newHashedPassword, {
-    keepSessionId: req.sessionID,
-  });
-
-  logAudit(req, 'user.password.updated', { entity: 'user', entityId: updatedUser.id });
-
-  return res.status(200).json({
-    userId: updatedUser.id,
-  });
 };
 
 export const logoutUser = (req, res, next) => {
