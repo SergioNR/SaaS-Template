@@ -19,13 +19,23 @@ export const globalErrorHandler = (err, req, res, next) => {
   const isClientError = statusCode < 500;
   const isLocalhost = process.env.DEPLOY_ENVIRONMENT === 'localhost';
 
+  //* Request context so every error/warning line correlates with its
+  //* access-log line by request id (req.id is set by requestLogger).
+  //* req.path (not originalUrl) keeps query-string secrets such as password
+  //* reset tokens out of the logs
+  const requestContext = {
+    requestId: req?.id ?? null,
+    method: req?.method ?? null,
+    path: req?.path ?? null,
+    userId: req?.user?.id ?? null,
+  };
+
   //* Client errors are expected noise - log them as warnings and do not page
-  //* the Telegram errors channel. req.path (not originalUrl) keeps query-string
-  //* secrets such as password reset tokens out of the logs
+  //* the Telegram errors channel
   if (isClientError) {
-    logWarn(`Client error ${statusCode} on ${req.method} ${req.path}`, err);
+    logWarn(`Client error ${statusCode} on ${req.method} ${req.path}`, err, requestContext);
   } else {
-    logError(err?.name || 'Unhandled error', err);
+    logError(err?.name || 'Unhandled error', err, requestContext);
   }
 
   if (isLocalhost) {

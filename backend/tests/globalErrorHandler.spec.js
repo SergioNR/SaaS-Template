@@ -15,7 +15,19 @@ const createMockRes = () => {
   return res;
 };
 
-const createMockReq = () => ({ method: 'POST', path: '/api/v1/auth/login' });
+const createMockReq = () => ({
+  method: 'POST',
+  path: '/api/v1/auth/login',
+  id: '00000000-0000-4000-8000-0000000000f1',
+  user: { id: '00000000-0000-4000-8000-000000000001' },
+});
+
+const expectedRequestContext = (req) => ({
+  requestId: req.id,
+  method: req.method,
+  path: req.path,
+  userId: req.user.id,
+});
 
 describe('globalErrorHandler', () => {
   const originalDeployEnvironment = process.env.DEPLOY_ENVIRONMENT;
@@ -95,26 +107,46 @@ describe('globalErrorHandler', () => {
     });
   });
 
-  it('logs server errors with logError', () => {
+  it('logs server errors with logError and the request context', () => {
     process.env.DEPLOY_ENVIRONMENT = 'production';
     const res = createMockRes();
+    const req = createMockReq();
     const error = new Error('boom');
 
-    globalErrorHandler(error, createMockReq(), res, jest.fn());
+    globalErrorHandler(error, req, res, jest.fn());
 
-    expect(logError).toHaveBeenCalledWith('Error', error);
+    expect(logError).toHaveBeenCalledWith('Error', error, expectedRequestContext(req));
     expect(logWarn).not.toHaveBeenCalled();
   });
 
-  it('logs client errors as warnings only (no Telegram alert)', () => {
+  it('logs client errors as warnings only (no Telegram alert), with the request context', () => {
     process.env.DEPLOY_ENVIRONMENT = 'production';
     const res = createMockRes();
+    const req = createMockReq();
     const error = Object.assign(new Error('too large'), { status: 413 });
 
-    globalErrorHandler(error, createMockReq(), res, jest.fn());
+    globalErrorHandler(error, req, res, jest.fn());
 
-    expect(logWarn).toHaveBeenCalledWith('Client error 413 on POST /api/v1/auth/login', error);
+    expect(logWarn).toHaveBeenCalledWith(
+      'Client error 413 on POST /api/v1/auth/login',
+      error,
+      expectedRequestContext(req),
+    );
     expect(logError).not.toHaveBeenCalled();
+  });
+
+  it('stays null-safe on request context for a bare req', () => {
+    process.env.DEPLOY_ENVIRONMENT = 'production';
+    const res = createMockRes();
+
+    globalErrorHandler(new Error('boom'), { method: 'GET', path: '/x' }, res, jest.fn());
+
+    expect(logError).toHaveBeenCalledWith('Error', expect.any(Error), {
+      requestId: null,
+      method: 'GET',
+      path: '/x',
+      userId: null,
+    });
   });
 
   it('delegates to Express when headers were already sent', () => {

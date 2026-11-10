@@ -88,6 +88,27 @@ describe('log functions', () => {
   });
 });
 
+describe('Telegram request id', () => {
+  beforeEach(() => {
+    resetAlertDedupe();
+    jest.clearAllMocks();
+  });
+
+  it('puts the request id of the failing request into the alert', () => {
+    logError('request failed', new Error('boom'), { requestId: '00000000-0000-4000-8000-0000000000f1', method: 'GET' });
+
+    const [, message] = sendTelegramMessage.mock.calls[0];
+    expect(message).toContain('<b>Request Id</b>: 00000000-0000-4000-8000-0000000000f1');
+  });
+
+  it('falls back to N/A outside a request', () => {
+    logError('cron failed', new Error('boom'));
+
+    const [, message] = sendTelegramMessage.mock.calls[0];
+    expect(message).toContain('<b>Request Id</b>: N/A');
+  });
+});
+
 describe('Telegram alert dedupe', () => {
   beforeEach(() => {
     resetAlertDedupe();
