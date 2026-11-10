@@ -95,7 +95,7 @@ See `.env.example` for the full list. Key variables:
 | Variable | Purpose |
 | --- | --- |
 | `NODE_ENV` | Node environment (`production` in the Docker image) |
-| `DEPLOY_ENVIRONMENT` | `localhost` for local development (disables global rate limiters, relaxes cookie flags, allows `localhost` dev-server origins, returns error details); any other value is treated as a deployed environment |
+| `DEPLOY_ENVIRONMENT` | `localhost` for local development (disables global rate limiters, relaxes cookie flags, allows `localhost` dev-server origins, returns error details); any other value is treated as a deployed environment. The server refuses to boot with `DEPLOY_ENVIRONMENT=localhost` and `NODE_ENV=production` together |
 | `TRUST_PROXY` | Express `trust proxy` setting: number of reverse-proxy hops in front of the app (e.g. `1`), `false` when the app is reached directly, or a comma-separated list of trusted addresses/subnets (e.g. `loopback, 10.0.0.0/8`). **Required** outside `DEPLOY_ENVIRONMENT=localhost` (defaults to `false` there); `true` is rejected because it lets clients spoof their IP and bypass rate limits |
 | `SESSION_SECRET` | Express session secret. **Required** outside `DEPLOY_ENVIRONMENT=localhost` — like every required key, a missing value only logs a warning on localhost (sessions fall back to a fixed dev secret) |
 | `PRISMA_POSTGRES_DIRECT_URL` / `PRISMA_POSTGRES_CONNECTION_STRING` | PostgreSQL connection strings. **Both required**: the direct (non-pooled) URL drives `prisma migrate deploy` (run by `start.sh` on every container boot) and `prisma db seed`; the connection string is the runtime client's and is checked at startup. Only `prisma generate` (Docker build) works without the direct URL |

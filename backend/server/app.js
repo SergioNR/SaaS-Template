@@ -1,3 +1,6 @@
+//* Must stay the first import - throws before any module reads
+//* DEPLOY_ENVIRONMENT when production is booted in localhost mode
+import './config/environmentGuard.js';
 import express from 'express';
 import passport from 'passport';
 import { createServer } from 'http';

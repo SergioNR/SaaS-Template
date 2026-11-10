@@ -50,6 +50,7 @@ Request flow: `server/app.js` → middlewares → routers → controllers → mo
 - **Query whitelist**: never pass `req.query`/`req.body` through to Prisma — whitelist explicit fields (see `getAllUsers` role filter).
 - **Admin self-protection**: superadmins cannot delete their own account via `/api/v1/admin` (409) — route them to the user endpoint.
 - **Required env vars fail fast at startup** via `requireEnv(name, reason)` from `config/requiredEnv.js` — throws outside localhost, only warns on `DEPLOY_ENVIRONMENT=localhost` so local dev boots with any key unset. `TRUST_PROXY` and `FRONT_WEB_APP_ORIGIN_URL` are required outside localhost; never hard-code `trust proxy`.
+- **No localhost mode in production**: `config/environmentGuard.js` (first import of `app.js`) throws at boot when `NODE_ENV=production` and `DEPLOY_ENVIRONMENT=localhost` - that mode disables the session secret, limiters, secure cookies and error hiding.
 - New env vars must be added to `.env.example` and the README table in the same change.
 
 ## Validation
