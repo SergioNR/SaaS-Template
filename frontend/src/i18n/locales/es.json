@@ -618,7 +618,6 @@
     "invites": {
       "title": "Invitaciones pendientes",
       "empty": "No hay invitaciones pendientes.",
-      "expiredBadge": "Caducada",
       "sentToast": "Invitación enviada",
       "resentToast": "Invitación reenviada",
       "revokedToast": "Invitación revocada",

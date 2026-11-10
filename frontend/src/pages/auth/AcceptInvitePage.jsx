@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import {
@@ -46,6 +46,9 @@ export function AcceptInvitePage() {
   const [inviteData, setInviteData] = useState(null);
   const [invalidReason, setInvalidReason] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  //* Synchronous double-submit guard: set before the request, cleared on
+  //* failure, kept on success until the navigation to login unmounts the page
+  const submittingRef = useRef(false);
 
   useEffect(() => {
     scrubQueryFromAddressBar();
@@ -95,12 +98,20 @@ export function AcceptInvitePage() {
   const acceptInvite = async (event) => {
     event.preventDefault();
 
+    if (submittingRef.current) {
+      return;
+    }
+
+    //* Read before the await - React reuses the event object afterwards
+    const password = event.currentTarget.elements.password.value;
+
+    submittingRef.current = true;
     setSubmitting(true);
 
     try {
       await apiClient.post('/api/v1/auth/invite-accept', {
         inviteToken,
-        password: event.target.password.value,
+        password,
       });
 
       notifySuccess(t('auth.acceptInvite.success'));
@@ -126,6 +137,7 @@ export function AcceptInvitePage() {
         notifyError(t('auth.acceptInvite.errors.generic'));
       }
 
+      submittingRef.current = false;
       setSubmitting(false);
     }
   };

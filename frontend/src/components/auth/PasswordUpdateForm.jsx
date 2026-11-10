@@ -30,8 +30,8 @@ const PasswordUpdateForm = () => {
     //* Captured before the await - React reuses the event object afterwards
     const form = e.currentTarget;
     const passwordUpdateData = {
-      currentPassword: form.currentPassword.value,
-      newPassword: form.newPassword.value,
+      currentPassword: form.elements.currentPassword.value,
+      newPassword: form.elements.newPassword.value,
     };
 
     try {
