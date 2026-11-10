@@ -15,6 +15,7 @@ import {
 } from '@mantine/core';
 import { notifyError, notifySuccess } from '../../utils/notifications.js';
 import { logApiError } from '../../utils/logApiError.js';
+import { invalidateSessionCaches } from '../../utils/sessionCaches.js';
 
 export const AccountActionsForm = () => {
   const { t } = useTranslation();
@@ -28,6 +29,7 @@ export const AccountActionsForm = () => {
     try {
       await apiClient.delete('/api/v1/user');
 
+      invalidateSessionCaches();
       resetAnalyticsUser();
 
       notifySuccess(t('user.accountActions.deletedToast'));

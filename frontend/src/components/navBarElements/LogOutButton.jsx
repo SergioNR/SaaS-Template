@@ -8,6 +8,7 @@ import { IconLogout } from '@tabler/icons-react';
 import classes from '../partials/AreaShell.module.css';
 import { notifyError } from '../../utils/notifications.js';
 import { logApiError } from '../../utils/logApiError.js';
+import { invalidateSessionCaches } from '../../utils/sessionCaches.js';
 
 const LogOutButton = () => {
   const { t } = useTranslation();
@@ -32,6 +33,7 @@ const LogOutButton = () => {
       return;
     }
 
+    invalidateSessionCaches();
     // Clear the analytics identity so the next user on this browser is not linked
     resetAnalyticsUser();
 

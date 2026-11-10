@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import {
   Anchor,
@@ -18,10 +18,13 @@ import classes from './AuthenticationTitle.module.css';
 import apiClient from '../../config/API/axiosConfig.js';
 import { Link } from 'react-router';
 import Seo from '../Seo.jsx';
+import { NEXT_PARAM, safeNextPath } from '../../utils/safeNext.js';
+import { invalidateSessionCaches } from '../../utils/sessionCaches.js';
 
 export function LoginForm() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [loginResponse, setLoginResponse] = useState(null);
 
   const handleLogin = async (e) => {
@@ -38,14 +41,15 @@ export function LoginForm() {
     try {
       const loginResponse = await apiClient.post('/api/v1/auth/login', data);
 
-      switch (loginResponse.data.user.role) {
-        case 'superadmin':
-          return navigate('/admin');
-        case 'user':
-          return navigate('/dashboard');
-        default:
-          return navigate('/dashboard');
-      }
+      //* A new session must never see the previous one's cached data
+      invalidateSessionCaches();
+
+      //* `next` (set by the 401 redirect) wins when it is a safe same-origin
+      //* path; the area wrappers still bounce a wrong-role target
+      const next = safeNextPath(searchParams.get(NEXT_PARAM));
+      const home = loginResponse.data.user.role === 'superadmin' ? '/admin' : '/dashboard';
+
+      return navigate(next ?? home, { replace: true });
     } catch (error) {
       const status = error.response?.status;
 

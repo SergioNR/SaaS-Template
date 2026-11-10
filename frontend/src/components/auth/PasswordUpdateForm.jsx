@@ -4,9 +4,13 @@ import apiClient from '../../config/API/axiosConfig.js';
 import { Card, Button, TextInput, Text, Alert, Box } from '@mantine/core';
 import { IconAlertCircle } from '@tabler/icons-react';
 import { notifySuccess } from '../../utils/notifications.js';
+import { useNavigate } from 'react-router';
+import { currentPath, loginRedirectPath } from '../../utils/safeNext.js';
+import { invalidateSessionCaches } from '../../utils/sessionCaches.js';
 
 const PasswordUpdateForm = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const [errorMessage, setErrorMessage] = useState(null);
   const [loading, setLoading] = useState(false);
 
@@ -28,6 +32,15 @@ const PasswordUpdateForm = () => {
       notifySuccess(t('auth.passwordUpdate.success'));
     } catch (error) {
       const { status, data } = error.response ?? {};
+
+      //* This endpoint sits under /api/v1/auth/, which the global 401
+      //* interceptor skips - an expired session is handled here
+      if (status === 401) {
+        invalidateSessionCaches();
+        navigate(loginRedirectPath(currentPath()), { replace: true });
+        return;
+      }
+
       const errorCode = status === 400 ? data?.code : null;
 
       if (errorCode === 'AUTH_CURRENT_PASSWORD_INCORRECT') {
@@ -37,7 +50,7 @@ const PasswordUpdateForm = () => {
       } else if (status === 400 || status === 422) {
         setErrorMessage(t('auth.passwordUpdate.errors.invalid'));
       } else {
-        // Handle other errors (network errors, server errors, expired session, etc)
+        // Network errors, server errors
         setErrorMessage(t('auth.passwordUpdate.errors.unexpected'));
       }
     } finally {

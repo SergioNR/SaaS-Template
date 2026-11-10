@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import apiClient from '../../config/API/axiosConfig.js';
+import { useCompanyPermissions } from '../../hooks/useCompanyPermissions.js';
 import { Container, Stack, Card, Title, Text, Group, Button, SimpleGrid, Alert, Badge, Tooltip } from '@mantine/core';
 import { useSubscription } from '../../contexts/useSubscription.js';
 import PageLoader from '../../components/PageLoader.jsx';
@@ -44,8 +45,10 @@ const UserBilling = () => {
     hasBillingId,
     refresh,
   } = useSubscription();
-  // null while unknown - the backend still enforces the permission (403)
-  const [canManageBilling, setCanManageBilling] = useState(null);
+  //* Shared session cache (one /api/v1/team fetch per session). While
+  //* loading or after a failed fetch the actions stay enabled - the backend
+  //* still enforces the permission (403 -> toast)
+  const { has: hasPermission, loading: permissionsLoading, failed: permissionsFailed } = useCompanyPermissions();
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [portalLoading, setPortalLoading] = useState(false);
   const [paidPollsLeft, setPaidPollsLeft] = useState(0);
@@ -106,26 +109,7 @@ const UserBilling = () => {
     pollingStartedRef.current = false;
   }, [paidPollsLeft, hasPaidSubscription, t]);
 
-  useEffect(() => {
-    const controller = new AbortController();
-
-    const loadPermissions = async () => {
-      try {
-        const response = await apiClient.get('/api/v1/team', { signal: controller.signal });
-        const permissions = response.data?.callerPermissions ?? [];
-
-        setCanManageBilling(permissions.includes(BILLING_PERMISSION));
-      } catch {
-        // Leave the actions enabled - a 403 on click is handled with a toast
-      }
-    };
-
-    loadPermissions();
-
-    return () => controller.abort();
-  }, []);
-
-  const billingLocked = canManageBilling === false;
+  const billingLocked = !permissionsLoading && !permissionsFailed && !hasPermission(BILLING_PERMISSION);
 
   const handlePriceLink = async (planName, planBillingCycle) => {
     const planData = {

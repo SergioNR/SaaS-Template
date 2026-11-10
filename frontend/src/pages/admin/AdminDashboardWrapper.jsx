@@ -6,6 +6,7 @@ import apiClient from '../../config/API/axiosConfig.js';
 import PageLoader from '../../components/PageLoader.jsx';
 import SessionCheckError from '../../components/SessionCheckError.jsx';
 import AreaShell from '../../components/partials/AreaShell.jsx';
+import { currentPath, loginRedirectPath } from '../../utils/safeNext.js';
 
 export const AdminDashboardWrapper = () => {
   const { t } = useTranslation();
@@ -47,7 +48,7 @@ export const AdminDashboardWrapper = () => {
         //* Only a rejected session sends the user to login; a network/server
         //* error keeps them here with a retry
         if (err?.response?.status === 401) {
-          navigateRef.current('/auth/login', { replace: true });
+          navigateRef.current(loginRedirectPath(currentPath()), { replace: true });
         } else {
           setError(true);
         }
