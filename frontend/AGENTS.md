@@ -19,7 +19,7 @@ Rules describe how this codebase is written today. Follow them for all new and m
 
 ## Routing & guards
 
-- Single route tree in `src/main.jsx` — add new pages there, colocated with their area wrapper.
+- Single route tree in `src/main.jsx` — add new pages there, colocated with their area wrapper. Every route except `Homepage` and `LoginPage` is a `React.lazy` import declared in `src/routes/lazyPages.js` (import-only module); one `<Suspense fallback={<PageLoader />}>` in `main.jsx` covers them all. A failed chunk (stale tab after a deploy) reloads once — `vite:preloadError` listener + `ErrorBoundary`, both via `src/utils/chunkReload.js`.
 - Area wrappers own session guarding: call `GET /api/v1/auth/session`; on failure `navigate('/auth/login')`; render `<Outlet />` only after the check (`UserWrapper.jsx` is the reference). The check runs once per mount (plus retries): read `navigate` through a ref, never list it as an effect dependency — its identity changes on every pathname change and would re-run the check, unmounting the layout on each navigation.
 - Post-login routing by role: `superadmin` → `/admin`, `user` → `/dashboard`. The user area is one pathless layout route (`<Route element={<UserWrapper />}>` with `dashboard` and `user/*` children) so the wrapper stays mounted across it; `/user` redirects to `/dashboard`.
 - Wrappers redirect to login only on a 401; any other session-check failure renders `SessionCheckError` with a retry. `UserWrapper` sends superadmins to `/admin`; `AdminDashboardWrapper` exposes the signed-in admin via `<Outlet context={{ sessionUser }} />`.

@@ -575,7 +575,9 @@
   "errorBoundary": {
     "title": "Algo ha ido mal",
     "description": "Se ha producido un error inesperado y no se pudo mostrar esta página. Puedes intentar recargarla.",
-    "reload": "Recargar"
+    "reload": "Recargar",
+    "chunkTitle": "Hay una nueva versión disponible",
+    "chunkDescription": "No se pudo cargar esta página, probablemente porque la aplicación se ha actualizado. Recarga para usar la última versión."
   },
   "team": {
     "title": "Equipo",
