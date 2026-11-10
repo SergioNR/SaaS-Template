@@ -25,3 +25,7 @@ Options: 404 (recommended, consistent with option 1) or idempotent 200. Revoking
 ## Open questions for the implementer
 
 - Should the 404 for an expired invite carry a distinct `code` (e.g. `INVITE_EXPIRED`) so the SPA can say "expired - send a new invite"? Recommended: no for revoke; optional for resend if the SPA wants a better message (then add it to the spec delta before archiving).
+
+## Implementation decisions (resolved open questions)
+
+- No distinct `code` on the expired-invite 404 (neither resend nor revoke): the 404 body is the generic "Invite does not exist". The SPA maps any 404 from resend/revoke to an "invite no longer pending - send a new one" notice and reloads the listing.

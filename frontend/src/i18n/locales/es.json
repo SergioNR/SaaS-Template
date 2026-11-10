@@ -679,7 +679,8 @@
       "roleConflict": "No se puede cambiar el rol de este miembro.",
       "forbidden": "No tienes permisos para realizar esta acción.",
       "generic": "Ha ocurrido un error. Inténtalo de nuevo.",
-      "retry": "No se pudo completar la acción por un conflicto. Inténtalo de nuevo."
+      "retry": "No se pudo completar la acción por un conflicto. Inténtalo de nuevo.",
+      "inviteGone": "Esta invitación ya no está pendiente (ha caducado o se ha eliminado). Envía una nueva invitación si la necesitas."
     }
   },
   "consent": {

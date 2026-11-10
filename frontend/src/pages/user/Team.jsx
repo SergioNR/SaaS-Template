@@ -257,6 +257,11 @@ export function Team() {
         //* transient conflict worth retrying
         if (status === 409 && code === 'INVITER_INVALID') {
           notifyError(t('team.errors.resendInviterInvalid'));
+        } else if (status === 404) {
+          //* Expired (or revoked/accepted) since the listing loaded - it is
+          //* no longer pending, so refresh the list instead of retrying
+          notifyError(t('team.errors.inviteGone'));
+          await loadTeam({ silent: true });
         } else if (status === 409) {
           notifyError(t('team.errors.retry'));
         } else if (status === 403) {
@@ -275,7 +280,12 @@ export function Team() {
         notifySuccess(t('team.invites.revokedToast'));
         await loadTeam({ silent: true });
       } catch (err) {
-        if (err?.response?.status === 403) {
+        const status = err?.response?.status;
+
+        if (status === 404) {
+          notifyError(t('team.errors.inviteGone'));
+          await loadTeam({ silent: true });
+        } else if (status === 403) {
           notifyError(t('team.errors.forbidden'));
         } else {
           notifyError(t('team.errors.generic'));

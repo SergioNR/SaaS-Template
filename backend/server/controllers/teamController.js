@@ -121,11 +121,20 @@ export const createTeamInvite = async (req, res) => {
   } = req.user;
 
   //* Every check that can change the response is company-scoped or about the
-  //* caller - nothing here depends on the invited account existing
-  const existingInvite = await getPendingTeamInviteByCompanyAndEmailInDb(companyId, email);
+  //* caller - nothing here depends on the invited account existing. Order:
+  //* authority (403) first - it needs only the caller's own roles and role
+  //* NAMES - then the role row (404), then the pending duplicate (409), so a
+  //* caller without authority over the role never learns whether such an
+  //* invite exists
 
-  if (existingInvite) {
-    return res.status(409).json(PENDING_INVITE_CONFLICT);
+  //* Callers can only grant roles they hold themselves (directly or through
+  //* the role hierarchy)
+  const callerRoleNames = await getUserCompanyRoleNames(inviterId);
+
+  if (!canGrantRole(callerRoleNames, roleName)) {
+    return res.status(403).json({
+      message: 'You can only invite users to roles you hold yourself',
+    });
   }
 
   const role = await getRoleByName(roleName);
@@ -136,14 +145,10 @@ export const createTeamInvite = async (req, res) => {
     });
   }
 
-  //* Callers can only grant roles they hold themselves (directly or through
-  //* the role hierarchy)
-  const callerRoleNames = await getUserCompanyRoleNames(inviterId);
+  const existingInvite = await getPendingTeamInviteByCompanyAndEmailInDb(companyId, email);
 
-  if (!canGrantRole(callerRoleNames, roleName)) {
-    return res.status(403).json({
-      message: 'You can only invite users to roles you hold yourself',
-    });
+  if (existingInvite) {
+    return res.status(409).json(PENDING_INVITE_CONFLICT);
   }
 
   //* The row is written synchronously for every address - registered or

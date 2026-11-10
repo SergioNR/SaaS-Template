@@ -47,6 +47,7 @@ const {
   createTeamInviteInDb,
   getCompanyPendingInvitesInDb,
   getPendingTeamInviteByCompanyAndEmailInDb,
+  getTeamInviteByIdInDb,
   getTeamInviteByTokenInDb,
   rotateTeamInviteTokenInDb,
 } = await import('../server/models/teamInvitesModel.js');
@@ -157,9 +158,20 @@ describe('teamInvitesModel tokens', () => {
     const { invite, inviteToken } = await rotateTeamInviteTokenInDb('invite-1', 'company-1', 'owner-1');
 
     const [{ where, data }] = prismaMock.teamInvites.update.mock.calls[0];
-    expect(where).toEqual({ id: 'invite-1', company_id: 'company-1' });
+    //* Pending only - an expired row is never revived
+    expect(where).toEqual({ id: 'invite-1', company_id: 'company-1', token_expires: { gt: expect.any(Date) } });
     expect(data.token_hash).toBe(sha256(inviteToken));
     expect(invite.id).toBe('invite-1');
+  });
+
+  it('looks invites up for resend/revoke by id, company AND pending expiry', async () => {
+    prismaMock.teamInvites.findFirst.mockResolvedValue(null);
+
+    await expect(getTeamInviteByIdInDb('invite-1', 'company-1')).resolves.toBeNull();
+
+    expect(prismaMock.teamInvites.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'invite-1', company_id: 'company-1', token_expires: { gt: expect.any(Date) } },
+    }));
   });
 
   it('returns null when the invite to rotate no longer exists', async () => {

@@ -246,6 +246,7 @@ describe('createTeamInvite', () => {
   });
 
   it('returns 409 when an invite is already pending for the email (company-scoped, not an enumeration)', async () => {
+    allowCreation();
     getPendingTeamInviteByCompanyAndEmailInDb.mockResolvedValue({ id: 'invite-1' });
     const res = mockRes();
 
@@ -256,14 +257,30 @@ describe('createTeamInvite', () => {
     expect(createTeamInviteInDb).not.toHaveBeenCalled();
   });
 
+  it('answers 403 - not 409 - to an admin inviting as owner an email with a pending owner invite, without the pending lookup', async () => {
+    getUserCompanyRoleNames.mockResolvedValue(['company_admin']);
+    getRoleByName.mockResolvedValue({ id: 'role-owner', name: 'company_owner' });
+    getPendingTeamInviteByCompanyAndEmailInDb.mockResolvedValue({ id: 'owner-invite' });
+    const res = mockRes();
+
+    await createTeamInvite({ user: caller, body: { email: 'new@acme.test', roleName: 'company_owner' } }, res);
+
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(getPendingTeamInviteByCompanyAndEmailInDb).not.toHaveBeenCalled();
+    expect(getRoleByName).not.toHaveBeenCalled();
+    expect(createTeamInviteInDb).not.toHaveBeenCalled();
+  });
+
   it('returns 404 when the role does not exist', async () => {
+    getUserCompanyRoleNames.mockResolvedValue(['company_owner']);
     getPendingTeamInviteByCompanyAndEmailInDb.mockResolvedValue(null);
     getRoleByName.mockResolvedValue(null);
     const res = mockRes();
 
-    await createTeamInvite({ user: caller, body: { email: 'new@acme.test', roleName: 'made_up_role' } }, res);
+    await createTeamInvite({ user: { ...caller }, body: { email: 'new@acme.test', roleName: 'company_member' } }, res);
 
     expect(res.status).toHaveBeenCalledWith(404);
+    expect(getPendingTeamInviteByCompanyAndEmailInDb).not.toHaveBeenCalled();
   });
 
   it('returns 403 when the caller invites to a role they do not hold', async () => {
@@ -485,6 +502,31 @@ describe('resendTeamInvite', () => {
     expect(rotateTeamInviteTokenInDb).not.toHaveBeenCalled();
   });
 
+  it('returns 404 for an expired-but-unpurged invite (the pending-only lookup finds nothing) and never rotates it', async () => {
+    getTeamInviteByIdInDb.mockResolvedValue(null);
+    const res = mockRes();
+
+    await resendTeamInvite({ user: caller, params: { inviteId: 'expired-invite' } }, res);
+    await flushBackgroundWork();
+
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(rotateTeamInviteTokenInDb).not.toHaveBeenCalled();
+    expect(sendTeamInviteToUser).not.toHaveBeenCalled();
+  });
+
+  it('returns 404 when the invite expired between the lookup and the rotation', async () => {
+    getTeamInviteByIdInDb.mockResolvedValue(pendingInvite);
+    //* The rotation WHERE requires token_expires > now - no row, null
+    rotateTeamInviteTokenInDb.mockResolvedValue(null);
+    const res = mockRes();
+
+    await resendTeamInvite({ user: caller, params: { inviteId: 'invite-1' } }, res);
+    await flushBackgroundWork();
+
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(sendTeamInviteToUser).not.toHaveBeenCalled();
+  });
+
   it('returns 404 when the invite disappeared before the rotation', async () => {
     getTeamInviteByIdInDb.mockResolvedValue(pendingInvite);
     rotateTeamInviteTokenInDb.mockResolvedValue(null);
@@ -521,6 +563,16 @@ describe('revokeTeamInvite', () => {
     await revokeTeamInvite({ user: caller, params: { inviteId: 'missing' } }, res);
 
     expect(res.status).toHaveBeenCalledWith(404);
+  });
+
+  it('returns 404 for an expired-but-unpurged invite and leaves the row for the nightly purge', async () => {
+    getTeamInviteByIdInDb.mockResolvedValue(null);
+    const res = mockRes();
+
+    await revokeTeamInvite({ user: caller, params: { inviteId: 'expired-invite' } }, res);
+
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(deleteTeamInviteInDb).not.toHaveBeenCalled();
   });
 
   it('returns 403 when the caller cannot grant the invited role', async () => {
