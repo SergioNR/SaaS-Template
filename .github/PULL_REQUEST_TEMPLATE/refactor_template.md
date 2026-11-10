@@ -27,5 +27,15 @@
 - [ ] I have added tests to cover my changes.
 - [ ] All new and existing tests passed.
 
+## Repo rules
+<!-- See AGENTS.md - the CI PR gate must pass before merging -->
+- [ ] Commits follow Conventional Commits with a scope (`feat(frontend): ...`, `fix(auth): ...`, `feat(db)!: ...` for breaking changes)
+- [ ] `prisma/schema.prisma` changes ship with a migration (`npx prisma migrate dev --name <change>`) and a `prisma/seed.js` update when models changed
+- [ ] New environment variables are in the package's `.env.example` **and** README table
+- [ ] `npm test` and `npx eslint .` pass in `backend/`; `npx eslint .`, `npm test` and `npm run build` pass in `frontend/` (the CI PR gate runs all of them)
+- [ ] Anything touching the API is documented in the same PR: an `@openapi` block for new/changed routes, with their parameters, request bodies **and** response fields in the spec
+- [ ] New non-trivial logic has a spec in `backend/tests/`
+- [ ] No `.env` files, secrets or `backend/server/config/generated/` committed
+
 ## Additional Notes
 <!-- Add any other context about the problem here. -->
