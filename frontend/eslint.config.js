@@ -60,4 +60,13 @@ export default [
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
     },
   },
+  {
+    // Vitest specs and helpers (imports from 'vitest', no globals) - never
+    // hot-reloaded, and test components are throwaway
+    files: ['src/**/*.test.{js,jsx}', 'src/test/**/*.{js,jsx}'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+      'react/prop-types': 'off',
+    },
+  },
 ];

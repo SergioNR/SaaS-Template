@@ -6,7 +6,7 @@ Rules describe how this codebase is written today. Follow them for all new and m
 
 - React 19 + Vite 8 + Mantine 9, `react-router` 8, axios, optional PostHog. Plain JSX (no TypeScript).
 - i18next + react-i18next (Spanish only), `@mantine/notifications` for toasts.
-- Node 26 (`engines.node`). ESLint 9 flat config (`eslint.config.js`): js recommended + react + react-hooks + react-refresh. Run `npx eslint .` from `frontend/`.
+- Node 26 (`engines.node`). ESLint 9 flat config (`eslint.config.js`): js recommended + react + react-hooks + react-refresh. Run `npm run lint` (`eslint .`) and `npm test` from `frontend/`.
 - 2-space indent, single quotes, semicolons, trailing commas — encoded in `.prettierrc.json`. `npm run format` (Prettier) formats the package; `npm run format:check` verifies. Format only the files you touch; whole-repo reformats go in their own `style(frontend)` commit.
 - Never create `.mjs` (or `.cjs` other than the existing PostCSS config) files — the package is `"type": "module"`, so plain `.js` is ESM and is what the ESLint `files` globs cover.
 
@@ -57,4 +57,9 @@ Rules describe how this codebase is written today. Follow them for all new and m
 
 - Vite vars are `VITE_*`, baked at build time (Docker `ARG`s). New vars must be added to `.env.example` and the README table.
 - Prod bundle: `vite build` → `dist/` (fails without `VITE_SITE_BASE_URL` or `VITE_API_BASE_URL`), served by unprivileged nginx on port 8080 (`nginx/default.conf.template` + `nginx/security-headers.inc.template`, rendered by envsubst; SPA history fallback, CSP/security headers). Any `location` that sets `add_header` must re-include `security-headers.inc`. Images are built and pushed by CI — no `docker-build:*`/push scripts in `package.json`.
-- No test framework yet — do not invent one without discussion.
+## Tests
+
+- Vitest + React Testing Library + jsdom: `npm test` (`vitest run`; `npm run test:watch` while developing). Config is the `test` block in `vite.config.js`; setup in `src/test/setup.js` (jest-dom matchers, Mantine browser stubs, cleanup).
+- Specs are colocated as `*.test.js(x)` and import `describe/it/expect/vi` from `vitest` (no globals). Render components through `renderWithProviders` (`src/test/renderWithProviders.jsx`) inside a router.
+- Mock the API with `vi.mock('…/config/API/axiosConfig.js', () => ({ default: { get: vi.fn(), … } }))` — no network, no MSW. Full-page redirects go through `src/utils/hardRedirect.js` so they can be mocked (jsdom's `window.location` cannot).
+- Keep decision logic pure and testable (e.g. `pages/user/teamLocks.js`, `utils/safeNext.js`, `analytics/sanitizeUrl.js`) and cover security-relevant rules (redirect validation, cache invalidation, URL sanitizing, permission locks) with specs.

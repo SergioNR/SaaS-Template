@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { currentPath, loginRedirectPath } from '../../utils/safeNext.js';
 import { invalidateSessionCaches } from '../../utils/sessionCaches.js';
+import { hardRedirect } from '../../utils/hardRedirect.js';
 
 const AUTH_ENDPOINT_PREFIX = '/api/v1/auth/';
 
@@ -31,7 +32,7 @@ export const handleUnauthorized = (error) => {
   ) {
     redirectingToLogin = true;
     invalidateSessionCaches();
-    window.location.assign(loginRedirectPath(currentPath()));
+    hardRedirect(loginRedirectPath(currentPath()));
   }
 
   return Promise.reject(error);

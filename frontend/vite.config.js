@@ -41,5 +41,12 @@ export default defineConfig(({ command, mode }) => {
 
   return {
     plugins: [react(), seoFilesPlugin(env.VITE_SITE_BASE_URL || DEV_SITE_BASE_URL)],
+    //* Vitest (`npm test`): jsdom + Testing Library, specs colocated as *.test.js(x)
+    test: {
+      environment: 'jsdom',
+      setupFiles: ['./src/test/setup.js'],
+      include: ['src/**/*.test.{js,jsx}'],
+      css: false,
+    },
   };
 });
