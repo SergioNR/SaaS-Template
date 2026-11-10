@@ -1,13 +1,15 @@
 import { Router } from 'express';
 import swaggerUi from 'swagger-ui-express';
 import { openapiSpecification } from '../config/swagger.js';
+import { docsContentSecurityPolicy } from '../middlewares/docsContentSecurityPolicy.js';
 
 //* Mounted by app.js only when DEPLOY_ENVIRONMENT=localhost - deployed
 //* environments never publish the API map
 export const docsRouter = Router();
 
-//* Interactive Swagger UI - served at /api/docs (assets served from /api/docs/*)
-docsRouter.use('/docs', swaggerUi.serve, swaggerUi.setup(openapiSpecification));
+//* Interactive Swagger UI - served at /api/docs (assets served from /api/docs/*).
+//* The only HTML route: it swaps the deny-all API CSP for the docs policy
+docsRouter.use('/docs', docsContentSecurityPolicy(), swaggerUi.serve, swaggerUi.setup(openapiSpecification));
 
 /**
  * @openapi
