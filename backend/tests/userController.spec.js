@@ -46,7 +46,7 @@ describe('deleteUser', () => {
 
     await deleteUser(req, res);
 
-    expect(deleteUserAndCleanup).toHaveBeenCalledWith('user-1', { protectLastOwner: true });
+    expect(deleteUserAndCleanup).toHaveBeenCalledWith('user-1', { protectLastOwner: true, actorKind: 'self' });
     expect(req.session.destroy).toHaveBeenCalled();
     expect(res.clearCookie).toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(200);

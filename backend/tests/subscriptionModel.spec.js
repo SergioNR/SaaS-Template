@@ -40,11 +40,14 @@ describe('syncSubscriptionWithCompanyLockInDb', () => {
   });
 
   it('locks the company before reading the stored row and writes the Stripe fields', async () => {
-    tx.subscription.findUnique.mockResolvedValue({ stripe_subscription_id: null, stripe_synced_at: null });
+    const stored = { stripe_subscription_id: null, stripe_synced_at: null };
+    tx.subscription.findUnique.mockResolvedValue(stored);
 
-    const written = await syncSubscriptionWithCompanyLockInDb('company-1', () => write());
+    const result = await syncSubscriptionWithCompanyLockInDb('company-1', () => write());
 
-    expect(written).toBe(true);
+    //* The previous row and the applied write - the webhook classifies the
+    //* transition (business events) from them after the commit
+    expect(result).toEqual({ previous: stored, written: write() });
     expect(tx.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(tx.subscription.findUnique.mock.invocationCallOrder[0]);
     expect(tx.subscription.upsert).toHaveBeenCalledWith({
       where: { company_id: 'company-1' },
@@ -67,24 +70,24 @@ describe('syncSubscriptionWithCompanyLockInDb', () => {
   it('drops a write based on an older Stripe read of the same subscription', async () => {
     tx.subscription.findUnique.mockResolvedValue({ stripe_subscription_id: 'sub_1', stripe_synced_at: LATER });
 
-    const written = await syncSubscriptionWithCompanyLockInDb('company-1', () => write({ syncedAt: EARLIER }));
+    const result = await syncSubscriptionWithCompanyLockInDb('company-1', () => write({ syncedAt: EARLIER }));
 
-    expect(written).toBe(false);
+    expect(result).toBeNull();
     expect(tx.subscription.upsert).not.toHaveBeenCalled();
   });
 
   it('applies an older read when it concerns a different subscription (replacement rules decide)', async () => {
     tx.subscription.findUnique.mockResolvedValue({ stripe_subscription_id: 'sub_old', stripe_synced_at: LATER });
 
-    const written = await syncSubscriptionWithCompanyLockInDb('company-1', () => write({ syncedAt: EARLIER }));
+    const result = await syncSubscriptionWithCompanyLockInDb('company-1', () => write({ syncedAt: EARLIER }));
 
-    expect(written).toBe(true);
+    expect(result).toEqual(expect.objectContaining({ written: write({ syncedAt: EARLIER }) }));
   });
 
   it('skips when the resolver returns null', async () => {
     tx.subscription.findUnique.mockResolvedValue(null);
 
-    await expect(syncSubscriptionWithCompanyLockInDb('company-1', () => null)).resolves.toBe(false);
+    await expect(syncSubscriptionWithCompanyLockInDb('company-1', () => null)).resolves.toBeNull();
     expect(tx.subscription.upsert).not.toHaveBeenCalled();
   });
 });

@@ -623,6 +623,7 @@ describe('removeTeamMember', () => {
       companyId: 'company-1',
       protectLastOwner: true,
       callerId: 'caller-id',
+      actorKind: 'team',
     });
     expect(res.status).toHaveBeenCalledWith(200);
     expect(res.json).toHaveBeenCalledWith({ userId: 'target' });

@@ -67,6 +67,8 @@ export default [
       'server/integrations/telegram/sendLogsToTelegram.js',
       'server/config/planPrices.js',
       'server/utils/companyRoleHierarchy.js',
+      //* Sends an account-deleted then a company-deleted event, in order
+      'server/utils/businessEvents.js',
     ],
     rules: {
       'no-await-in-loop': 'off',

@@ -210,7 +210,7 @@ describe('deleteOneUserById', () => {
 
     await deleteOneUserById({ params: { userId: 'user-1' }, user: { id: 'admin-1' } }, res);
 
-    expect(deleteUserAndCleanup).toHaveBeenCalledWith('user-1', { protectLastOwner: true });
+    expect(deleteUserAndCleanup).toHaveBeenCalledWith('user-1', { protectLastOwner: true, actorKind: 'admin' });
     expect(res.status).toHaveBeenCalledWith(200);
     expect(res.json).toHaveBeenCalledWith({ userId: 'user-1' });
     //* The acting superadmin rides on the audit line (req.user)

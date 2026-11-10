@@ -19,6 +19,7 @@ import { linkSessionToUser } from '../models/sessionModel.js';
 import { sendResetPasswordTokenToUser } from '../integrations/brevo/transactionalEmails/sendResetPasswordTokenToUser.js';
 import { sendExistingAccountNoticeToUser } from '../integrations/brevo/transactionalEmails/sendExistingAccountNoticeToUser.js';
 import { trackBackground } from '../utils/processLifecycle.js';
+import { notifyCompanyRegistered, notifyInviteAccepted } from '../utils/businessEvents.js';
 import { isPrismaErrorCode, sendMappedWriteError } from '../utils/prismaErrors.js';
 
 //* Detached from the request: the lookup, token creation and email all run
@@ -239,6 +240,12 @@ export const acceptTeamInvite = async (req, res) => {
 
   logAudit(req, 'auth.invite.accepted', { entity: 'user', entityId: acceptResult.user?.id });
 
+  trackBackground(notifyInviteAccepted({
+    companyId: inviteData.company_id,
+    companyName: inviteData.Company?.name ?? null,
+    roleName: inviteData.Role.name,
+  })); // Fire-and-forget - the user creation committed
+
   //* No auto-login here - consistent with the register endpoint
   return res.status(201).json({});
 };
@@ -312,11 +319,16 @@ const registerUserInBackground = async (email, password, companyName) => {
     const hashedPassword = await bcrypt.hash(password, BCRYPT_SALT_ROUNDS);
 
     //* The registrant founds the company and becomes its company owner
-    await createUserInDb({
+    const createdUser = await createUserInDb({
       username: email,
       password: hashedPassword,
       companyName,
     });
+
+    //* Only here - after an account and its company were actually created.
+    //* The existing-account path and the P2002 race send nothing, so the
+    //* events chat stays as enumeration-safe as the response
+    trackBackground(notifyCompanyRegistered(createdUser?.company_id)); // Fire-and-forget
   } catch (error) {
     //* Concurrent registrations can beat the existence check - the unique
     //* constraint resolves the race, nothing else to do

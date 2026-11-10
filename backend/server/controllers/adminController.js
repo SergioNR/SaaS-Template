@@ -102,6 +102,7 @@ export const deleteOneUserById = async (req, res) => {
   try {
     deletionResult = await deleteUserAndCleanup(userId, {
       protectLastOwner: true,
+      actorKind: 'admin',
     });
   } catch (error) {
     if (sendMappedWriteError(res, error, USER_DELETION_WRITE_ERRORS)) {

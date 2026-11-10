@@ -44,6 +44,15 @@ jest.unstable_mockModule('../server/integrations/brevo/transactionalEmails/sendE
   sendExistingAccountNoticeToUser: jest.fn(),
 }));
 
+//* Business events are covered by their own specs - stubbed here so the
+//* real models behind them never load
+jest.unstable_mockModule('../server/utils/businessEvents.js', () => ({
+  notifyCompanyRegistered: jest.fn().mockResolvedValue(undefined),
+  notifyInviteAccepted: jest.fn().mockResolvedValue(undefined),
+  notifySubscriptionTransition: jest.fn().mockResolvedValue(undefined),
+  notifyUserDeleted: jest.fn().mockResolvedValue(undefined),
+}));
+
 const {
   checkPasswordResetTokenValidity,
   checkSession,
@@ -58,6 +67,7 @@ const {
   createUserInDb,
 } = await import('../server/models/userModel.js');
 const { SESSION_COOKIE_NAME, SESSION_COOKIE_OPTIONS } = await import('../server/config/security.js');
+const { notifyCompanyRegistered } = await import('../server/utils/businessEvents.js');
 const {
   createPasswordResetToken,
   getPasswordResetTokenData,
@@ -270,6 +280,33 @@ describe('registerUser', () => {
     expect(res.json).toHaveBeenCalledWith({});
     expect(sendExistingAccountNoticeToUser).toHaveBeenCalledWith('stored@acme.test');
     expect(createUserInDb).not.toHaveBeenCalled();
+    //* Enumeration-safe: an existing email never reaches the events chat
+    expect(notifyCompanyRegistered).not.toHaveBeenCalled();
+  });
+
+  it('emits the company-registered business event once the account was created', async () => {
+    getUserByEmail.mockResolvedValue(null);
+    createUserInDb.mockResolvedValue({ id: 'new-user', company_id: 'company-new' });
+    const res = mockRes();
+
+    await registerUser({ body: { username: 'new@acme.test', companyName: 'Acme Corp', password: 'Password123' } }, res);
+    await waitUntilCalled(notifyCompanyRegistered);
+
+    expect(notifyCompanyRegistered).toHaveBeenCalledWith('company-new');
+    expect(createUserInDb.mock.invocationCallOrder[0]).toBeLessThan(notifyCompanyRegistered.mock.invocationCallOrder[0]);
+  });
+
+  it('emits nothing when a concurrent registration won the unique constraint', async () => {
+    getUserByEmail.mockResolvedValue(null);
+    createUserInDb.mockRejectedValue(Object.assign(new Error('Unique constraint'), { code: 'P2002' }));
+    const res = mockRes();
+
+    await registerUser({ body: { username: 'new@acme.test', companyName: 'Acme Corp', password: 'Password123' } }, res);
+    await waitUntilCalled(createUserInDb);
+    await flushBackgroundWork();
+
+    expect(notifyCompanyRegistered).not.toHaveBeenCalled();
+    expect(logError).not.toHaveBeenCalled();
   });
 });
 
