@@ -7,7 +7,7 @@ Rules describe how this codebase is written today. Follow them for all new and m
 - React 19 + Vite 8 + Mantine 9, `react-router` 8, axios, optional PostHog. Plain JSX (no TypeScript).
 - i18next + react-i18next (Spanish only), `@mantine/notifications` for toasts.
 - Node 26 (`engines.node`). ESLint 9 flat config (`eslint.config.js`): js recommended + react + react-hooks + react-refresh. Run `npx eslint .` from `frontend/`.
-- 2-space indent for new files, single quotes, semicolons (match the majority of `src/`).
+- 2-space indent, single quotes, semicolons, trailing commas — encoded in `.prettierrc.json`. `npm run format` (Prettier) formats the package; `npm run format:check` verifies. Format only the files you touch; whole-repo reformats go in their own `style(frontend)` commit.
 - Never create `.mjs` (or `.cjs` other than the existing PostCSS config) files — the package is `"type": "module"`, so plain `.js` is ESM and is what the ESLint `files` globs cover.
 
 ## Structure

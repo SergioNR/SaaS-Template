@@ -13,7 +13,9 @@
   "scripts": {
     "build": "vite build",
     "start:local": "vite",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "dependencies": {
     "@mantine/core": "^9.7.3",
@@ -40,6 +42,7 @@
     "postcss": "^8.5.3",
     "postcss-preset-mantine": "^1.17.0",
     "postcss-simple-vars": "^7.0.1",
+    "prettier": "^3.9.10",
     "vite": "^8.3.4"
   },
   "allowScripts": {

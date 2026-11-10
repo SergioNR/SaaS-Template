@@ -24,6 +24,7 @@ The app expects the backend API to be running (see `../backend/README.md`). Copy
 | `npm run start:local` | Start the Vite dev server locally |
 | `npm run build` | Build the production bundle (`dist/`) |
 | `npm run lint` | Lint the package with ESLint |
+| `npm run format` | Format the package with Prettier (`format:check` to verify only) |
 
 ## Environment variables
 
