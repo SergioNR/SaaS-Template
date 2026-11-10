@@ -42,9 +42,12 @@ export function LoginForm() {
     setSubmitting(true);
     setLoginError(null);
 
+    //* `elements.<name>` rather than the form's named properties - jsdom
+    //* (the test runner) does not implement HTMLFormElement named access
+    const { username, password } = e.target.elements;
     const data = {
-      username: e.target.username.value,
-      password: e.target.password.value,
+      username: username.value,
+      password: password.value,
     };
 
     try {
