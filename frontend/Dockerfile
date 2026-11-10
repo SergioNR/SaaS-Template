@@ -48,3 +48,10 @@ COPY nginx/security-headers.inc.template /etc/nginx/templates/security-headers.i
 COPY --from=build /usr/src/app/dist /usr/share/nginx/html
 
 EXPOSE 8080
+
+# `docker compose up -d --wait` and `depends_on: condition: service_healthy`
+# treat the container as ready only once this passes. busybox wget ships in
+# the alpine base (no curl). /healthz is a plain 200 from nginx; on an older
+# nginx config the SPA fallback still answers it with index.html
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD wget -q -O /dev/null http://127.0.0.1:8080/healthz || exit 1

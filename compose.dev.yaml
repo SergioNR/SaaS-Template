@@ -1,0 +1,58 @@
+#* Staging replica of compose.yaml: runs the images CI pushes from the `next`
+#* branch, with its own project name, database volume and host ports offset
+#* by one (8081 / 3001 / 5433), so it can run beside the production stack on
+#* the same host. Shares the root `.env`:
+#*   docker compose -f compose.dev.yaml pull
+#*   docker compose -f compose.dev.yaml up -d --wait
+name: saas-template-next
+
+volumes:
+  database:
+
+services:
+  database:
+    image: postgres:18.6
+    restart: unless-stopped
+    user: postgres
+    volumes:
+      - database:/var/lib/postgresql
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in .env}
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    ports:
+      - 127.0.0.1:${NEXT_POSTGRES_PORT:-5433}:5432 #* Loopback only
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  backend:
+    image: ${DOCKERHUB_USERNAME:?set DOCKERHUB_USERNAME in .env}/expressjs-template:${NEXT_TAG:-next}
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    environment:
+      PRISMA_POSTGRES_DIRECT_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@database:5432/${POSTGRES_DB}
+      PRISMA_POSTGRES_CONNECTION_STRING: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@database:5432/${POSTGRES_DB}
+      PORT: 3000
+      #* backend/.env.example ships NODE_ENV=development - never let it leak in
+      NODE_ENV: production
+      #* The staging SPA origin (CORS + Origin CSRF allowlist) - must match
+      #* the NEXT_VITE_SITE_BASE_URL the `next` build bakes into the bundle
+      FRONT_WEB_APP_ORIGIN_URL: ${NEXT_FRONT_WEB_APP_ORIGIN_URL:?set NEXT_FRONT_WEB_APP_ORIGIN_URL in .env}
+    ports:
+      - 127.0.0.1:${NEXT_BACKEND_PORT:-3001}:3000
+    depends_on:
+      database:
+        condition: service_healthy #* start.sh runs `prisma migrate deploy` on boot
+
+  frontend:
+    image: ${DOCKERHUB_USERNAME:?set DOCKERHUB_USERNAME in .env}/expressjs-template-front:${NEXT_TAG:-next}
+    restart: unless-stopped
+    ports:
+      - 127.0.0.1:${NEXT_FRONTEND_PORT:-8081}:8080
+    depends_on:
+      - backend

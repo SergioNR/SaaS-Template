@@ -3,11 +3,19 @@ name: Build Docker images and push to Docker Hub
 on:
   push:
     branches: [ "latest", "next" ]
+  # PR gate: PRs into the protected branches must pass the same test job
+  # before merging. The image jobs are guarded to push events, so PR runs
+  # (including PRs from forks) never need Docker Hub credentials or the
+  # branch environments
+  pull_request:
+    branches: [ "latest", "next" ]
 
 # A newer push to the same branch supersedes an in-flight run - there is no
-# point finishing (and pushing) an image for a commit that is no longer the tip
+# point finishing (and pushing) an image for a commit that is no longer the
+# tip. The event name keeps PR runs in their own group, so a PR update never
+# cancels a branch push run (and vice versa)
 concurrency:
-  group: docker-${{ github.ref }}
+  group: docker-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 # Least privilege - the jobs only need to read the repository
@@ -20,7 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -36,6 +44,13 @@ jobs:
         working-directory: backend
         run: npm ci
 
+      # The generated client is gitignored and eslint resolves its import
+      # statically - generate it like the Dockerfile does (no database needed:
+      # prisma.config.ts falls back to a placeholder direct URL)
+      - name: Backend - generate Prisma client
+        working-directory: backend
+        run: npx prisma generate
+
       - name: Backend - test
         working-directory: backend
         run: npm test
@@ -44,6 +59,14 @@ jobs:
         working-directory: backend
         run: npx eslint .
 
+      # Report known high/critical advisories in production dependencies.
+      # Non-blocking: an upstream advisory must not freeze every PR - review
+      # the step output (Dependabot opens the fix PRs)
+      - name: Backend - audit production dependencies
+        working-directory: backend
+        continue-on-error: true
+        run: npm audit --omit=dev --audit-level=high
+
       - name: Frontend - install
         working-directory: frontend
         run: npm ci
@@ -51,6 +74,16 @@ jobs:
       - name: Frontend - lint
         working-directory: frontend
         run: npx eslint .
+
+      - name: Frontend - audit production dependencies
+        working-directory: frontend
+        continue-on-error: true
+        run: npm audit --omit=dev --audit-level=high
+
+      # --if-present: a no-op until the frontend gains a `test` script
+      - name: Frontend - test
+        working-directory: frontend
+        run: npm run test --if-present
 
       # vite.config.js refuses to build without VITE_SITE_BASE_URL; this build
       # only proves the bundle compiles, so placeholder origins are enough
@@ -64,22 +97,26 @@ jobs:
   backend:
     name: Backend image
     needs: test
+    # Images are built and pushed only on branch pushes, never on PRs
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     # Secrets/vars may be defined per GitHub environment (`latest` / `next`)
     # or at repository level - environment values take precedence
     environment: ${{ github.ref_name }}
     steps:
       - name: Checkout
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Login to Docker Hub
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          # The namespace is public (it is in every image name) - a variable,
+          # not a secret, so it is not masked out of the build logs
+          username: ${{ vars.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - name: Set date
         id: date
@@ -87,9 +124,9 @@ jobs:
 
       - name: Generate Docker metadata
         id: meta
-        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
-          images: ${{ secrets.DOCKERHUB_USERNAME }}/expressjs-template
+          images: ${{ vars.DOCKERHUB_USERNAME }}/expressjs-template
           # The sha tag pins a deploy to an exact commit (rollbacks, audits)
           tags: |
             type=raw,value=${{ github.ref_name }}
@@ -97,30 +134,37 @@ jobs:
             type=sha,prefix=${{ github.ref_name }}-
 
       - name: Build and push
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: ./backend
           platforms: linux/amd64 # amd64 only - the target server is amd64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
+          # Ephemeral runners cannot reuse the Dockerfile's npm cache mounts -
+          # persist image layers in the GitHub Actions cache instead, so a push
+          # that leaves the lockfile alone skips the `npm ci` layer. One scope
+          # per image keeps the two builds from evicting each other's layers
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
 
   frontend:
     name: Frontend image
     needs: test
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     environment: ${{ github.ref_name }}
     steps:
       - name: Checkout
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Login to Docker Hub
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          username: ${{ vars.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - name: Set date
         id: date
@@ -128,24 +172,29 @@ jobs:
 
       - name: Generate Docker metadata
         id: meta
-        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
-          images: ${{ secrets.DOCKERHUB_USERNAME }}/expressjs-template-front
+          images: ${{ vars.DOCKERHUB_USERNAME }}/expressjs-template-front
           tags: |
             type=raw,value=${{ github.ref_name }}
             type=raw,value=${{ github.ref_name }}-${{ steps.date.outputs.date }}
             type=sha,prefix=${{ github.ref_name }}-
 
       - name: Build and push
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: ./frontend
           platforms: linux/amd64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
           # Vite bakes these into the bundle - configure them as GitHub
-          # Actions variables (not secrets: they ship to every browser)
+          # Actions variables (not secrets: they ship to every browser). The
+          # `next` build reads the NEXT_VITE_* variables (staging origins),
+          # each falling back to the shared VITE_* value when unset - so a
+          # single set of variables (or per-environment ones) still works
           build-args: |
-            VITE_API_BASE_URL=${{ vars.VITE_API_BASE_URL }}
-            VITE_SITE_BASE_URL=${{ vars.VITE_SITE_BASE_URL }}
-            VITE_PUBLIC_POSTHOG_KEY=${{ vars.VITE_PUBLIC_POSTHOG_KEY }}
+            VITE_API_BASE_URL=${{ github.ref_name == 'next' && vars.NEXT_VITE_API_BASE_URL || vars.VITE_API_BASE_URL }}
+            VITE_SITE_BASE_URL=${{ github.ref_name == 'next' && vars.NEXT_VITE_SITE_BASE_URL || vars.VITE_SITE_BASE_URL }}
+            VITE_PUBLIC_POSTHOG_KEY=${{ github.ref_name == 'next' && vars.NEXT_VITE_PUBLIC_POSTHOG_KEY || vars.VITE_PUBLIC_POSTHOG_KEY }}

@@ -1,0 +1,61 @@
+# Weekly dependency updates, grouped so each ecosystem opens at most a couple
+# of PRs a week. npm runs once per package, never at the repo root (lockfiles
+# are per package - see AGENTS.md). Every update PR runs the CI PR gate.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /backend
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore(deps)
+    groups:
+      backend-minor-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore(deps)
+    groups:
+      frontend-minor-patch:
+        update-types: [minor, patch]
+
+  # Actions are SHA-pinned with a version comment - Dependabot bumps both
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: ci
+    groups:
+      github-actions:
+        patterns: ["*"]
+
+  # Base images: one group so node/nginx bumps land in both Dockerfiles together
+  - package-ecosystem: docker
+    directories:
+      - /backend
+      - /frontend
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore(docker)
+    groups:
+      docker-base-images:
+        patterns: ["*"]
+
+  # Postgres image tags in the compose stacks
+  - package-ecosystem: docker-compose
+    directories:
+      - /
+      - /backend
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore(docker)
+    groups:
+      compose-images:
+        patterns: ["*"]

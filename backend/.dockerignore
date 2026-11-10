@@ -31,6 +31,7 @@
 
 # ESLint files
 **/.eslintrc.cjs
+**/eslint.config.*
 
 ## Swagger file
 **/swagger.yaml
@@ -60,8 +61,15 @@
 # Tests and Results
 **/tests
 **/test-results
+**/coverage
+**/*.spec.*
 
-# Documentation and Licenses
+# Seed script - dev-only demo data with a known password, never shipped
+prisma/seed.js
+
+# Documentation, licenses and agent instructions
 README*
 LICENSE
-README.md
+AGENTS.md
+CLAUDE.md
+
