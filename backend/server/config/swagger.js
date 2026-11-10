@@ -6,7 +6,7 @@ const swaggerOptions = {
     openapi: '3.0.3',
     info: {
       title: 'Express.js Template API',
-      description: 'REST API for the Express.js server template. Interactive documentation is generated from `@openapi` JSDoc annotations declared next to each route definition.',
+      description: 'REST API for the Express.js server template. Interactive documentation is generated from `@openapi` JSDoc annotations declared next to each route definition.\n\nEvery response carries an `X-Request-Id` header: a server-generated UUID that also tags the access-log, audit and error lines of that request. Quote it when reporting a problem. Inbound `X-Request-Id` headers are ignored.',
       version: '1.0.0',
     },
     servers: [

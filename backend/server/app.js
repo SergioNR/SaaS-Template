@@ -23,6 +23,7 @@ import { trustProxySetting } from './config/trustProxy.js';
 import { prisma } from './config/prismaClient.js';
 import { client as posthogClient } from './config/posthog-node.js';
 import { logError, logInfo } from './config/loggerFunctions.js';
+import { requestLogger } from './middlewares/requestLogger.js';
 
 const app = express();
 const server = createServer(app);
@@ -35,6 +36,13 @@ app.set('trust proxy', trustProxySetting);
 //* Middleware for ExpressJS securization
 app.use(helmetMiddleware);
 app.use(corsMiddleware);
+
+//* Access log + request id - mounted before every router (health, webhooks,
+//* docs, API) so every request gets an X-Request-Id and one access line.
+//* pino-http logs at response finish, after the session middlewares further
+//* down populated req.user, so the user id is included. /health polling is
+//* excluded inside requestLogger
+app.use(requestLogger());
 
 //* Health probe - mounted before every limiter so orchestrator polling is
 //* never throttled, and before sessions/body parsing so it stays cheap

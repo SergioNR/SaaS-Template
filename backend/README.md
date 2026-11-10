@@ -126,6 +126,7 @@ See `.env.example` for the full list. Key variables:
 
 - **JSON only** — every `/api` request with a body must send `Content-Type: application/json` (other body types get `415`). Form/urlencoded bodies are not parsed.
 - **Origin check (CSRF)** — non-`GET`/`HEAD`/`OPTIONS` requests must carry an `Origin` (or, failing that, `Referer`) header matching `FRONT_WEB_APP_ORIGIN_URL` (plus `localhost` dev-server ports when `DEPLOY_ENVIRONMENT=localhost`) or the API's own origin; otherwise `403`. Browsers send it automatically; for curl/Postman add e.g. `-H "Origin: http://localhost:5173"`. `/webhooks` is exempt.
+- **Request ids** — every response carries an `X-Request-Id` header (a fresh server-generated UUID per request; an inbound `X-Request-Id` is ignored). The same id tags the request's access-log line, audit lines and error lines - quote it when reporting a problem.
 - **Rate limits** — global 100 req / 15 min per IP plus progressive slow-down after 30 req / 5 min (capped at 2 s delay), disabled on localhost; credential endpoints (login, register, invite check/accept, password-reset check/submit) share a 10 req / 15 min per-IP budget; login additionally allows 5 failed attempts / 15 min per account; password-reset emails 5 / hour per IP; `/webhooks` has its own 300 req / min per-IP budget (always on); `/health` is never limited.
 
 ## API overview

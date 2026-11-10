@@ -39,6 +39,7 @@
         "passport-local": "^1.0.0",
         "pg": "^8.23.1",
         "pino": "^10.1.0",
+        "pino-http": "^11.0.0",
         "posthog-node": "^5.13.2",
         "prisma": "^7.10.1",
         "stripe": "^23.0.0",
