@@ -1,6 +1,14 @@
+import { COMPANY_ROLE_RANK } from '../companyRoleHierarchy.js';
+
 export const createTeamInviteSchema = {
   email: {
     in: ['body'],
+    //* First and bailing: `["a@b.co"]` would otherwise pass isEmail per
+    //* element and reach Prisma as an array
+    isString: {
+      errorMessage: 'Email must be a string',
+      bail: true,
+    },
     notEmpty: {
       errorMessage: 'Email is required',
     },
@@ -34,7 +42,13 @@ export const createTeamInviteSchema = {
     },
     isString: {
       errorMessage: 'Role name must be a string',
+      bail: true,
     },
-    escape: true,
+    isIn: {
+      options: [Object.keys(COMPANY_ROLE_RANK)],
+      //* A bogus role is a validation problem (422), not a missing row - the
+      //* swagger schemas document the enum
+      errorMessage: 'Role name must be one of the company roles',
+    },
   },
 };

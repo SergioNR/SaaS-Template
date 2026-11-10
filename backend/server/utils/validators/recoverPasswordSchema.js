@@ -1,12 +1,14 @@
 import { SECURE_TOKEN_PATTERN } from '../secureToken.js';
+import { passwordByteLengthValidator } from './passwordByteLength.js';
 
 export const recoverPasswordSchema = {
   newPassword: {
-    notEmpty: {
-      errorMessage: 'Password is required',
-    },
     isString: {
       errorMessage: 'Password must be a string',
+      bail: true,
+    },
+    notEmpty: {
+      errorMessage: 'Password is required',
     },
     isLength: {
       options: {
@@ -15,6 +17,7 @@ export const recoverPasswordSchema = {
       },
       errorMessage: 'Password must be between 8-64 characters long',
     },
+    isWithinBcryptByteLimit: passwordByteLengthValidator,
     isStrongPassword: {
       options: {
         minLength: 8,
@@ -31,11 +34,12 @@ export const recoverPasswordSchema = {
     },
   },
   confirmNewPassword: {
-    notEmpty: {
-      errorMessage: 'Password confirmation is required',
-    },
     isString: {
       errorMessage: 'Password confirmation must be a string',
+      bail: true,
+    },
+    notEmpty: {
+      errorMessage: 'Password confirmation is required',
     },
     isLength: {
       options: {
@@ -46,11 +50,12 @@ export const recoverPasswordSchema = {
     },
   },
   passwordResetToken: {
-    notEmpty: {
-      errorMessage: 'Password reset token is required',
-    },
     isString: {
       errorMessage: 'Password reset token must be a string',
+      bail: true,
+    },
+    notEmpty: {
+      errorMessage: 'Password reset token is required',
     },
     matches: {
       options: SECURE_TOKEN_PATTERN,

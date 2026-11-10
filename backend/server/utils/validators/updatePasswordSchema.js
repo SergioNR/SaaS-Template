@@ -1,18 +1,27 @@
+import { passwordByteLengthValidator } from './passwordByteLength.js';
+
 export const updatePasswordSchema = {
   currentPassword: {
+    isString: {
+      errorMessage: 'Current password must be a string',
+      bail: true,
+    },
     notEmpty: {
       errorMessage: 'Current password is required',
     },
-    isString: {
-      errorMessage: 'Current password must be a string',
+    //* Same ceiling as login - bounds what bcrypt.compare is asked to hash
+    isLength: {
+      options: { max: 128 },
+      errorMessage: 'Current password must not exceed 128 characters',
     },
   },
   newPassword: {
-    notEmpty: {
-      errorMessage: 'Password is required',
-    },
     isString: {
       errorMessage: 'Password must be a string',
+      bail: true,
+    },
+    notEmpty: {
+      errorMessage: 'Password is required',
     },
     isLength: {
       options: {
@@ -21,6 +30,7 @@ export const updatePasswordSchema = {
       },
       errorMessage: 'Password must be between 8-64 characters long',
     },
+    isWithinBcryptByteLimit: passwordByteLengthValidator,
     isStrongPassword: {
       options: {
         minLength: 8,

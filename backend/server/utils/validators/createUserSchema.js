@@ -1,5 +1,13 @@
+import { passwordByteLengthValidator } from './passwordByteLength.js';
+
 export const createUserValidationSchema = {
   username: {
+    //* First and bailing: `["a@b.co"]` would otherwise pass isEmail per
+    //* element and reach Prisma as an array
+    isString: {
+      errorMessage: 'Username must be a string',
+      bail: true,
+    },
     notEmpty: {
       errorMessage: 'Username is required',
     },
@@ -61,10 +69,13 @@ export const createUserValidationSchema = {
     },
   },
   password: {
+    isString: {
+      errorMessage: 'Password must be a string',
+      bail: true,
+    },
     notEmpty: {
       errorMessage: 'Password is required',
     },
-    isString: true,
     isLength: {
       options: {
         min: 8,
@@ -72,6 +83,7 @@ export const createUserValidationSchema = {
       },
       errorMessage: 'Password must be between 8-64 characters long',
     },
+    isWithinBcryptByteLimit: passwordByteLengthValidator,
     isStrongPassword: {
       options: {
         minLength: 8,
