@@ -38,6 +38,7 @@ Rules describe how this codebase is written today. Follow them for all new and m
 ## UI conventions
 
 - Accessibility: every layout renders `<SkipLink />` first and its content inside `<main id={MAIN_CONTENT_ID} tabIndex={-1}>` (`src/components/SkipLink.jsx`); `RouteFocus` (mounted once in `main.jsx`) moves focus to the new page's first `h1`/`h2` on navigation, so each page starts with a heading. Burgers set `aria-controls`/`aria-expanded`; inputs without a visible label get `aria-label`; email inputs use `type="email"` + `autoComplete`.
+- Theme lives in `src/theme/theme.js` (primary `brand` colour, component defaults, font) and is passed to `MantineProvider`. Use `--mantine-primary-color-*` / theme tokens in CSS — never hard-coded colour names or `!important`. Fonts are self-hosted with `@fontsource/*` (CSP `font-src 'self'`); never load Google Fonts or other CDNs.
 - Mantine components + `@tabler/icons-react` icons only. Page-specific styles in colocated `*.module.css`.
 - Forms: uncontrolled inputs with `name` attributes, read via `e.target.<name>` in `onSubmit`; surface API errors with Mantine `Alert`.
 - UI copy lives in `src/i18n/locales/es.json` — never as literals in JSX. Use `useTranslation()`/`t('key')` (or `<Trans>` when copy contains links/components); `t` from `i18next` in class components. Spanish only (`lng: 'es'`); code, identifiers, and comments are English.

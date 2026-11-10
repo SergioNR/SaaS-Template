@@ -5,6 +5,12 @@ import { MantineProvider } from '@mantine/core';
 import '@mantine/core/styles.css';
 import { Notifications } from '@mantine/notifications';
 import '@mantine/notifications/styles.css';
+//* Self-hosted (CSP font-src 'self') - see src/theme/theme.js
+import '@fontsource/inter/400.css';
+import '@fontsource/inter/500.css';
+import '@fontsource/inter/600.css';
+import '@fontsource/inter/700.css';
+import { theme } from './theme/theme.js';
 import './index.css';
 import './i18n/index.js';
 import IndexWrapper from './pages/index/IndexWrapper.jsx';
@@ -48,7 +54,7 @@ scheduleAnalytics();
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <MantineProvider>
+    <MantineProvider theme={theme}>
       <Notifications />
       <BrowserRouter>
         <RoutedErrorBoundary>
