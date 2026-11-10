@@ -42,6 +42,14 @@ A production-ready Express.js backend template with authentication, billing, and
    npx prisma migrate deploy
    ```
 
+   Optionally load the demo data (4 users with password `Password123!`, see `backend/AGENTS.md`). The seed refuses to run unless `DEPLOY_ENVIRONMENT=localhost` or `ALLOW_SEED=1`:
+
+   ```bash
+   npx prisma db seed
+   ```
+
+   Prisma 7 `migrate reset` no longer runs the seed automatically - run `npx prisma db seed` after a reset.
+
 4. Start the server:
 
    ```bash
@@ -100,6 +108,7 @@ See `.env.example` for the full list. Key variables:
 | `SESSION_SECRET` | Express session secret. **Required** outside `DEPLOY_ENVIRONMENT=localhost` — like every required key, a missing value only logs a warning on localhost (sessions fall back to a fixed dev secret) |
 | `PRISMA_POSTGRES_DIRECT_URL` / `PRISMA_POSTGRES_CONNECTION_STRING` | PostgreSQL connection strings. **Both required**: the direct (non-pooled) URL drives `prisma migrate deploy` (run by `start.sh` on every container boot) and `prisma db seed`; the connection string is the runtime client's and is checked at startup. Only `prisma generate` (Docker build) works without the direct URL |
 | `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` | Docker Compose database credentials |
+| `ALLOW_SEED` | Set to `1` to let `npx prisma db seed` run outside `DEPLOY_ENVIRONMENT=localhost` (the seed creates accounts with a public password, superadmin included). Unset everywhere else |
 | `STRIPE_API_KEY` / `STRIPE_WEBHOOK_SECRET` / `STRIPE_PRICE_ID` | Stripe billing configuration |
 | `STRIPE_PRICE_ID_BASIC_MONTHLY` / `STRIPE_PRICE_ID_BASIC_YEARLY` | Stripe price ids for the Basic plan (monthly / yearly billing) |
 | `STRIPE_PRICE_ID_PRO_MONTHLY` / `STRIPE_PRICE_ID_PRO_YEARLY` | Stripe price ids for the Pro plan (monthly / yearly billing) |

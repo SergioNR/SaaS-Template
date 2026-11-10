@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs';
 import { prisma } from '../server/config/prismaClient.js';
 import { BCRYPT_SALT_ROUNDS, FREE_TRIAL_DURATION_MS } from '../server/config/security.js';
+import { isSeedAllowed } from './seedGuard.js';
 
 const ACME_COMPANY_ID = '5f8b7c2e-1d4a-4f6b-8c3a-2a1b3c4d5e6f';
 
@@ -178,12 +179,18 @@ async function main() {
   }
 }
 
-main()
-  .catch((error) => {
-    // eslint-disable-next-line no-console
-    console.error(error);
-    process.exitCode = 1;
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+if (!isSeedAllowed()) {
+  // eslint-disable-next-line no-console
+  console.error('Refusing to seed: the seed creates accounts with a public password. Set DEPLOY_ENVIRONMENT=localhost, or ALLOW_SEED=1 to seed this database anyway');
+  process.exitCode = 1;
+} else {
+  main()
+    .catch((error) => {
+      // eslint-disable-next-line no-console
+      console.error(error);
+      process.exitCode = 1;
+    })
+    .finally(async () => {
+      await prisma.$disconnect();
+    });
+}
