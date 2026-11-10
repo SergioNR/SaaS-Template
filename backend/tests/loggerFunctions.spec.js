@@ -15,7 +15,7 @@ jest.unstable_mockModule('../server/config/telegramBotConfig.js', () => ({
 }));
 
 const {
-  logError, logInfo, logWarn, logAudit, serializeError,
+  logError, logInfo, logWarn, logAudit, logRateLimited, serializeError,
 } = await import('../server/config/loggerFunctions.js');
 const {
   ALERT_DEDUPE_WINDOW_MS,
@@ -62,14 +62,21 @@ describe('log functions', () => {
     expect(JSON.stringify(payload)).not.toContain('secret-body');
   });
 
-  it('logWarn tolerates a missing error', async () => {
-    await expect(logWarn('Just a warning')).resolves.toBeUndefined();
+  it('logWarn tolerates a missing error and is synchronous', () => {
+    expect(logWarn('Just a warning')).toBeUndefined();
     expect(loggerMock.warn).toHaveBeenCalled();
   });
 
-  it('only logError reaches Telegram - info and warn stay in pino', async () => {
-    await logInfo('routine event');
-    await logWarn('something odd', new Error('odd'));
+  it('logInfo and logRateLimited are synchronous - the line is written before they return', () => {
+    expect(logInfo('routine event')).toBeUndefined();
+    expect(logRateLimited({ ip: '10.0.0.1' })).toBeUndefined();
+    expect(loggerMock.info).toHaveBeenCalledTimes(1);
+    expect(loggerMock.warn).toHaveBeenCalledWith({ message: 'rate limit exceeded', context: { ipAddress: '10.0.0.1' } });
+  });
+
+  it('only logError reaches Telegram - info and warn stay in pino', () => {
+    logInfo('routine event');
+    logWarn('something odd', new Error('odd'));
     expect(loggerMock.info).toHaveBeenCalledTimes(1);
     expect(loggerMock.warn).toHaveBeenCalledTimes(1);
     expect(sendTelegramMessage).not.toHaveBeenCalled();

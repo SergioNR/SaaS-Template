@@ -45,7 +45,6 @@ jest.unstable_mockModule('../server/models/posthogModel.js', () => ({
 jest.unstable_mockModule('../server/config/loggerFunctions.js', () => ({
   logError: jest.fn(),
   logInfo: jest.fn(),
-  logPasswordResetTokenCreated: jest.fn(),
 }));
 
 const { deleteUserWithCompanyDataInDb } = await import('../server/models/userModel.js');

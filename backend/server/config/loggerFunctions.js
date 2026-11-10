@@ -37,13 +37,15 @@ export const logError = (errorMessage, error, additionalInfo = 'N/A') => {
       },
     });
 
+    //* Fire-and-forget on purpose - the integration swallows its own errors,
+    //* so a Telegram outage must never break or delay the log call
     sendErrorLogsToTelegram(errorMessage, serializeError(error), additionalInfo);
   } catch {
     // Fail silently
   }
 };
 
-export const logWarn = async (message, error, additionalInfo = 'N/A') => {
+export const logWarn = (message, error, additionalInfo = 'N/A') => {
   try {
     logger.warn({
       message: message,
@@ -57,7 +59,7 @@ export const logWarn = async (message, error, additionalInfo = 'N/A') => {
   }
 };
 
-export const logInfo = async (message, context = 'no context') => {
+export const logInfo = (message, context = 'no context') => {
   try {
     logger.info({
       message: message,
@@ -97,22 +99,15 @@ export const logAudit = (req, action, { entity, entityId, changedFields } = {}) 
   }
 };
 
-export const logPasswordResetTokenCreated = (userId) => {
-  logger.info({
-    message: 'User password reset token succesfully created in database',
-    context: {
-      userData: {
-        userId: userId,
+export const logRateLimited = (req) => {
+  try {
+    logger.warn({
+      message: 'rate limit exceeded',
+      context: {
+        ipAddress: req.ip,
       },
-    },
-  });
-};
-
-export const logRateLimited = async (req) => {
-  logger.warn({
-    message: 'rate limit exceeded',
-    context: {
-      ipAddress: req.ip,
-    },
-  });
+    });
+  } catch {
+    // Fail silently
+  }
 };

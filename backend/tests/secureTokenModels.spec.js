@@ -30,7 +30,7 @@ jest.unstable_mockModule('../server/config/prismaClient.js', () => ({
 
 jest.unstable_mockModule('../server/config/loggerFunctions.js', () => ({
   logError: jest.fn(),
-  logPasswordResetTokenCreated: jest.fn(),
+  logInfo: jest.fn(),
 }));
 
 const {

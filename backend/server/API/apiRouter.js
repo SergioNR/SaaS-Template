@@ -10,7 +10,7 @@ import { checkAuthentication } from '../middlewares/authenticationChecker.js';
 import { checkPermissionByRole } from '../middlewares/permissionByRoleChecker.js';
 import { checkCompanyMembership } from '../middlewares/companyMembershipChecker.js';
 import { isS3Configured } from '../config/s3.js';
-import { logWarn } from '../config/loggerFunctions.js';
+import { logInfo } from '../config/loggerFunctions.js';
 
 export const apiRouter = Router();
 
@@ -63,7 +63,8 @@ if (isS3Configured()) {
     filesRouter,
   );
 } else {
-  logWarn('S3 storage is not configured - /api/v1/files endpoints are disabled', new Error('S3_BUCKET is not set'));
+  //* An optional feature switched off is a startup note, not a warning
+  logInfo('S3 storage is not configured (S3_BUCKET is not set) - /api/v1/files endpoints are disabled');
 }
 
 apiRouter.use('/*fallback', (req, res) => {
