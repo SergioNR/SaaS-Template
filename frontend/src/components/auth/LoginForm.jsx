@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import {
@@ -26,10 +26,20 @@ export function LoginForm() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [loginResponse, setLoginResponse] = useState(null);
+  //* State drives the button spinner; the ref blocks a second submit that
+  //* lands before the re-render (double Enter / double click)
+  const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
 
   const handleLogin = async (e) => {
     e.preventDefault();
 
+    if (submittingRef.current) {
+      return;
+    }
+
+    submittingRef.current = true;
+    setSubmitting(true);
     // Reset messages
     setLoginResponse(null);
 
@@ -51,6 +61,9 @@ export function LoginForm() {
 
       return navigate(next ?? home, { replace: true });
     } catch (error) {
+      submittingRef.current = false;
+      setSubmitting(false);
+
       const status = error.response?.status;
 
       //* 422 = malformed email - from the user's point of view the same as
@@ -120,7 +133,7 @@ export function LoginForm() {
               {t('auth.login.forgotPassword')}
             </Anchor>
           </Group>
-          <Button type="submit" fullWidth mt="xl">
+          <Button type="submit" fullWidth mt="xl" loading={submitting}>
             {t('auth.login.submit')}
           </Button>
         </form>

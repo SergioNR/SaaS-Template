@@ -24,6 +24,10 @@ export const AccountActionsForm = () => {
   const [deleting, setDeleting] = useState(false);
 
   const deleteUser = async () => {
+    if (deleting) {
+      return;
+    }
+
     setDeleting(true);
 
     try {
@@ -65,9 +69,18 @@ export const AccountActionsForm = () => {
         </Button>
       </Group>
 
+      {/* Not dismissable while the DELETE is in flight - closing it would
+          hide the outcome and re-enable a second attempt */}
       <Modal
         opened={confirmOpened}
-        onClose={() => setConfirmOpened(false)}
+        onClose={() => {
+          if (!deleting) {
+            setConfirmOpened(false);
+          }
+        }}
+        closeOnClickOutside={!deleting}
+        closeOnEscape={!deleting}
+        withCloseButton={!deleting}
         title={t('user.accountActions.deleteConfirmModal.title')}
       >
         <Stack>

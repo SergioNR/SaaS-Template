@@ -16,7 +16,7 @@ import {
 import classes from './ForgotPassword.module.css';
 import { Link } from 'react-router';
 import apiClient from '../../config/API/axiosConfig.js';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import Seo from '../Seo.jsx';
 import { logApiError } from '../../utils/logApiError.js';
 
@@ -24,9 +24,18 @@ const ForgotPasswordForm = () => {
   const { t } = useTranslation();
   const [recoverPasswordResponse, setRecoverPasswordResponse] = useState(null);
   const [recoverPasswordError, setRecoverPasswordError] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
 
   const recoverPasswordRequest = async (e) => {
     e.preventDefault();
+
+    if (submittingRef.current) {
+      return;
+    }
+
+    submittingRef.current = true;
+    setSubmitting(true);
 
     const data = {
       email: e.target.email.value,
@@ -44,6 +53,9 @@ const ForgotPasswordForm = () => {
           ? t('auth.errors.tooManyAttempts')
           : t('auth.recover.error')
       );
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
     }
   };
 
@@ -85,7 +97,9 @@ const ForgotPasswordForm = () => {
                 <Box ml={5}>{t('auth.backToLoginSmall')}</Box>
               </Center>
             </Anchor>
-            <Button type="submit" className={classes.control}>{t('auth.recover.submit')}</Button>
+            <Button type="submit" className={classes.control} loading={submitting}>
+              {t('auth.recover.submit')}
+            </Button>
           </Group>
         </form>
       </Paper>
