@@ -13,7 +13,7 @@ A production-ready Express.js backend template with authentication, billing, and
 - **Analytics** — PostHog product analytics
 - **Logging** — Pino structured logs (pretty-printed on localhost, JSON elsewhere) with Telegram alerts for errors
 - **Security** — Helmet, CORS, rate limiting, request throttling, input validation (express-validator), bcrypt password hashing
-- **Scheduled jobs** — cron-based cleanup (expired password reset tokens at 03:00, expired team invites at 03:15, abandoned file uploads every 15 min). Each tick takes a Postgres advisory lock, so with several replicas only one runs it
+- **Scheduled jobs** — cron-based cleanup (expired password reset tokens at 03:00, expired team invites at 03:15, abandoned file uploads every 15 min, expired sessions every 15 min). Each tick takes a Postgres advisory lock, so with several replicas only one runs it
 - **Docker** — production image (tini + non-root + `/health` HEALTHCHECK), Docker Compose for the local database
 
 ## Requirements

@@ -8,6 +8,7 @@ const schedulers = {
   deletePasswordResetTokensScheduler: schedulerStub(),
   deleteTeamInvitesScheduler: schedulerStub(),
   deletePendingFileUploadsScheduler: schedulerStub(),
+  deleteExpiredSessionsScheduler: schedulerStub(),
 };
 
 jest.unstable_mockModule('../server/cron/deletePasswordResetTokensScheduler.js', () => ({
@@ -18,6 +19,9 @@ jest.unstable_mockModule('../server/cron/deleteTeamInvitesScheduler.js', () => (
 }));
 jest.unstable_mockModule('../server/cron/deletePendingFileUploadsScheduler.js', () => ({
   deletePendingFileUploadsScheduler: schedulers.deletePendingFileUploadsScheduler,
+}));
+jest.unstable_mockModule('../server/cron/deleteExpiredSessionsScheduler.js', () => ({
+  deleteExpiredSessionsScheduler: schedulers.deleteExpiredSessionsScheduler,
 }));
 
 jest.unstable_mockModule('../server/config/loggerFunctions.js', () => ({
@@ -77,6 +81,6 @@ describe('jobsContainer', () => {
 
     const results = await stopCronJobs();
 
-    expect(results.map((result) => result.status)).toEqual(['fulfilled', 'rejected', 'fulfilled']);
+    expect(results.map((result) => result.status)).toEqual(['fulfilled', 'rejected', 'fulfilled', 'fulfilled']);
   });
 });

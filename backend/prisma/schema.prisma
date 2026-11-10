@@ -156,6 +156,10 @@ model File {
   //* verified against the declared size and MIME type (confirm endpoint)
   status            FileStatus @default(pending)
   created_at        DateTime   @default(now())
+  //* Set by the pending-upload sweep the first time this row's bucket delete
+  //* failed - the shared "already alerted" memory, so a stuck object alerts
+  //* once whichever replica runs the sweep and across restarts
+  cleanup_failed_at DateTime?
 
   @@index([company_id, created_at])
   @@index([status, created_at])

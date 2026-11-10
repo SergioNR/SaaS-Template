@@ -7,4 +7,5 @@ export const ADVISORY_LOCK_KEYS = {
   cronPasswordResetTokens: 7300001,
   cronTeamInvites: 7300002,
   cronPendingFileUploads: 7300003,
+  cronExpiredSessions: 7300004,
 };

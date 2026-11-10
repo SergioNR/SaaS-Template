@@ -15,6 +15,21 @@ export const linkSessionToUser = async (sessionId, userId) => {
   });
 };
 
+//* Storage hygiene for the expired-session job - the store already refuses an
+//* expired session on read. One indexed delete (@@index([expiresAt])) instead
+//* of the store's full-table prune. Errors propagate to runExclusiveCronTick
+export const deleteExpiredSessionsInDb = async (now = new Date()) => {
+  const deleteResult = await prisma.session.deleteMany({
+    where: {
+      expiresAt: {
+        lt: now,
+      },
+    },
+  });
+
+  return deleteResult.count;
+};
+
 export const countActiveSessionsInDb = async () => {
   const activeSessionCount = await prisma.session.count({
     where: {

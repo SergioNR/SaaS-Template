@@ -14,6 +14,7 @@ const {
   deleteUserSessions,
   countActiveSessionsInDb,
   countActiveSessionsByUserInDb,
+  deleteExpiredSessionsInDb,
 } = await import('../server/models/sessionModel.js');
 
 describe('linkSessionToUser', () => {
@@ -119,5 +120,25 @@ describe('active session counts', () => {
     expect(args.where.user_id).toBe('user-1');
     expect(args.where.expiresAt.gt).toBeInstanceOf(Date);
     expect(args).not.toHaveProperty('select');
+  });
+});
+
+describe('deleteExpiredSessionsInDb', () => {
+  beforeEach(() => {
+    sessionDeleteMany.mockReset();
+  });
+
+  it('deletes only rows whose expiry is in the past and returns the count', async () => {
+    sessionDeleteMany.mockResolvedValue({ count: 4 });
+    const now = new Date('2026-11-11T00:00:00.000Z');
+
+    await expect(deleteExpiredSessionsInDb(now)).resolves.toBe(4);
+    expect(sessionDeleteMany).toHaveBeenCalledWith({ where: { expiresAt: { lt: now } } });
+  });
+
+  it('propagates database errors so runExclusiveCronTick can log them', async () => {
+    sessionDeleteMany.mockRejectedValue(new Error('db down'));
+
+    await expect(deleteExpiredSessionsInDb()).rejects.toThrow('db down');
   });
 });
