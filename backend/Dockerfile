@@ -4,16 +4,11 @@
 # and frontend images move together - see frontend/Dockerfile)
 ARG NODE_VERSION=26.12
 
-# Use official Node.js Alpine Linux image with the specified version
-FROM node:${NODE_VERSION}-alpine
+# ---------------------------------------------------------------------------
+# Stage 1: production dependencies + generated Prisma client
+# ---------------------------------------------------------------------------
+FROM node:${NODE_VERSION}-alpine AS deps
 
-# Production mode for every library that checks NODE_ENV (express, etc.)
-ENV NODE_ENV=production
-
-# tini reaps zombies and forwards signals to node (PID 1 duties node does not do)
-RUN apk add --no-cache tini
-
-# Set the working directory inside the container
 WORKDIR /usr/src/app
 
 # Install production dependencies only (prisma CLI + tsx are runtime
@@ -24,22 +19,42 @@ RUN --mount=type=bind,source=package.json,target=package.json \
     --mount=type=cache,target=/root/.npm \
     npm ci --omit=dev
 
-# Copy Prisma schema and CLI config files into the container
-COPY prisma ./prisma/
+# Generate the Prisma client (output: server/config/generated, see
+# prisma/schema.prisma). No database URL is needed here: prisma.config.ts
+# falls back to a placeholder when PRISMA_POSTGRES_DIRECT_URL is unset
+COPY prisma/schema.prisma ./prisma/schema.prisma
 COPY prisma.config.ts ./
-
-# Generate Prisma client with npm cache mount. No database URL is needed here:
-# prisma.config.ts falls back to a placeholder when PRISMA_POSTGRES_DIRECT_URL is unset
 RUN --mount=type=cache,target=/root/.npm npx prisma generate
 
-# Copy all remaining source files into the container
+# ---------------------------------------------------------------------------
+# Stage 2: runtime - source + prod node_modules + generated client only
+# ---------------------------------------------------------------------------
+FROM node:${NODE_VERSION}-alpine AS runtime
+
+# Production mode for every library that checks NODE_ENV (express, etc.)
+ENV NODE_ENV=production
+
+# tini reaps zombies and forwards signals to node (PID 1 duties node does not do)
+RUN apk add --no-cache tini
+
+# Set the working directory inside the container
+WORKDIR /usr/src/app
+
+COPY --from=deps /usr/src/app/node_modules ./node_modules
+
+# Application source, start.sh, prisma.config.ts and prisma/migrations -
+# .dockerignore keeps out tests, docs, the seed script, env files and any
+# host-generated Prisma client
 COPY . .
 
-# Copy and make executable the production startup script
-COPY start.sh .
+# Generated client from the deps stage (never from the host)
+COPY --from=deps /usr/src/app/server/config/generated ./server/config/generated
+
+# start.sh is tracked without the exec bit
 RUN chmod +x start.sh
 
-# Switch to non-root user for better security
+# Switch to non-root user for better security - the app files stay owned by
+# root, so the process cannot modify its own code
 USER node
 
 # Declare that the container will listen on port 3000
