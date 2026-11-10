@@ -30,7 +30,7 @@ ENV NODE_ENV=production
 RUN npm run build
 
 # Second stage: serve the static bundle with an unprivileged nginx (port 8080)
-FROM nginxinc/nginx-unprivileged:1.30.6-alpine
+FROM nginxinc/nginx-unprivileged:1.31.7-alpine
 
 # Default API origin allowed by the CSP connect-src - derived from the build
 # arg, overridable at runtime with `-e NGINX_CSP_API_ORIGIN=...`
