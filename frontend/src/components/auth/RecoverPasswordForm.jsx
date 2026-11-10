@@ -18,6 +18,7 @@ import { Link } from 'react-router';
 import apiClient from '../../config/API/axiosConfig.js';
 import { useState } from 'react';
 import Seo from '../Seo.jsx';
+import { logApiError } from '../../utils/logApiError.js';
 
 const ForgotPasswordForm = () => {
   const { t } = useTranslation();
@@ -36,7 +37,7 @@ const ForgotPasswordForm = () => {
       setRecoverPasswordResponse(response.data);
       setRecoverPasswordError(null);
     } catch (error) {
-      console.error('Password reset request failed:', error);
+      logApiError('Password reset request failed', error);
       setRecoverPasswordResponse(null);
       setRecoverPasswordError(
         error.response?.status === 429

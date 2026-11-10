@@ -14,6 +14,7 @@ import {
   Group,
 } from '@mantine/core';
 import { notifyError, notifySuccess } from '../../utils/notifications.js';
+import { logApiError } from '../../utils/logApiError.js';
 
 const analyticsEnabled = Boolean(import.meta.env.VITE_PUBLIC_POSTHOG_KEY);
 
@@ -37,7 +38,7 @@ export const AccountActionsForm = () => {
       notifySuccess(t('user.accountActions.deletedToast'));
       navigate('/', { replace: true });
     } catch (err) {
-      console.error('Account deletion failed:', err);
+      logApiError('Account deletion failed', err);
 
       //* The last company owner cannot leave while other members remain
       if (err?.response?.status === 409 && err?.response?.data?.code === 'USER_LAST_COMPANY_OWNER') {

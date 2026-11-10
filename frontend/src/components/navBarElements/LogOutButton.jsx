@@ -7,6 +7,7 @@ import { usePostHog } from 'posthog-js/react';
 import { IconLogout } from '@tabler/icons-react';
 import classes from '../partials/AreaShell.module.css';
 import { notifyError } from '../../utils/notifications.js';
+import { logApiError } from '../../utils/logApiError.js';
 
 const analyticsEnabled = Boolean(import.meta.env.VITE_PUBLIC_POSTHOG_KEY);
 
@@ -28,7 +29,7 @@ const LogOutButton = () => {
       await apiClient.post('/api/v1/auth/logout');
     } catch (error) {
       //* The session is still alive server-side - stay put so the user can retry
-      console.error('Logout failed:', error);
+      logApiError('Logout failed', error);
       notifyError(t('errors.logoutFailed'));
       setLoggingOut(false);
       return;

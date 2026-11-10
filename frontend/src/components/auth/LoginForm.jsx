@@ -47,8 +47,6 @@ export function LoginForm() {
           return navigate('/dashboard');
       }
     } catch (error) {
-      console.error(error);
-
       const status = error.response?.status;
 
       //* 422 = malformed email - from the user's point of view the same as

@@ -51,6 +51,9 @@ export default [
           message: 'Never render backend response messages (`*.data.message`) — map status/code to t() keys.',
         },
       ],
+      // Axios errors carry request bodies (passwords) - log through
+      // utils/logApiError.js, which only prints { status, code }
+      'no-console': 'error',
       // The codebase fetches on mount in effects (see SubscriptionContext);
       // this rule cannot trace setState past async boundaries and false-flags it
       'react-hooks/set-state-in-effect': 'off',

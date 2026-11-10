@@ -45,7 +45,7 @@ const RestorePasswordPage = () => {
         });
         setPasswordResetTokenValidity(response.data);
       } catch {
-        console.error('Error checking password reset token validity:');
+        // Rendered as the invalid-link state below
       } finally {
         setLoading(false);
       }
