@@ -1,0 +1,65 @@
+#* Production-like stack: runs the images CI pushes from the `latest` branch
+#* (see .github/workflows/docker-build-push.yaml) plus Postgres. Configured
+#* from the root `.env` - copy .env.example and follow its deploy checklist:
+#*   docker compose pull && docker compose up -d --wait
+#* Staging (images from `next`) lives in compose.dev.yaml. Local development
+#* uses backend/compose.yaml (database only) with the API on the host.
+name: saas-template
+
+volumes:
+  database:
+
+services:
+  database:
+    image: postgres:18.6
+    restart: unless-stopped
+    user: postgres
+    volumes:
+      - database:/var/lib/postgresql
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in .env}
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    ports:
+      #* Loopback only - reachable for backups/psql from this host, never
+      #* from the network. The backend reaches it on the compose network
+      - 127.0.0.1:${POSTGRES_PORT:-5432}:5432
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  backend:
+    image: ${DOCKERHUB_USERNAME:?set DOCKERHUB_USERNAME in .env}/expressjs-template:${TAG:-latest}
+    restart: unless-stopped
+    #* Backend secrets and settings (see backend/.env.example) come from the
+    #* same root .env
+    env_file:
+      - ./.env
+    environment:
+      #* Both Prisma URLs point at the database service (start.sh migrates
+      #* over the direct URL, the API uses the runtime one). URL-encode the
+      #* password in .env if it contains URL-special characters
+      PRISMA_POSTGRES_DIRECT_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@database:5432/${POSTGRES_DB}
+      PRISMA_POSTGRES_CONNECTION_STRING: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@database:5432/${POSTGRES_DB}
+      #* The port mapping below assumes the container listens on 3000
+      PORT: 3000
+      #* backend/.env.example ships NODE_ENV=development - never let it leak in
+      NODE_ENV: production
+    ports:
+      #* Loopback only - put a TLS-terminating reverse proxy on this host in
+      #* front of it (and set TRUST_PROXY accordingly)
+      - 127.0.0.1:${BACKEND_PORT:-3000}:3000
+    depends_on:
+      database:
+        condition: service_healthy #* start.sh runs `prisma migrate deploy` on boot
+
+  frontend:
+    image: ${DOCKERHUB_USERNAME:?set DOCKERHUB_USERNAME in .env}/expressjs-template-front:${TAG:-latest}
+    restart: unless-stopped
+    ports:
+      - 127.0.0.1:${FRONTEND_PORT:-8080}:8080
+    depends_on:
+      - backend
