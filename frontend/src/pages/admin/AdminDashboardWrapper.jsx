@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { IconLayoutDashboard, IconUsers, IconBuilding } from '@tabler/icons-react';
 import apiClient from '../../config/API/axiosConfig.js';
@@ -62,6 +62,17 @@ export const AdminDashboardWrapper = () => {
     };
   }, [attempt]);
 
+  const links = useMemo(
+    () => [
+      { to: '/admin', label: t('admin.nav.overview'), icon: IconLayoutDashboard, end: true },
+      { to: '/admin/users', label: t('admin.nav.users'), icon: IconUsers },
+      { to: '/admin/companies', label: t('admin.nav.companies'), icon: IconBuilding },
+    ],
+    [t],
+  );
+
+  const outletContext = useMemo(() => ({ sessionUser }), [sessionUser]);
+
   if (error) {
     return <SessionCheckError onRetry={() => setAttempt((n) => n + 1)} />;
   }
@@ -70,19 +81,13 @@ export const AdminDashboardWrapper = () => {
     return <PageLoader />;
   }
 
-  const links = [
-    { to: '/admin', label: t('admin.nav.overview'), icon: IconLayoutDashboard, end: true },
-    { to: '/admin/users', label: t('admin.nav.users'), icon: IconUsers },
-    { to: '/admin/companies', label: t('admin.nav.companies'), icon: IconBuilding },
-  ];
-
   //* Child pages read the signed-in admin via useOutletContext()
   return (
     <AreaShell
       homeTo="/admin"
       title={t('admin.areaTitle')}
       links={links}
-      outletContext={{ sessionUser }}
+      outletContext={outletContext}
     />
   );
 };

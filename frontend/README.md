@@ -32,7 +32,7 @@ Because the app is built with Vite, all `VITE_*` variables are baked in at build
 
 | Variable | When | Purpose |
 | --- | --- | --- |
-| `VITE_API_BASE_URL` | Build (required in Docker) | Base URL of the backend API |
+| `VITE_API_BASE_URL` | Build (required for `npm run build`) | Base URL of the backend API |
 | `VITE_PUBLIC_POSTHOG_KEY` | Build (optional) | PostHog project key. Analytics stay disabled when unset |
 | `VITE_PUBLIC_POSTHOG_HOST` | Build (optional) | PostHog ingestion host. Defaults to `https://eu.i.posthog.com`; keep `NGINX_CSP_POSTHOG_ORIGINS` in sync |
 | `VITE_SITE_BASE_URL` | Build (required for `npm run build`) | Public URL of the deployed frontend (canonical / `og:url`). The dev server defaults to `http://localhost:5173` |

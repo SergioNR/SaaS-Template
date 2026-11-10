@@ -103,7 +103,9 @@
         "invalidLink": "El enlace no es válido. Solicita un nuevo enlace para restablecer tu contraseña.",
         "invalid": "La contraseña no cumple los requisitos o las contraseñas no coinciden. Revisa los datos e inténtalo de nuevo.",
         "generic": "No se pudo actualizar la contraseña. Por favor, inténtalo de nuevo más tarde."
-      }
+      },
+      "checkErrorTitle": "No se pudo comprobar el enlace",
+      "checkErrorBody": "No hemos podido verificar el enlace para restablecer la contraseña. Revisa tu conexión e inténtalo de nuevo."
     },
     "passwordUpdate": {
       "title": "Cambiar contraseña",

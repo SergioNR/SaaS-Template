@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import PropTypes from 'prop-types';
 import apiClient from '../config/API/axiosConfig.js';
 import { SubscriptionContext } from './useSubscription.js';
+import { subscriptionStatus } from '../utils/subscriptionStatus.js';
 
 export const SubscriptionProvider = ({ children }) => {
   const { t } = useTranslation();
@@ -51,32 +52,31 @@ export const SubscriptionProvider = ({ children }) => {
     fetchSubscription();
   }, [fetchSubscription]);
 
-  const expiresInFuture = Boolean(
-    subscription?.expires_at && new Date(subscription.expires_at) > new Date()
-  );
+  //* Memoized so consumers only re-render when the subscription state
+  //* actually changes, not on every provider render. Expiry is evaluated
+  //* when the subscription is (re)loaded
+  const value = useMemo(() => {
+    //* `is_paid` is only true for a paid Stripe subscription; the free trial
+    //* has an `expires_at` too but no payment behind it
+    //* (utils/subscriptionStatus.js, shared with SubscriptionStatusBadge)
+    const status = subscriptionStatus(subscription);
+    const hasPaidSubscription = status === 'paid';
+    const isTrial = status === 'trial';
 
-  //* `is_paid` is only true for a paid Stripe subscription; the free trial has
-  //* an `expires_at` too but no payment behind it
-  const hasPaidSubscription = Boolean(subscription?.is_paid) && expiresInFuture;
-  const isTrial = Boolean(subscription) && !subscription.is_paid && expiresInFuture;
-
-  //* Access to the platform: either a paid subscription or a running trial
-  const hasActiveSubscription = hasPaidSubscription || isTrial;
-
-  //* Companies get a Stripe customer id only when a checkout session is
-  //* started - the customer portal rejects companies without one (409)
-  const hasBillingId = Boolean(subscription?.has_billing_id);
-
-  const value = {
-    subscription,
-    hasActiveSubscription,
-    hasPaidSubscription,
-    isTrial,
-    hasBillingId,
-    loading,
-    error,
-    refresh: fetchSubscription,
-  };
+    return {
+      subscription,
+      //* Access to the platform: either a paid subscription or a running trial
+      hasActiveSubscription: status !== 'inactive',
+      hasPaidSubscription,
+      isTrial,
+      //* Companies get a Stripe customer id only when a checkout session is
+      //* started - the customer portal rejects companies without one (409)
+      hasBillingId: Boolean(subscription?.has_billing_id),
+      loading,
+      error,
+      refresh: fetchSubscription,
+    };
+  }, [subscription, loading, error, fetchSubscription]);
 
   return (
     <SubscriptionContext.Provider value={value}>

@@ -18,6 +18,12 @@ export default defineConfig(({ command, mode }) => {
     process.env.VITE_SITE_BASE_URL = DEV_SITE_BASE_URL;
   }
 
+  //* Without an API base URL every request goes to the SPA's own origin,
+  //* where nginx answers /api/* with 404 - fail the build instead
+  if (command === 'build' && !env.VITE_API_BASE_URL) {
+    throw new Error('VITE_API_BASE_URL must be set for production builds (see .env.example)');
+  }
+
   return {
     plugins: [react()],
   };
