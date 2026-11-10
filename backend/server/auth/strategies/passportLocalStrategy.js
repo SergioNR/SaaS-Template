@@ -1,5 +1,5 @@
 import LocalStrategy from 'passport-local';
-import bcrypt from 'bcryptjs';
+import bcrypt from 'bcrypt';
 import { getUserForLogin } from '../../models/userModel.js';
 import { BCRYPT_SALT_ROUNDS } from '../../config/security.js';
 

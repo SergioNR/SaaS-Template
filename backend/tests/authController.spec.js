@@ -1,5 +1,5 @@
 import { jest } from '@jest/globals';
-import bcrypt from 'bcryptjs';
+import bcrypt from 'bcrypt';
 
 jest.unstable_mockModule('../server/models/userModel.js', () => ({
   getUserByEmail: jest.fn(),
