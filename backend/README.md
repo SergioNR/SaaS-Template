@@ -118,6 +118,8 @@ See `.env.example` for the full list. Key variables:
 | `BREVO_ACCOUNT_EXISTS_TEMPLATE_ID` | Template id for the duplicate-registration notice (optional - notice is skipped when unset) |
 | `POSTHOG_API_KEY` | Product analytics |
 | `TELEGRAM_BOT_API_KEY` / `TELEGRAM_ERRORS_CHAT_ID` | Telegram alerts for `logError` only (info/warn stay in pino). Optional - sending is a no-op when the bot key is unset. Each send times out after 5 s and the same alert is sent at most once per minute per process |
+| `LOG_LEVEL` | Optional pino log level (`trace`, `debug`, `info`, `warn`, `error`, `fatal`, `silent`; default `info`, unknown values fall back to `info`), shared by stdout and Better Stack |
+| `BETTER_STACK_SOURCE_TOKEN` / `BETTER_STACK_INGESTING_HOST` | Optional Better Stack log shipping through the `@logtail/pino` transport (ingest endpoint `https://$BETTER_STACK_INGESTING_HOST`). Only active when **both** are set; every pino line (access, audit, info/warn/error) is shipped in addition to stdout |
 | `FRONT_WEB_APP_ORIGIN_URL` | Front-end origin (CORS allowlist, CSRF Origin check + Stripe redirects). **Required** outside `DEPLOY_ENVIRONMENT=localhost` |
 | `PORT` | HTTP port (defaults to `3000`) |
 | `API_PUBLIC_ORIGIN_URL` | Optional. Server URL written into the OpenAPI spec (Swagger UI "Try it out" target), e.g. a tunnel in front of the local API. Defaults to `http://localhost:<PORT>` |

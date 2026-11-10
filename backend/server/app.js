@@ -22,6 +22,7 @@ import { webhookLimiter } from './webhooks/webhookRateLimiter.js';
 import { trustProxySetting } from './config/trustProxy.js';
 import { prisma } from './config/prismaClient.js';
 import { client as posthogClient } from './config/posthog-node.js';
+import { logger } from './config/logger.js';
 import { logError, logInfo } from './config/loggerFunctions.js';
 import { requestLogger } from './middlewares/requestLogger.js';
 
@@ -102,6 +103,16 @@ server.listen(Number.isInteger(PORT) && PORT > 0 ? PORT : 3000, () => {
 
 startCronJobs();
 
+//* Best-effort flush of the transport worker buffer (Better Stack) before an
+//* exit - losing the last log line must never block or break a shutdown
+const flushLogs = () => {
+  try {
+    logger.flush();
+  } catch {
+    // Fail silently
+  }
+};
+
 const SHUTDOWN_TIMEOUT_MS = 10000;
 let isShuttingDown = false;
 
@@ -127,12 +138,14 @@ const gracefulShutdown = (signal) => {
   //* Force shutdown after timeout - unref'd so it never keeps the process alive
   setTimeout(() => {
     logError('Could not close connections in time, forcefully shutting down', new Error('Shutdown timeout'));
+    flushLogs();
     process.exit(1);
   }, SHUTDOWN_TIMEOUT_MS).unref();
 
   server.close(async () => {
     await closeResources();
     logInfo('Server closed gracefully');
+    flushLogs();
     process.exit(0);
   });
 };
