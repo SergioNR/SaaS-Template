@@ -26,6 +26,10 @@ jest.unstable_mockModule('../server/models/subscriptionModel.js', () => ({
   storeBillingCompanyIdInDb: jest.fn(),
 }));
 
+jest.unstable_mockModule('../server/config/loggerFunctions.js', () => ({
+  logAudit: jest.fn(),
+}));
+
 const {
   createCompanyBillingId,
   getBillingCheckoutSessionUrl,
@@ -40,6 +44,7 @@ const {
   getSubscriptionDataInDb,
   storeBillingCompanyIdInDb,
 } = await import('../server/models/subscriptionModel.js');
+const { logAudit } = await import('../server/config/loggerFunctions.js');
 
 const FUTURE = new Date('2030-01-01T00:00:00Z');
 const PAST = new Date('2020-01-01T00:00:00Z');
@@ -59,7 +64,7 @@ const createReq = () => ({
 describe('billingController', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    createStripeCheckoutSession.mockResolvedValue({ url: 'https://checkout.stripe.test/s' });
+    createStripeCheckoutSession.mockResolvedValue({ id: 'cs_new', url: 'https://checkout.stripe.test/s' });
     createCompanyIdInStripe.mockResolvedValue({ id: 'cus_new' });
     storeBillingCompanyIdInDb.mockImplementation(async (companyId, stripeId) => stripeId);
     hasActiveStripeSubscription.mockResolvedValue(false);
@@ -106,6 +111,7 @@ describe('billingController', () => {
       expect(createStripeCheckoutSession).not.toHaveBeenCalled();
       expect(res.status).toHaveBeenCalledWith(200);
       expect(res.json).toHaveBeenCalledWith({ checkoutSessionUrl: 'https://checkout.stripe.test/open' });
+      expect(logAudit).toHaveBeenCalledWith(expect.anything(), 'billing.checkout_session.reused', { entity: 'checkout_session', entityId: 'cs_open' });
     });
 
     it('creates a new session after the other open sessions of an existing customer were expired', async () => {
@@ -120,6 +126,7 @@ describe('billingController', () => {
         .toBeLessThan(createStripeCheckoutSession.mock.invocationCallOrder[0]);
       expect(res.status).toHaveBeenCalledWith(200);
       expect(res.json).toHaveBeenCalledWith({ checkoutSessionUrl: 'https://checkout.stripe.test/s' });
+      expect(logAudit).toHaveBeenCalledWith(expect.anything(), 'billing.checkout_session.created', { entity: 'checkout_session', entityId: 'cs_new' });
     });
 
     it.each([
@@ -206,6 +213,7 @@ describe('billingController', () => {
 
       expect(createStripeCustomerPortalSession).toHaveBeenCalledWith('cus_existing');
       expect(res.json).toHaveBeenCalledWith({ customerPortalUrl: 'https://portal.stripe.test/p' });
+      expect(logAudit).toHaveBeenCalledWith(expect.anything(), 'billing.portal_session.created', { entity: 'company', entityId: 'company-1' });
     });
 
     it('returns 409 when the company has no Stripe customer yet', async () => {
@@ -238,6 +246,7 @@ describe('billingController', () => {
 
       expect(storeBillingCompanyIdInDb).toHaveBeenCalledWith('company-1', 'cus_new');
       expect(res.status).toHaveBeenCalledWith(201);
+      expect(logAudit).toHaveBeenCalledWith(expect.anything(), 'billing.customer.created', { entity: 'company', entityId: 'company-1' });
     });
   });
 });

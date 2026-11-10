@@ -28,12 +28,13 @@ jest.unstable_mockModule('../server/utils/userDeletionCleanup.js', () => ({
 }));
 
 jest.unstable_mockModule('../server/config/loggerFunctions.js', () => ({
+  logAudit: jest.fn(),
   logInfo: jest.fn(),
   logError: jest.fn(),
   logWarn: jest.fn(),
 }));
 
-const { logInfo } = await import('../server/config/loggerFunctions.js');
+const { logAudit } = await import('../server/config/loggerFunctions.js');
 
 const {
   deleteOneUserById,
@@ -212,11 +213,27 @@ describe('deleteOneUserById', () => {
     expect(deleteUserAndCleanup).toHaveBeenCalledWith('user-1', { protectLastOwner: true });
     expect(res.status).toHaveBeenCalledWith(200);
     expect(res.json).toHaveBeenCalledWith({ userId: 'user-1' });
-    //* The acting superadmin is recorded with every admin deletion
-    expect(logInfo).toHaveBeenCalledWith(
-      expect.stringContaining('admin-1'),
-      expect.objectContaining({ actorId: 'admin-1', deletedUserId: 'user-1' }),
+    //* The acting superadmin rides on the audit line (req.user)
+    expect(logAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ user: { id: 'admin-1' } }),
+      'admin.user.deleted',
+      { entity: 'user', entityId: 'user-1' },
     );
+    expect(logAudit).toHaveBeenCalledTimes(1);
+  });
+
+  it('audits the company removal when the deleted user was its last member', async () => {
+    getUserById.mockResolvedValue({ id: 'user-1' });
+    deleteUserAndCleanup.mockResolvedValue({
+      status: 'deleted',
+      deletedUser: { id: 'user-1' },
+      companyDeleted: true,
+      companyId: 'company-1',
+    });
+
+    await deleteOneUserById({ params: { userId: 'user-1' }, user: { id: 'admin-1' } }, mockRes());
+
+    expect(logAudit).toHaveBeenCalledWith(expect.anything(), 'admin.company.deleted', { entity: 'company', entityId: 'company-1' });
   });
 
   it('returns 409 LAST_SUPERADMIN when the target is the last superadmin', async () => {
@@ -228,7 +245,7 @@ describe('deleteOneUserById', () => {
 
     expect(res.status).toHaveBeenCalledWith(409);
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'LAST_SUPERADMIN' }));
-    expect(logInfo).not.toHaveBeenCalled();
+    expect(logAudit).not.toHaveBeenCalled();
   });
 
   it('returns 409 with a stable code when the user is the last owner of a company with other members', async () => {

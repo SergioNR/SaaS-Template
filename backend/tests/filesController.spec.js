@@ -14,6 +14,7 @@ jest.unstable_mockModule('../server/config/s3.js', () => ({
 }));
 
 jest.unstable_mockModule('../server/config/loggerFunctions.js', () => ({
+  logAudit: jest.fn(),
   logWarn: jest.fn(),
 }));
 
@@ -52,7 +53,7 @@ const { headS3Object } = await import('../server/integrations/s3/headS3Object.js
 const { presignGetObject } = await import('../server/integrations/s3/presignGetObject.js');
 const { presignPutObject } = await import('../server/integrations/s3/presignPutObject.js');
 const { deleteS3Objects } = await import('../server/integrations/s3/deleteS3Objects.js');
-const { logWarn } = await import('../server/config/loggerFunctions.js');
+const { logAudit, logWarn } = await import('../server/config/loggerFunctions.js');
 const {
   PENDING_FILE_CONFIRM_MAX_AGE_MS,
   PENDING_FILE_MAX_AGE_MS,
@@ -147,6 +148,9 @@ describe('createFileUpload', () => {
       status: 'pending',
       uploaded_by: 'caller-id',
     });
+    //* Ids only - the filename is user-supplied free text
+    expect(logAudit).toHaveBeenCalledWith(req, 'file.upload.created', { entity: 'file', entityId: createdData.id });
+    expect(JSON.stringify(logAudit.mock.calls.map((call) => call.slice(1)))).not.toContain('quarterly');
   });
 
   it('presigns before inserting the row', async () => {
@@ -250,6 +254,7 @@ describe('confirmFileUpload', () => {
     expect(deleteS3Objects).toHaveBeenCalledWith(['company-1/file-1/report.pdf']);
     expect(deleteFileInDb.mock.invocationCallOrder[0]).toBeLessThan(deleteS3Objects.mock.invocationCallOrder[0]);
     expect(markFileReadyInDb).not.toHaveBeenCalled();
+    expect(logAudit).toHaveBeenCalledWith(expect.anything(), 'file.upload.discarded', { entity: 'file', entityId: 'file-1' });
   });
 
   it('discards row and object when the stored content type differs from the declared one', async () => {
@@ -276,6 +281,7 @@ describe('confirmFileUpload', () => {
     expect(Date.now() - confirmableAfter.getTime()).toBeLessThan(PENDING_FILE_MAX_AGE_MS);
     expect(res.status).toHaveBeenCalledWith(200);
     expect(res.json).toHaveBeenCalledWith({ file: expect.objectContaining({ id: 'file-1', status: 'ready' }) });
+    expect(logAudit).toHaveBeenCalledWith(expect.anything(), 'file.upload.confirmed', { entity: 'file', entityId: 'file-1' });
   });
 
   it('answers 409 FILE_UPLOAD_EXPIRED without touching the bucket for a row past the confirm window', async () => {
@@ -437,6 +443,7 @@ describe('deleteOneFileById', () => {
     expect(deleteFileInDb.mock.invocationCallOrder[0]).toBeLessThan(deleteS3Objects.mock.invocationCallOrder[0]);
     expect(res.status).toHaveBeenCalledWith(200);
     expect(res.json).toHaveBeenCalledWith({ fileId: 'file-1' });
+    expect(logAudit).toHaveBeenCalledWith(req, 'file.deleted', { entity: 'file', entityId: 'file-1' });
   });
 
   it('answers 404 and never touches the bucket when the row was deleted concurrently', async () => {

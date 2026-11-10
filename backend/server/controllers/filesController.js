@@ -14,7 +14,8 @@ import { deleteS3Objects } from '../integrations/s3/deleteS3Objects.js';
 import { buildFileS3Key, sanitizeFilename } from '../utils/s3Key.js';
 import { MAX_PENDING_UPLOADS_PER_COMPANY } from '../config/s3.js';
 import { PENDING_FILE_CONFIRM_MAX_AGE_MS } from '../config/pendingFileUploads.js';
-import { logWarn } from '../config/loggerFunctions.js';
+import { logAudit, logWarn } from '../config/loggerFunctions.js';
+import { computeNextCursor, parsePagination } from '../utils/cursorPagination.js';
 
 //* The catalog row is the source of truth and is already gone when this runs:
 //* an orphaned object is harmless and reclaimable, a dangling row is not, so a
@@ -30,16 +31,6 @@ const deleteS3ObjectBestEffort = async (s3Key) => {
 const uploadExpiredResponse = (res) => res.status(409).json({
   message: 'The upload is too old to be confirmed - upload the file again',
   code: 'FILE_UPLOAD_EXPIRED',
-});
-
-const DEFAULT_PAGE_SIZE = 50;
-const MAX_PAGE_SIZE = 100;
-
-const parsePagination = (query) => ({
-  limit: Math.min(Number.parseInt(query.limit, 10) || DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE),
-  cursor: typeof query.cursor === 'string' && query.cursor.length > 0
-    ? query.cursor
-    : undefined,
 });
 
 const toFileShape = (file) => ({
@@ -85,6 +76,8 @@ export const createFileUpload = async (req, res) => {
     mimeType: contentType,
     sizeBytes,
   }); //* Starts as pending - only listed once confirmed
+
+  logAudit(req, 'file.upload.created', { entity: 'file', entityId: file.id });
 
   return res.status(201).json({
     file: toFileShape(file),
@@ -154,6 +147,8 @@ export const confirmFileUpload = async (req, res) => {
     await deleteFileInDb(file.id, companyId);
     await deleteS3ObjectBestEffort(file.s3_key);
 
+    logAudit(req, 'file.upload.discarded', { entity: 'file', entityId: file.id });
+
     return res.status(400).json({
       message: 'The uploaded object does not match the declared size or content type - the upload was discarded',
       code: 'FILE_UPLOAD_MISMATCH',
@@ -183,6 +178,8 @@ export const confirmFileUpload = async (req, res) => {
     return uploadExpiredResponse(res);
   }
 
+  logAudit(req, 'file.upload.confirmed', { entity: 'file', entityId: readyFile.id });
+
   return res.status(200).json({
     file: toFileShape(readyFile),
   });
@@ -195,13 +192,9 @@ export const getFiles = async (req, res) => {
 
   const files = await getFilesInDb(companyId, { limit, cursor });
 
-  const nextCursor = files.length === limit && files.length > 0
-    ? files[files.length - 1].id
-    : undefined;
-
   return res.status(200).json({
     files: files.map(toFileShape),
-    nextCursor,
+    nextCursor: computeNextCursor(files, limit),
   });
 };
 
@@ -257,6 +250,8 @@ export const deleteOneFileById = async (req, res) => {
   }
 
   await deleteS3ObjectBestEffort(file.s3_key);
+
+  logAudit(req, 'file.deleted', { entity: 'file', entityId: file.id });
 
   return res.status(200).json({
     fileId: file.id,

@@ -1,5 +1,5 @@
 import { describe, expect, test } from '@jest/globals';
-import { checkSchema, validationResult } from 'express-validator';
+import { runSchema as run, failedPaths } from './helpers/checkQuerySchema.js';
 import { createUserValidationSchema } from '../server/utils/validators/createUserSchema.js';
 import { userLoginValidationSchema } from '../server/utils/validators/userLoginValidationSchema.js';
 import { requestNewPasswordSchema } from '../server/utils/validators/requestNewPasswordSchema.js';
@@ -16,15 +16,6 @@ const VALID_PASSWORD = 'Password123';
 //* 24 three-byte characters + 'Aa1' = 27 characters but 75 bytes
 const MULTIBYTE_PASSWORD = `${'€'.repeat(24)}Aa1`;
 
-const run = async (schema, { body = {}, query = {} } = {}) => {
-  const req = { body, query };
-
-  await checkSchema(schema).run(req);
-
-  return { req, errors: validationResult(req).array() };
-};
-
-const failedPaths = (errors) => [...new Set(errors.map((error) => error.path))];
 
 describe('email fields reject non-string values', () => {
   test.each([

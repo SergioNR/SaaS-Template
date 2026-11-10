@@ -2,7 +2,6 @@ import { Router } from 'express';
 import { checkSchema } from 'express-validator';
 import {
   registerUser,
-  updateUserPassword,
   checkSession,
   requestPasswordResetToken,
   loginLocal,
@@ -12,6 +11,7 @@ import {
   checkTeamInviteValidity,
   acceptTeamInvite,
 } from '../../../controllers/authController.js';
+import { updateUserPassword } from '../../../controllers/userController.js';
 import { sanitizerResult } from '../../../middlewares/sanitizerResult.js';
 import { authLimiter } from '../../../middlewares/authRateLimiter.js';
 import { passwordResetLimiter } from '../../../middlewares/passwordResetRateLimiter.js';
@@ -26,6 +26,14 @@ import { requestNewPasswordSchema } from '../../../utils/validators/requestNewPa
 import { passwordResetTokenQuerySchema } from '../../../utils/validators/passwordResetTokenQuerySchema.js';
 import { teamInviteTokenQuerySchema } from '../../../utils/validators/teamInviteTokenQuerySchema.js';
 import { acceptTeamInviteSchema } from '../../../utils/validators/acceptTeamInviteSchema.js';
+
+//* Public (unauthenticated) routes - session establishment, credential
+//* recovery and invite consumption. The gate is scoped by composition at the
+//* bottom of the file, not by file position
+const authPublicRouter = Router();
+
+//* Gated routes - mounted behind checkAuthentication() below
+const authPrivateRouter = Router();
 
 export const authRouter = Router();
 
@@ -66,11 +74,7 @@ export const authRouter = Router();
  *             schema:
  *               $ref: '#/components/schemas/ErrorMessage'
  *       422:
- *         description: Validation errors
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ValidationError'
+ *         $ref: '#/components/responses/ValidationError'
  *       429:
  *         description: Too many authentication attempts (per IP) or too many failed attempts for this account
  *         content:
@@ -79,7 +83,7 @@ export const authRouter = Router();
  *               $ref: '#/components/schemas/ErrorMessage'
  */
 //* loginAccountLimiter runs after the validator so it keys on the normalized email
-authRouter.post('/login', authLimiter, checkSchema(userLoginValidationSchema), sanitizerResult, loginAccountLimiter, loginLocal);
+authPublicRouter.post('/login', authLimiter, checkSchema(userLoginValidationSchema), sanitizerResult, loginAccountLimiter, loginLocal);
 
 /**
  * @openapi
@@ -110,19 +114,11 @@ authRouter.post('/login', authLimiter, checkSchema(userLoginValidationSchema), s
  *             schema:
  *               $ref: '#/components/schemas/SuccessMessage'
  *       422:
- *         description: Validation errors
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ValidationError'
+ *         $ref: '#/components/responses/ValidationError'
  *       429:
- *         description: Too many authentication attempts
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorMessage'
+ *         $ref: '#/components/responses/TooManyRequests'
  */
-authRouter.post('/register', authLimiter, checkSchema(createUserValidationSchema), sanitizerResult, registerUser);
+authPublicRouter.post('/register', authLimiter, checkSchema(createUserValidationSchema), sanitizerResult, registerUser);
 
 /**
  * @openapi
@@ -166,13 +162,9 @@ authRouter.post('/register', authLimiter, checkSchema(createUserValidationSchema
  *             schema:
  *               $ref: '#/components/schemas/ErrorMessage'
  *       429:
- *         description: Too many authentication attempts
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorMessage'
+ *         $ref: '#/components/responses/TooManyRequests'
  */
-authRouter.get('/password-reset', authLimiter, checkSchema(passwordResetTokenQuerySchema), sanitizerResult, checkPasswordResetTokenValidity);
+authPublicRouter.get('/password-reset', authLimiter, checkSchema(passwordResetTokenQuerySchema), sanitizerResult, checkPasswordResetTokenValidity);
 
 /**
  * @openapi
@@ -195,11 +187,7 @@ authRouter.get('/password-reset', authLimiter, checkSchema(passwordResetTokenQue
  *             schema:
  *               $ref: '#/components/schemas/SuccessMessage'
  *       422:
- *         description: Validation errors
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ValidationError'
+ *         $ref: '#/components/responses/ValidationError'
  *       429:
  *         description: Too many password reset requests
  *         content:
@@ -207,7 +195,7 @@ authRouter.get('/password-reset', authLimiter, checkSchema(passwordResetTokenQue
  *             schema:
  *               $ref: '#/components/schemas/ErrorMessage'
  */
-authRouter.post('/password-reset', passwordResetLimiter, checkSchema(requestNewPasswordSchema), sanitizerResult, requestPasswordResetToken);
+authPublicRouter.post('/password-reset', passwordResetLimiter, checkSchema(requestNewPasswordSchema), sanitizerResult, requestPasswordResetToken);
 
 /**
  * @openapi
@@ -236,19 +224,11 @@ authRouter.post('/password-reset', passwordResetLimiter, checkSchema(requestNewP
  *             schema:
  *               $ref: '#/components/schemas/ErrorMessage'
  *       422:
- *         description: Validation errors
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ValidationError'
+ *         $ref: '#/components/responses/ValidationError'
  *       429:
- *         description: Too many authentication attempts
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorMessage'
+ *         $ref: '#/components/responses/TooManyRequests'
  */
-authRouter.patch('/password-reset', authLimiter, checkSchema(recoverPasswordSchema), sanitizerResult, updateRecoveredUserPassword);
+authPublicRouter.patch('/password-reset', authLimiter, checkSchema(recoverPasswordSchema), sanitizerResult, updateRecoveredUserPassword);
 
 /**
  * @openapi
@@ -294,7 +274,7 @@ authRouter.patch('/password-reset', authLimiter, checkSchema(recoverPasswordSche
  *             schema:
  *               $ref: '#/components/schemas/ErrorMessage'
  */
-authRouter.get('/invite', authLimiter, checkSchema(teamInviteTokenQuerySchema), sanitizerResult, checkTeamInviteValidity);
+authPublicRouter.get('/invite', authLimiter, checkSchema(teamInviteTokenQuerySchema), sanitizerResult, checkTeamInviteValidity);
 
 /**
  * @openapi
@@ -342,21 +322,11 @@ authRouter.get('/invite', authLimiter, checkSchema(teamInviteTokenQuerySchema), 
  *             schema:
  *               $ref: '#/components/schemas/ErrorMessage'
  *       422:
- *         description: Validation errors
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ValidationError'
+ *         $ref: '#/components/responses/ValidationError'
  *       429:
- *         description: Too many authentication attempts
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorMessage'
+ *         $ref: '#/components/responses/TooManyRequests'
  */
-authRouter.post('/invite-accept', authLimiter, checkSchema(acceptTeamInviteSchema), sanitizerResult, acceptTeamInvite);
-
-authRouter.use(checkAuthentication());
+authPublicRouter.post('/invite-accept', authLimiter, checkSchema(acceptTeamInviteSchema), sanitizerResult, acceptTeamInvite);
 
 /**
  * @openapi
@@ -381,15 +351,16 @@ authRouter.use(checkAuthentication());
  *             schema:
  *               $ref: '#/components/schemas/ErrorMessage'
  */
-authRouter.post('/logout', logoutUser);
+authPrivateRouter.post('/logout', logoutUser);
 
 /**
  * @openapi
  * /api/v1/auth/update-user-password:
  *   patch:
  *     tags: [Auth]
- *     summary: Update the password of the logged-in user
- *     description: Validates the current password before setting the new one.
+ *     deprecated: true
+ *     summary: Update the password of the logged-in user (deprecated alias)
+ *     description: Deprecated alias of `PATCH /api/v1/user/password` - same handler, request and responses. Kept so existing clients keep working; new clients must call `PATCH /api/v1/user/password`.
  *     security:
  *       - sessionCookie: []
  *     requestBody:
@@ -426,19 +397,13 @@ authRouter.post('/logout', logoutUser);
  *                       enum: [AUTH_CURRENT_PASSWORD_INCORRECT, AUTH_PASSWORD_UNCHANGED]
  *                       description: Machine-readable reason distinguishing the two 400 cases
  *       404:
- *         description: User not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorMessage'
+ *         $ref: '#/components/responses/NotFound'
  *       422:
- *         description: Validation errors
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ValidationError'
+ *         $ref: '#/components/responses/ValidationError'
  */
-authRouter.patch('/update-user-password', checkSchema(updatePasswordSchema), sanitizerResult, updateUserPassword);
+//* Deprecated alias of PATCH /api/v1/user/password (same handler) - remove once
+//* every client calls the user route
+authPrivateRouter.patch('/update-user-password', checkSchema(updatePasswordSchema), sanitizerResult, updateUserPassword);
 
 /**
  * @openapi
@@ -473,7 +438,14 @@ authRouter.patch('/update-user-password', checkSchema(updatePasswordSchema), san
  *             schema:
  *               $ref: '#/components/schemas/ErrorMessage'
  */
-authRouter.get('/session', checkSession);
+authPrivateRouter.get('/session', checkSession);
+
+//* Composition: the authentication gate is attached to the private router
+//* itself, so what a route requires is visible at its definition - not at its
+//* file position. Public routes first so unauthenticated traffic never hits
+//* the gate
+authRouter.use(authPublicRouter);
+authRouter.use(checkAuthentication(), authPrivateRouter);
 
 authRouter.use('/*fallback', (req, res) => {
   res.status(404).json({

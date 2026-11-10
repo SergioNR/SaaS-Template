@@ -3,9 +3,9 @@ import { jest } from '@jest/globals';
 jest.unstable_mockModule('../server/models/userModel.js', () => ({
   getUserByEmail: jest.fn(),
   canCompanyMemberGrantRoleInDb: jest.fn(),
-  createUserInDB: jest.fn(),
+  createUserInDb: jest.fn(),
   getUserPassword: jest.fn(),
-  updateUserPasswordInDB: jest.fn(),
+  updateUserPasswordInDb: jest.fn(),
   updateUserLastLoginDate: jest.fn(),
 }));
 
@@ -29,6 +29,11 @@ jest.unstable_mockModule('../server/models/posthogModel.js', () => ({
   posthogUserSuccessLoggedIn: jest.fn(),
 }));
 
+jest.unstable_mockModule('../server/config/loggerFunctions.js', () => ({
+  logAudit: jest.fn(),
+  logError: jest.fn(),
+}));
+
 jest.unstable_mockModule('../server/auth/passportjs.js', () => ({
   default: { authenticate: jest.fn() },
 }));
@@ -42,8 +47,9 @@ jest.unstable_mockModule('../server/integrations/brevo/transactionalEmails/sendE
 }));
 
 const { checkTeamInviteValidity, acceptTeamInvite } = await import('../server/controllers/authController.js');
-const { getUserByEmail, canCompanyMemberGrantRoleInDb, createUserInDB } = await import('../server/models/userModel.js');
+const { getUserByEmail, canCompanyMemberGrantRoleInDb, createUserInDb } = await import('../server/models/userModel.js');
 const { getTeamInviteByTokenInDb, deleteTeamInviteByIdSafe } = await import('../server/models/teamInvitesModel.js');
+const { logAudit } = await import('../server/config/loggerFunctions.js');
 
 const mockRes = () => {
   const res = {
@@ -153,7 +159,7 @@ describe('acceptTeamInvite', () => {
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'INVITER_INVALID' }));
     expect(deleteTeamInviteByIdSafe).toHaveBeenCalledWith('invite-1');
-    expect(createUserInDB).not.toHaveBeenCalled();
+    expect(createUserInDb).not.toHaveBeenCalled();
   });
 
   it('returns 400 and voids the invite when the inviter was demoted below the invited role', async () => {
@@ -166,13 +172,13 @@ describe('acceptTeamInvite', () => {
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'INVITER_INVALID' }));
     expect(deleteTeamInviteByIdSafe).toHaveBeenCalledWith('invite-1');
-    expect(createUserInDB).not.toHaveBeenCalled();
+    expect(createUserInDb).not.toHaveBeenCalled();
   });
 
   it('returns 400 when the conditional consumption inside the transaction finds no usable invite', async () => {
     getTeamInviteByTokenInDb.mockResolvedValue(validInvite);
     getUserByEmail.mockResolvedValue(null);
-    createUserInDB.mockResolvedValue({ status: 'invite_invalid' });
+    createUserInDb.mockResolvedValue({ status: 'invite_invalid' });
     const res = mockRes();
 
     await acceptTeamInvite({ body: { inviteToken: 'invite-token', password: 'Password123' } }, res);
@@ -187,7 +193,7 @@ describe('acceptTeamInvite', () => {
   it('returns 400 INVITER_INVALID when the in-transaction re-check finds the inviter removed or demoted', async () => {
     getTeamInviteByTokenInDb.mockResolvedValue(validInvite);
     getUserByEmail.mockResolvedValue(null);
-    createUserInDB.mockResolvedValue({ status: 'inviter_invalid' });
+    createUserInDb.mockResolvedValue({ status: 'inviter_invalid' });
     const res = mockRes();
 
     await acceptTeamInvite({ body: { inviteToken: 'invite-token', password: 'Password123' } }, res);
@@ -205,7 +211,7 @@ describe('acceptTeamInvite', () => {
     await acceptTeamInvite({ body: { inviteToken: 'missing', password: 'Password123' } }, res);
 
     expect(res.status).toHaveBeenCalledWith(404);
-    expect(createUserInDB).not.toHaveBeenCalled();
+    expect(createUserInDb).not.toHaveBeenCalled();
   });
 
   it('returns 400 when the invite has expired', async () => {
@@ -216,7 +222,7 @@ describe('acceptTeamInvite', () => {
 
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'INVITE_EXPIRED' }));
-    expect(createUserInDB).not.toHaveBeenCalled();
+    expect(createUserInDb).not.toHaveBeenCalled();
     expect(deleteTeamInviteByIdSafe).not.toHaveBeenCalled();
   });
 
@@ -230,18 +236,18 @@ describe('acceptTeamInvite', () => {
     expect(res.status).toHaveBeenCalledWith(409);
     //* Deleting it would leak the registration to the inviting company
     expect(deleteTeamInviteByIdSafe).not.toHaveBeenCalled();
-    expect(createUserInDB).not.toHaveBeenCalled();
+    expect(createUserInDb).not.toHaveBeenCalled();
   });
 
   it('creates the user in the invited company and consumes the invite in the same transaction', async () => {
     getTeamInviteByTokenInDb.mockResolvedValue(validInvite);
     getUserByEmail.mockResolvedValue(null);
-    createUserInDB.mockResolvedValue({ status: 'created', user: { id: 'new-user' } });
+    createUserInDb.mockResolvedValue({ status: 'created', user: { id: 'new-user' } });
     const res = mockRes();
 
     await acceptTeamInvite({ body: { inviteToken: 'invite-token', password: 'Password123' } }, res);
 
-    expect(createUserInDB).toHaveBeenCalledWith(expect.objectContaining({
+    expect(createUserInDb).toHaveBeenCalledWith(expect.objectContaining({
       username: 'new@acme.test',
       companyId: 'company-1',
       roleId: 'role-member',
@@ -254,12 +260,13 @@ describe('acceptTeamInvite', () => {
     expect(deleteTeamInviteByIdSafe).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(201);
     expect(res.json).toHaveBeenCalledWith({});
+    expect(logAudit).toHaveBeenCalledWith(expect.anything(), 'auth.invite.accepted', { entity: 'user', entityId: 'new-user' });
   });
 
   it('maps a concurrent-registration P2002 to 409 and keeps the invite row', async () => {
     getTeamInviteByTokenInDb.mockResolvedValue(validInvite);
     getUserByEmail.mockResolvedValue(null);
-    createUserInDB.mockRejectedValue(Object.assign(new Error('unique'), { code: 'P2002' }));
+    createUserInDb.mockRejectedValue(Object.assign(new Error('unique'), { code: 'P2002' }));
     const res = mockRes();
 
     await acceptTeamInvite({ body: { inviteToken: 'invite-token', password: 'Password123' } }, res);

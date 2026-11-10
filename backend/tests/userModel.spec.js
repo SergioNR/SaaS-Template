@@ -41,14 +41,13 @@ jest.unstable_mockModule('../server/models/posthogModel.js', () => ({
 jest.unstable_mockModule('../server/config/loggerFunctions.js', () => ({
   logError: jest.fn(),
   logInfo: jest.fn(),
-  logPasswordResetTokenCreated: jest.fn(),
 }));
 
 const {
   canCompanyMemberGrantRoleInDb,
-  createUserInDB,
+  createUserInDb,
   updateCompanyMemberRoleInDb,
-  updateUserPasswordInDB,
+  updateUserPasswordInDb,
 } = await import('../server/models/userModel.js');
 const { prisma } = await import('../server/config/prismaClient.js');
 const { posthogUserSignedUp } = await import('../server/models/posthogModel.js');
@@ -67,7 +66,7 @@ const inviteAcceptance = {
 
 const inviterRow = (roleNames) => ({ UserRoles: roleNames.map((name) => ({ Role: { name } })) });
 
-describe('createUserInDB - invite acceptance', () => {
+describe('createUserInDb - invite acceptance', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     tx.user.findFirst.mockResolvedValue(inviterRow(['company_admin']));
@@ -77,7 +76,7 @@ describe('createUserInDB - invite acceptance', () => {
     tx.teamInvites.deleteMany.mockResolvedValue({ count: 1 });
     tx.user.create.mockResolvedValue({ id: 'new-user', role: 'user' });
 
-    const acceptResult = await createUserInDB(inviteAcceptance);
+    const acceptResult = await createUserInDb(inviteAcceptance);
 
     expect(tx.$queryRaw).toHaveBeenCalledTimes(1);
     expect(tx.user.findFirst).toHaveBeenCalledWith(expect.objectContaining({
@@ -105,7 +104,7 @@ describe('createUserInDB - invite acceptance', () => {
     tx.user.findFirst.mockResolvedValue(null);
     tx.teamInvites.deleteMany.mockResolvedValue({ count: 1 });
 
-    const acceptResult = await createUserInDB(inviteAcceptance);
+    const acceptResult = await createUserInDb(inviteAcceptance);
 
     expect(acceptResult).toEqual({ status: 'inviter_invalid' });
     expect(tx.teamInvites.deleteMany).toHaveBeenCalledWith({ where: { id: 'invite-1' } });
@@ -116,7 +115,7 @@ describe('createUserInDB - invite acceptance', () => {
   it('resolves to inviter_invalid when the inviter was demoted below the invited role', async () => {
     tx.user.findFirst.mockResolvedValue(inviterRow(['company_member']));
 
-    const acceptResult = await createUserInDB({ ...inviteAcceptance, roleName: 'company_admin' });
+    const acceptResult = await createUserInDb({ ...inviteAcceptance, roleName: 'company_admin' });
 
     expect(acceptResult).toEqual({ status: 'inviter_invalid' });
     expect(tx.user.create).not.toHaveBeenCalled();
@@ -125,7 +124,7 @@ describe('createUserInDB - invite acceptance', () => {
   it('creates nothing and resolves to invite_invalid when the invite was already consumed, revoked or expired', async () => {
     tx.teamInvites.deleteMany.mockResolvedValue({ count: 0 });
 
-    const acceptResult = await createUserInDB(inviteAcceptance);
+    const acceptResult = await createUserInDb(inviteAcceptance);
 
     expect(acceptResult).toEqual({ status: 'invite_invalid' });
     expect(tx.user.create).not.toHaveBeenCalled();
@@ -160,7 +159,7 @@ describe('canCompanyMemberGrantRoleInDb', () => {
   });
 });
 
-describe('createUserInDB - self-registration', () => {
+describe('createUserInDb - self-registration', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
@@ -168,11 +167,11 @@ describe('createUserInDB - self-registration', () => {
   it('throws a clear error when the company owner role was never seeded', async () => {
     prisma.role.findUnique.mockResolvedValue(null);
 
-    await expect(createUserInDB({ username: 'new@acme.test', password: 'hash', companyName: 'Acme' })).rejects.toThrow('Company owner role');
+    await expect(createUserInDb({ username: 'new@acme.test', password: 'hash', companyName: 'Acme' })).rejects.toThrow('Company owner role');
   });
 });
 
-describe('updateUserPasswordInDB', () => {
+describe('updateUserPasswordInDb', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
@@ -182,7 +181,7 @@ describe('updateUserPasswordInDB', () => {
     tx.passwordResetTokens.deleteMany.mockResolvedValue({ count: 1 });
     tx.session.deleteMany.mockResolvedValue({ count: 2 });
 
-    const updatedUser = await updateUserPasswordInDB('user-1', 'new-hash', { keepSessionId: 'sid-current' });
+    const updatedUser = await updateUserPasswordInDb('user-1', 'new-hash', { keepSessionId: 'sid-current' });
 
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
     expect(tx.user.update).toHaveBeenCalledWith(expect.objectContaining({
@@ -199,7 +198,7 @@ describe('updateUserPasswordInDB', () => {
     tx.passwordResetTokens.deleteMany.mockResolvedValue({ count: 0 });
     tx.session.deleteMany.mockRejectedValue(new Error('db down'));
 
-    await expect(updateUserPasswordInDB('user-1', 'new-hash', { keepSessionId: 'sid-current' })).rejects.toThrow('db down');
+    await expect(updateUserPasswordInDb('user-1', 'new-hash', { keepSessionId: 'sid-current' })).rejects.toThrow('db down');
   });
 });
 

@@ -15,7 +15,7 @@ jest.unstable_mockModule('../server/config/telegramBotConfig.js', () => ({
 }));
 
 const {
-  logError, logInfo, logWarn, serializeError,
+  logError, logInfo, logWarn, logAudit, logRateLimited, serializeError,
 } = await import('../server/config/loggerFunctions.js');
 const {
   ALERT_DEDUPE_WINDOW_MS,
@@ -62,14 +62,21 @@ describe('log functions', () => {
     expect(JSON.stringify(payload)).not.toContain('secret-body');
   });
 
-  it('logWarn tolerates a missing error', async () => {
-    await expect(logWarn('Just a warning')).resolves.toBeUndefined();
+  it('logWarn tolerates a missing error and is synchronous', () => {
+    expect(logWarn('Just a warning')).toBeUndefined();
     expect(loggerMock.warn).toHaveBeenCalled();
   });
 
-  it('only logError reaches Telegram - info and warn stay in pino', async () => {
-    await logInfo('routine event');
-    await logWarn('something odd', new Error('odd'));
+  it('logInfo and logRateLimited are synchronous - the line is written before they return', () => {
+    expect(logInfo('routine event')).toBeUndefined();
+    expect(logRateLimited({ ip: '10.0.0.1' })).toBeUndefined();
+    expect(loggerMock.info).toHaveBeenCalledTimes(1);
+    expect(loggerMock.warn).toHaveBeenCalledWith({ message: 'rate limit exceeded', context: { ipAddress: '10.0.0.1' } });
+  });
+
+  it('only logError reaches Telegram - info and warn stay in pino', () => {
+    logInfo('routine event');
+    logWarn('something odd', new Error('odd'));
     expect(loggerMock.info).toHaveBeenCalledTimes(1);
     expect(loggerMock.warn).toHaveBeenCalledTimes(1);
     expect(sendTelegramMessage).not.toHaveBeenCalled();
@@ -85,6 +92,27 @@ describe('log functions', () => {
     expect(message).not.toContain('<script>');
     expect(message).toContain('&lt;script&gt;');
     expect(message).toContain('a &lt; b &amp; &quot;c&quot;');
+  });
+});
+
+describe('Telegram request id', () => {
+  beforeEach(() => {
+    resetAlertDedupe();
+    jest.clearAllMocks();
+  });
+
+  it('puts the request id of the failing request into the alert', () => {
+    logError('request failed', new Error('boom'), { requestId: '00000000-0000-4000-8000-0000000000f1', method: 'GET' });
+
+    const [, message] = sendTelegramMessage.mock.calls[0];
+    expect(message).toContain('<b>Request Id</b>: 00000000-0000-4000-8000-0000000000f1');
+  });
+
+  it('falls back to N/A outside a request', () => {
+    logError('cron failed', new Error('boom'));
+
+    const [, message] = sendTelegramMessage.mock.calls[0];
+    expect(message).toContain('<b>Request Id</b>: N/A');
   });
 });
 
@@ -127,5 +155,64 @@ describe('escapeHtml', () => {
 
   it('truncates very long values', () => {
     expect(escapeHtml('x'.repeat(5000)).length).toBeLessThan(1100);
+  });
+});
+
+describe('logAudit', () => {
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  const auditReq = () => ({
+    id: '00000000-0000-4000-8000-0000000000f1',
+    user: { id: '00000000-0000-4000-8000-000000000001', company_id: '00000000-0000-4000-8000-0000000000c0' },
+  });
+
+  it('emits an info line with the action as message and mirrored request context', () => {
+    logAudit(auditReq(), 'team.member.role_updated', {
+      entity: 'user',
+      entityId: '00000000-0000-4000-8000-0000000000aa',
+      changedFields: ['role'],
+    });
+
+    expect(loggerMock.info).toHaveBeenCalledTimes(1);
+    expect(loggerMock.info).toHaveBeenCalledWith({
+      message: 'team.member.role_updated',
+      audit: {
+        entity: 'user',
+        entityId: '00000000-0000-4000-8000-0000000000aa',
+        changedFields: ['role'],
+      },
+      userId: '00000000-0000-4000-8000-000000000001',
+      companyId: '00000000-0000-4000-8000-0000000000c0',
+      reqId: '00000000-0000-4000-8000-0000000000f1',
+    });
+  });
+
+  it('omits the changed-fields list for creates and deletes', () => {
+    logAudit(auditReq(), 'file.deleted', { entity: 'file', entityId: '00000000-0000-4000-8000-0000000000ab' });
+
+    const [payload] = loggerMock.info.mock.calls[0];
+    expect(payload.audit).toEqual({
+      entity: 'file',
+      entityId: '00000000-0000-4000-8000-0000000000ab',
+    });
+    expect('changedFields' in payload.audit).toBe(false);
+  });
+
+  it('stays null-safe and silent for a request without a session', () => {
+    expect(() => logAudit({}, 'auth.register.requested', { entity: 'user' })).not.toThrow();
+
+    const [payload] = loggerMock.info.mock.calls[0];
+    expect(payload.userId).toBeNull();
+    expect(payload.companyId).toBeNull();
+    expect(payload.reqId).toBeNull();
+    expect(payload.audit.entityId).toBeNull();
+  });
+
+  it('never reaches Telegram', () => {
+    logAudit(auditReq(), 'team.invite.created', { entity: 'invite', entityId: '00000000-0000-4000-8000-0000000000ac' });
+
+    expect(sendTelegramMessage).not.toHaveBeenCalled();
   });
 });

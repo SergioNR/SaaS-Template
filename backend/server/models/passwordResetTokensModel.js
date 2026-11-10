@@ -1,5 +1,5 @@
 import { prisma } from '../config/prismaClient.js';
-import { logPasswordResetTokenCreated } from '../config/loggerFunctions.js';
+import { logInfo } from '../config/loggerFunctions.js';
 import { generateSecureToken, hashSecureToken } from '../utils/secureToken.js';
 import { deleteUserSessionsInTx } from './sessionModel.js';
 
@@ -27,7 +27,7 @@ export const createPasswordResetToken = async (userId) => {
     }),
   ]);
 
-  logPasswordResetTokenCreated(userId);
+  logInfo('Password reset token created', { userData: { userId } });
 
   return passwordResetToken;
 };

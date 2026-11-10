@@ -18,18 +18,15 @@ import {
   countActiveSessionsByUserInDb,
 } from '../models/sessionModel.js';
 import { deleteUserAndCleanup } from '../utils/userDeletionCleanup.js';
-import { logInfo } from '../config/loggerFunctions.js';
+import { logAudit } from '../config/loggerFunctions.js';
+import { computeNextCursor, parsePagination } from '../utils/cursorPagination.js';
+import { sendMappedWriteError } from '../utils/prismaErrors.js';
 
-const DEFAULT_PAGE_SIZE = 50;
-const MAX_PAGE_SIZE = 100;
 const WEEK_IN_MS = 7 * 24 * 60 * 60 * 1000;
 
-const parsePagination = (query) => ({
-  limit: Math.min(Number.parseInt(query.limit, 10) || DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE),
-  cursor: typeof query.cursor === 'string' && query.cursor.length > 0
-    ? query.cursor
-    : undefined,
-});
+const USER_DELETION_WRITE_ERRORS = {
+  P2003: { status: 409, message: 'User deletion failed - Related DB entries exist' },
+};
 
 export const getAllUsers = async (req, res) => {
   const filters = {};
@@ -49,18 +46,16 @@ export const getAllUsers = async (req, res) => {
 
   const { limit, cursor } = parsePagination(req.query);
 
-  const users = await getAllUsersInDb(filters, { limit, cursor });
-
-  const nextCursor = users.length === limit && users.length > 0
-    ? users[users.length - 1].id
-    : undefined;
-
-  const totalUserCount = await countUsersInDb(filters);
+  //* Page and total are independent reads - issued together
+  const [users, totalUserCount] = await Promise.all([
+    getAllUsersInDb(filters, { limit, cursor }),
+    countUsersInDb(filters),
+  ]);
 
   return res.status(200).json({
     userCount: totalUserCount,
     users: users,
-    nextCursor: nextCursor,
+    nextCursor: computeNextCursor(users, limit),
   });
 };
 
@@ -109,10 +104,8 @@ export const deleteOneUserById = async (req, res) => {
       protectLastOwner: true,
     });
   } catch (error) {
-    if (error.code === 'P2003') {
-      return res.status(409).json({
-        message: 'User deletion failed - Related DB entries exist',
-      });
+    if (sendMappedWriteError(res, error, USER_DELETION_WRITE_ERRORS)) {
+      return res;
     }
 
     throw error; //* Forwarded to the global error handler (Express 5)
@@ -137,12 +130,13 @@ export const deleteOneUserById = async (req, res) => {
     });
   }
 
-  //* Admin deletions are privileged actions - the actor is always recorded
-  logInfo(`Superadmin ${req.user.id} deleted user ${deletionResult.deletedUser.id}`, {
-    actorId: req.user.id,
-    deletedUserId: deletionResult.deletedUser.id,
-    companyDeleted: deletionResult.companyDeleted,
-  });
+  //* Admin deletions are privileged actions - the audit line always carries
+  //* the acting superadmin (userId) next to the deleted user
+  logAudit(req, 'admin.user.deleted', { entity: 'user', entityId: deletionResult.deletedUser.id });
+
+  if (deletionResult.companyDeleted) {
+    logAudit(req, 'admin.company.deleted', { entity: 'company', entityId: deletionResult.companyId });
+  }
 
   return res.status(200).json({
     userId: deletionResult.deletedUser.id,
@@ -163,18 +157,16 @@ export const getAllCompanies = async (req, res) => {
 
   const { limit, cursor } = parsePagination(req.query);
 
-  const companies = await getAllCompaniesInDb(filters, { limit, cursor });
-
-  const nextCursor = companies.length === limit && companies.length > 0
-    ? companies[companies.length - 1].id
-    : undefined;
-
-  const totalCompanyCount = await countCompaniesInDb(filters);
+  //* Page and total are independent reads - issued together
+  const [companies, totalCompanyCount] = await Promise.all([
+    getAllCompaniesInDb(filters, { limit, cursor }),
+    countCompaniesInDb(filters),
+  ]);
 
   return res.status(200).json({
     companyCount: totalCompanyCount,
     companies: companies,
-    nextCursor: nextCursor,
+    nextCursor: computeNextCursor(companies, limit),
   });
 };
 

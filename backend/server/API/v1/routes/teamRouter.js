@@ -114,17 +114,9 @@ const updateMemberRoleValidation = [
  *                   items:
  *                     type: string
  *       401:
- *         description: Not authenticated
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorMessage'
+ *         $ref: '#/components/responses/Unauthorized'
  *       403:
- *         description: Missing permissions
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorMessage'
+ *         $ref: '#/components/responses/Forbidden'
  */
 teamRouter.get('/', checkCompanyPermission('team.view'), getTeamData);
 
@@ -169,11 +161,7 @@ teamRouter.get('/', checkCompanyPermission('team.view'), getTeamData);
  *                       type: string
  *                       format: date-time
  *       401:
- *         description: Not authenticated
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorMessage'
+ *         $ref: '#/components/responses/Unauthorized'
  *       403:
  *         description: Missing permissions, or the inviter does not hold the invited role
  *         content:
@@ -193,11 +181,7 @@ teamRouter.get('/', checkCompanyPermission('team.view'), getTeamData);
  *             schema:
  *               $ref: '#/components/schemas/ErrorMessage'
  *       422:
- *         description: Validation errors
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ValidationError'
+ *         $ref: '#/components/responses/ValidationError'
  */
 teamRouter.post('/invites', checkCompanyPermission('team.invite'), createInviteValidation, createTeamInvite);
 
@@ -244,11 +228,7 @@ teamRouter.post('/invites', checkCompanyPermission('team.invite'), createInviteV
  *                       type: string
  *                       format: date-time
  *       401:
- *         description: Not authenticated
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorMessage'
+ *         $ref: '#/components/responses/Unauthorized'
  *       403:
  *         description: Missing permissions, or the caller cannot grant the invite's role
  *         content:
@@ -275,11 +255,7 @@ teamRouter.post('/invites', checkCompanyPermission('team.invite'), createInviteV
  *                       enum: [INVITER_INVALID]
  *                       description: Only present when the original inviter can no longer vouch for the invite
  *       422:
- *         description: Validation errors
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ValidationError'
+ *         $ref: '#/components/responses/ValidationError'
  */
 teamRouter.post('/invites/:inviteId/resend', checkCompanyPermission('team.invite'), inviteIdParamValidation, resendTeamInvite);
 
@@ -308,11 +284,7 @@ teamRouter.post('/invites/:inviteId/resend', checkCompanyPermission('team.invite
  *             schema:
  *               $ref: '#/components/schemas/SuccessMessage'
  *       401:
- *         description: Not authenticated
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorMessage'
+ *         $ref: '#/components/responses/Unauthorized'
  *       403:
  *         description: Missing permissions, or the caller cannot grant the invite's role
  *         content:
@@ -326,11 +298,7 @@ teamRouter.post('/invites/:inviteId/resend', checkCompanyPermission('team.invite
  *             schema:
  *               $ref: '#/components/schemas/ErrorMessage'
  *       422:
- *         description: Validation errors
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ValidationError'
+ *         $ref: '#/components/responses/ValidationError'
  */
 teamRouter.delete('/invites/:inviteId', checkCompanyPermission('team.invite'), inviteIdParamValidation, revokeTeamInvite);
 
@@ -363,11 +331,7 @@ teamRouter.delete('/invites/:inviteId', checkCompanyPermission('team.invite'), i
  *                   type: string
  *                   format: uuid
  *       401:
- *         description: Not authenticated
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorMessage'
+ *         $ref: '#/components/responses/Unauthorized'
  *       403:
  *         description: Missing permissions, or the member holds a role that outranks the caller
  *         content:
@@ -387,11 +351,7 @@ teamRouter.delete('/invites/:inviteId', checkCompanyPermission('team.invite'), i
  *             schema:
  *               $ref: '#/components/schemas/ErrorMessage'
  *       422:
- *         description: Validation errors
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ValidationError'
+ *         $ref: '#/components/responses/ValidationError'
  */
 teamRouter.delete('/members/:userId', checkCompanyPermission('team.remove'), userIdParamValidation, removeTeamMember);
 
@@ -443,11 +403,7 @@ teamRouter.delete('/members/:userId', checkCompanyPermission('team.remove'), use
  *                       items:
  *                         type: string
  *       401:
- *         description: Not authenticated
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorMessage'
+ *         $ref: '#/components/responses/Unauthorized'
  *       403:
  *         description: Missing permissions, the caller does not hold the target role, or the member holds a role that outranks the caller
  *         content:
@@ -467,11 +423,7 @@ teamRouter.delete('/members/:userId', checkCompanyPermission('team.remove'), use
  *             schema:
  *               $ref: '#/components/schemas/ErrorMessage'
  *       422:
- *         description: Validation errors
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ValidationError'
+ *         $ref: '#/components/responses/ValidationError'
  */
 teamRouter.patch('/members/:userId', checkCompanyPermission('team.manage_roles'), userIdParamValidation, updateMemberRoleValidation, updateTeamMemberRole);
 

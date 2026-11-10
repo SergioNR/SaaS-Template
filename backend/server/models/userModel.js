@@ -1,4 +1,5 @@
 import { prisma } from '../config/prismaClient.js';
+import { listPaginationArgs } from '../utils/cursorPagination.js';
 import { posthogUserDeleteAccount, posthogUserSignedUp } from './posthogModel.js';
 import { FREE_TRIAL_DURATION_MS } from '../config/security.js';
 import {
@@ -73,7 +74,7 @@ export const canCompanyMemberGrantRoleInDb = async (memberId, companyId, roleNam
 //* left or can no longer grant the role - the invite is voided) or
 //* { status: 'invite_invalid' } (unknown, expired, already accepted or
 //* revoked meanwhile)
-export const createUserInDB = async (userData) => {
+export const createUserInDb = async (userData) => {
   const {
     username,
     password,
@@ -348,7 +349,7 @@ export const getUserDetailInDb = async (userId) => {
 //* every outstanding reset token and of every other session of the user land
 //* together, so a failure can never leave a changed password with live
 //* sessions (or the reverse). Errors propagate - nothing is swallowed here
-export const updateUserPasswordInDB = async (userId, newPassword, options = {}) => {
+export const updateUserPasswordInDb = async (userId, newPassword, options = {}) => {
   const { keepSessionId = null } = options;
 
   const updatedUser = await prisma.$transaction(async (tx) => {
@@ -388,14 +389,8 @@ export const getAllUsersInDb = async (filters = {}, pagination = {}) => {
         },
       },
     },
-    //* id tiebreaker keeps the cursor order total when created_at collides
-    orderBy: [
-      { created_at: 'desc' },
-      { id: 'desc' },
-    ],
-    take: pagination.limit,
-    skip: pagination.cursor ? 1 : undefined,
-    cursor: pagination.cursor ? { id: pagination.cursor } : undefined,
+    //* Newest first with the id tiebreaker - the order the cursor walk relies on
+    ...listPaginationArgs(pagination),
   });
 
   return getAllUsersQuery;

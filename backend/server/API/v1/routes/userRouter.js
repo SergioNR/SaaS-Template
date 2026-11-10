@@ -1,5 +1,8 @@
 import { Router } from 'express';
-import { getUserProfile, deleteUser } from '../../../controllers/userController.js';
+import { checkSchema } from 'express-validator';
+import { getUserProfile, deleteUser, updateUserPassword } from '../../../controllers/userController.js';
+import { sanitizerResult } from '../../../middlewares/sanitizerResult.js';
+import { updatePasswordSchema } from '../../../utils/validators/updatePasswordSchema.js';
 
 export const userRouter = Router();
 
@@ -45,19 +48,62 @@ export const userRouter = Router();
  *                       format: date-time
  *                       nullable: true
  *       401:
- *         description: Not authenticated
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorMessage'
+ *         $ref: '#/components/responses/Unauthorized'
  *       404:
- *         description: User not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorMessage'
+ *         $ref: '#/components/responses/NotFound'
  */
 userRouter.get('/', getUserProfile);
+
+/**
+ * @openapi
+ * /api/v1/user/password:
+ *   patch:
+ *     tags: [User]
+ *     summary: Update the password of the logged-in user
+ *     description: Validates the current password before setting the new one. In one transaction the hash is replaced, every outstanding password reset token is deleted and every other session of the user is revoked - the current session stays logged in. Replaces the deprecated `PATCH /api/v1/auth/update-user-password`.
+ *     security:
+ *       - sessionCookie: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/UpdatePasswordRequest'
+ *     responses:
+ *       200:
+ *         description: Password updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: 'object'
+ *               properties:
+ *                 userId:
+ *                   type: string
+ *                   format: uuid
+ *       400:
+ *         description: Current password is incorrect, or the new password is the same as the current one - disambiguated by `code`
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/ErrorMessage'
+ *                 - type: object
+ *                   properties:
+ *                     message:
+ *                       type: string
+ *                       enum: [Current password is incorrect, New password must be different from the current password]
+ *                     code:
+ *                       type: string
+ *                       enum: [AUTH_CURRENT_PASSWORD_INCORRECT, AUTH_PASSWORD_UNCHANGED]
+ *                       description: Machine-readable reason distinguishing the two 400 cases
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized'
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ *       422:
+ *         $ref: '#/components/responses/ValidationError'
+ */
+userRouter.patch('/password', checkSchema(updatePasswordSchema), sanitizerResult, updateUserPassword);
 
 /**
  * @openapi
@@ -76,11 +122,7 @@ userRouter.get('/', getUserProfile);
  *             schema:
  *               $ref: '#/components/schemas/SuccessMessage'
  *       401:
- *         description: Not authenticated
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorMessage'
+ *         $ref: '#/components/responses/Unauthorized'
  *       404:
  *         description: User no longer exists
  *         content:

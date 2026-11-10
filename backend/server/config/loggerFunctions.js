@@ -37,13 +37,15 @@ export const logError = (errorMessage, error, additionalInfo = 'N/A') => {
       },
     });
 
+    //* Fire-and-forget on purpose - the integration swallows its own errors,
+    //* so a Telegram outage must never break or delay the log call
     sendErrorLogsToTelegram(errorMessage, serializeError(error), additionalInfo);
   } catch {
     // Fail silently
   }
 };
 
-export const logWarn = async (message, error, additionalInfo = 'N/A') => {
+export const logWarn = (message, error, additionalInfo = 'N/A') => {
   try {
     logger.warn({
       message: message,
@@ -57,7 +59,7 @@ export const logWarn = async (message, error, additionalInfo = 'N/A') => {
   }
 };
 
-export const logInfo = async (message, context = 'no context') => {
+export const logInfo = (message, context = 'no context') => {
   try {
     logger.info({
       message: message,
@@ -68,22 +70,44 @@ export const logInfo = async (message, context = 'no context') => {
   }
 };
 
-export const logPasswordResetTokenCreated = (userId) => {
-  logger.info({
-    message: 'User password reset token succesfully created in database',
-    context: {
-      userData: {
-        userId: userId,
-      },
-    },
-  });
+//* Business-event audit line for successful writes. The payload is constant
+//* action names, entity types, ids and FIELD NAMES only - never field values
+//* or free text - so PII and secrets stay out of the logs by construction.
+//* Info level keeps it out of the Telegram alert channel; the top-level
+//* userId/companyId/reqId mirror the access-log fields so log searches work
+//* across both line types
+export const logAudit = (req, action, { entity, entityId, changedFields } = {}) => {
+  try {
+    const audit = {
+      entity: entity,
+      entityId: entityId ?? null,
+    };
+
+    if (changedFields !== undefined) {
+      audit.changedFields = changedFields;
+    }
+
+    logger.info({
+      message: action,
+      audit: audit,
+      userId: req?.user?.id ?? null,
+      companyId: req?.user?.company_id ?? null,
+      reqId: req?.id ?? null,
+    });
+  } catch {
+    // Fail silently
+  }
 };
 
-export const logRateLimited = async (req) => {
-  logger.warn({
-    message: 'rate limit exceeded',
-    context: {
-      ipAddress: req.ip,
-    },
-  });
+export const logRateLimited = (req) => {
+  try {
+    logger.warn({
+      message: 'rate limit exceeded',
+      context: {
+        ipAddress: req.ip,
+      },
+    });
+  } catch {
+    // Fail silently
+  }
 };

@@ -21,8 +21,10 @@ import {
 import { getCompanyByIdInDb } from '../models/companyModel.js';
 import { deleteUserAndCleanup } from '../utils/userDeletionCleanup.js';
 import { canGrantRole, outranksAllRoles, rolesGrantableBy } from '../utils/companyRoleHierarchy.js';
-import { logError } from '../config/loggerFunctions.js';
+import { logAudit, logError } from '../config/loggerFunctions.js';
 import { sendTeamInviteToUser } from '../integrations/brevo/transactionalEmails/sendTeamInviteToUser.js';
+import { trackBackground } from '../utils/processLifecycle.js';
+import { sendMappedWriteError } from '../utils/prismaErrors.js';
 
 const targetRoleNames = (targetMember) => targetMember.UserRoles.map((userRole) => userRole.Role.name);
 
@@ -158,8 +160,8 @@ export const createTeamInvite = async (req, res) => {
   } catch (error) {
     //* A concurrent invite for the same company+email beat the pending check
     //* - the unique constraint resolves the race
-    if (error.code === 'P2002') {
-      return res.status(409).json(PENDING_INVITE_CONFLICT);
+    if (sendMappedWriteError(res, error, { P2002: { status: 409, ...PENDING_INVITE_CONFLICT } })) {
+      return res;
     }
 
     throw error;
@@ -167,7 +169,9 @@ export const createTeamInvite = async (req, res) => {
 
   const { invite, inviteToken } = creation;
 
-  deliverInviteInBackground(invite, inviteToken, companyId, inviterEmail); // Fire-and-forget
+  trackBackground(deliverInviteInBackground(invite, inviteToken, companyId, inviterEmail)); // Fire-and-forget
+
+  logAudit(req, 'team.invite.created', { entity: 'invite', entityId: invite.id });
 
   return res.status(201).json({
     invite: toInviteShape(invite, role.name),
@@ -218,10 +222,10 @@ export const resendTeamInvite = async (req, res) => {
     //* window resets and the invite id (and original inviter) stay the same
     rotation = await rotateTeamInviteTokenInDb(inviteId, companyId);
   } catch (error) {
-    if (error.code === 'P2002') {
-      return res.status(409).json({
-        message: 'The invite could not be rotated - please try again',
-      });
+    const rotationConflict = { status: 409, message: 'The invite could not be rotated - please try again' };
+
+    if (sendMappedWriteError(res, error, { P2002: rotationConflict })) {
+      return res;
     }
 
     throw error;
@@ -238,7 +242,9 @@ export const resendTeamInvite = async (req, res) => {
 
   //* The row is never deleted here, registered invitee or not - the same
   //* detached delivery as on creation decides whether an email goes out
-  deliverInviteInBackground(rotatedInvite, inviteToken, companyId, inviterEmail); // Fire-and-forget
+  trackBackground(deliverInviteInBackground(rotatedInvite, inviteToken, companyId, inviterEmail)); // Fire-and-forget
+
+  logAudit(req, 'team.invite.resent', { entity: 'invite', entityId: inviteId });
 
   return res.status(200).json({
     invite: toInviteShape(rotatedInvite, invite.Role.name),
@@ -272,6 +278,8 @@ export const revokeTeamInvite = async (req, res) => {
   }
 
   await deleteTeamInviteInDb(inviteId, companyId);
+
+  logAudit(req, 'team.invite.revoked', { entity: 'invite', entityId: inviteId });
 
   return res.status(200).json({});
 };
@@ -336,6 +344,8 @@ export const removeTeamMember = async (req, res) => {
       message: 'The last company owner cannot be removed',
     });
   }
+
+  logAudit(req, 'team.member.removed', { entity: 'user', entityId: userId });
 
   return res.status(200).json({
     userId,
@@ -412,6 +422,12 @@ export const updateTeamMemberRole = async (req, res) => {
       message: 'The last company owner cannot be demoted',
     });
   }
+
+  logAudit(req, 'team.member.role_updated', {
+    entity: 'user',
+    entityId: userId,
+    changedFields: ['role'],
+  });
 
   return res.status(200).json({
     member: toMemberShape(updateResult.member),

@@ -32,6 +32,7 @@ jest.unstable_mockModule('../server/utils/userDeletionCleanup.js', () => ({
 }));
 
 jest.unstable_mockModule('../server/config/loggerFunctions.js', () => ({
+  logAudit: jest.fn(),
   logError: jest.fn(),
   logWarn: jest.fn(),
 }));
@@ -74,7 +75,7 @@ const {
 } = await import('../server/models/roleModel.js');
 const { getCompanyByIdInDb } = await import('../server/models/companyModel.js');
 const { deleteUserAndCleanup } = await import('../server/utils/userDeletionCleanup.js');
-const { logError } = await import('../server/config/loggerFunctions.js');
+const { logAudit, logError } = await import('../server/config/loggerFunctions.js');
 const { sendTeamInviteToUser } = await import('../server/integrations/brevo/transactionalEmails/sendTeamInviteToUser.js');
 const { sendExistingAccountNoticeToUser } = await import('../server/integrations/brevo/transactionalEmails/sendExistingAccountNoticeToUser.js');
 
@@ -307,6 +308,9 @@ describe('createTeamInvite', () => {
     expect(res.status).toHaveBeenCalledWith(201);
     expect(res.json).toHaveBeenCalledWith(expectedResponse);
     expect(sendTeamInviteToUser).not.toHaveBeenCalled();
+    //* Ids only - never the invited email
+    expect(logAudit).toHaveBeenCalledWith(expect.anything(), 'team.invite.created', { entity: 'invite', entityId: expect.any(String) });
+    expect(JSON.stringify(logAudit.mock.calls.map((call) => call.slice(1)))).not.toContain('new@acme.test');
 
     resolveLookup(null);
     await flushBackgroundWork();
@@ -433,6 +437,7 @@ describe('resendTeamInvite', () => {
       invite: expect.objectContaining({ id: 'invite-1', role: 'company_member' }),
     });
     expect(JSON.stringify(res.json.mock.calls)).not.toContain('rotated-secret-token');
+    expect(logAudit).toHaveBeenCalledWith(expect.anything(), 'team.invite.resent', { entity: 'invite', entityId: 'invite-1' });
   });
 
   it('answers the same 200 when the invitee registered on their own, keeping the row and sending nothing', async () => {
@@ -527,6 +532,7 @@ describe('revokeTeamInvite', () => {
 
     expect(deleteTeamInviteInDb).toHaveBeenCalledWith('invite-1', 'company-1');
     expect(res.status).toHaveBeenCalledWith(200);
+    expect(logAudit).toHaveBeenCalledWith(expect.anything(), 'team.invite.revoked', { entity: 'invite', entityId: 'invite-1' });
   });
 });
 
@@ -620,6 +626,7 @@ describe('removeTeamMember', () => {
     });
     expect(res.status).toHaveBeenCalledWith(200);
     expect(res.json).toHaveBeenCalledWith({ userId: 'target' });
+    expect(logAudit).toHaveBeenCalledWith(expect.anything(), 'team.member.removed', { entity: 'user', entityId: 'target' });
   });
 
   it('restricts target roles for superadmins like for anyone else', async () => {
@@ -714,6 +721,13 @@ describe('updateTeamMemberRole', () => {
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
       member: expect.objectContaining({ companyRoles: ['company_admin'] }),
     }));
+    //* The changed field NAME only - the new role value is never logged
+    expect(logAudit).toHaveBeenCalledWith(expect.anything(), 'team.member.role_updated', {
+      entity: 'user',
+      entityId: 'target',
+      changedFields: ['role'],
+    });
+    expect(JSON.stringify(logAudit.mock.calls.map((call) => call.slice(1)))).not.toContain('company_admin');
   });
 
   it('returns 409 when the transaction reports the last company owner', async () => {

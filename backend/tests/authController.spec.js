@@ -1,12 +1,9 @@
 import { jest } from '@jest/globals';
-import bcrypt from 'bcrypt';
 
 jest.unstable_mockModule('../server/models/userModel.js', () => ({
   getUserByEmail: jest.fn(),
   canCompanyMemberGrantRoleInDb: jest.fn(),
-  createUserInDB: jest.fn(),
-  getUserPassword: jest.fn(),
-  updateUserPasswordInDB: jest.fn(),
+  createUserInDb: jest.fn(),
   updateUserLastLoginDate: jest.fn(),
 }));
 
@@ -31,6 +28,7 @@ jest.unstable_mockModule('../server/models/posthogModel.js', () => ({
 }));
 
 jest.unstable_mockModule('../server/config/loggerFunctions.js', () => ({
+  logAudit: jest.fn(),
   logError: jest.fn(),
 }));
 
@@ -54,13 +52,10 @@ const {
   registerUser,
   requestPasswordResetToken,
   updateRecoveredUserPassword,
-  updateUserPassword,
 } = await import('../server/controllers/authController.js');
 const {
   getUserByEmail,
-  createUserInDB,
-  getUserPassword,
-  updateUserPasswordInDB,
+  createUserInDb,
 } = await import('../server/models/userModel.js');
 const { SESSION_COOKIE_NAME, SESSION_COOKIE_OPTIONS } = await import('../server/config/security.js');
 const {
@@ -70,7 +65,7 @@ const {
 } = await import('../server/models/passwordResetTokensModel.js');
 const { linkSessionToUser } = await import('../server/models/sessionModel.js');
 const { posthogUserSuccessLoggedIn } = await import('../server/models/posthogModel.js');
-const { logError } = await import('../server/config/loggerFunctions.js');
+const { logAudit, logError } = await import('../server/config/loggerFunctions.js');
 const { default: passport } = await import('../server/auth/passportjs.js');
 const { sendResetPasswordTokenToUser } = await import('../server/integrations/brevo/transactionalEmails/sendResetPasswordTokenToUser.js');
 const { sendExistingAccountNoticeToUser } = await import('../server/integrations/brevo/transactionalEmails/sendExistingAccountNoticeToUser.js');
@@ -114,6 +109,16 @@ describe('requestPasswordResetToken', () => {
 
     expect(createPasswordResetToken).not.toHaveBeenCalled();
     expect(sendResetPasswordTokenToUser).not.toHaveBeenCalled();
+  });
+
+  it('audits the request without any user identifier (enumeration-safe logs)', async () => {
+    getUserByEmail.mockResolvedValue(null);
+    const req = { body: { email: 'nobody@acme.test' } };
+
+    await requestPasswordResetToken(req, mockRes());
+
+    expect(logAudit).toHaveBeenCalledWith(req, 'auth.password_reset.requested', { entity: 'password_reset' });
+    expect(JSON.stringify(logAudit.mock.calls.map((call) => call.slice(1)))).not.toContain('nobody@acme.test');
   });
 
   it('creates a token and emails the raw token to the stored address in the background', async () => {
@@ -181,6 +186,7 @@ describe('updateRecoveredUserPassword', () => {
 
     expect(resetUserPasswordWithTokenInDb).toHaveBeenCalledWith('raw', expect.stringMatching(/^\$2[aby]\$/));
     expect(res.status).toHaveBeenCalledWith(200);
+    expect(logAudit).toHaveBeenCalledWith(expect.anything(), 'auth.password_reset.completed', { entity: 'user', entityId: 'user-1' });
   });
 
   it('answers 400 when the token was already used, expired or is unknown (single use)', async () => {
@@ -219,18 +225,21 @@ describe('registerUser', () => {
 
     expect(res.status).toHaveBeenCalledWith(201);
     expect(res.json).toHaveBeenCalledWith({});
-    expect(createUserInDB).not.toHaveBeenCalled();
+    expect(createUserInDb).not.toHaveBeenCalled();
+    //* No email, user id or company name - the create may not even happen
+    expect(logAudit).toHaveBeenCalledWith(expect.anything(), 'auth.register.requested', { entity: 'user' });
+    expect(JSON.stringify(logAudit.mock.calls.map((call) => call.slice(1)))).not.toContain('acme');
   });
 
   it('creates the account and its company in the background for a new email', async () => {
     getUserByEmail.mockResolvedValue(null);
-    createUserInDB.mockResolvedValue({ id: 'new-user' });
+    createUserInDb.mockResolvedValue({ id: 'new-user' });
     const res = mockRes();
 
     await registerUser({ body: { username: 'new@acme.test', companyName: 'Acme Corp', password: 'Password123' } }, res);
-    await waitUntilCalled(createUserInDB);
+    await waitUntilCalled(createUserInDb);
 
-    expect(createUserInDB).toHaveBeenCalledWith({
+    expect(createUserInDb).toHaveBeenCalledWith({
       username: 'new@acme.test',
       password: expect.stringMatching(/^\$2[aby]\$/),
       companyName: 'Acme Corp',
@@ -240,14 +249,14 @@ describe('registerUser', () => {
 
   it('still creates an unnamed company for clients that omit the company name', async () => {
     getUserByEmail.mockResolvedValue(null);
-    createUserInDB.mockResolvedValue({ id: 'new-user' });
+    createUserInDb.mockResolvedValue({ id: 'new-user' });
     const res = mockRes();
 
     await registerUser({ body: { username: 'new@acme.test', password: 'Password123' } }, res);
-    await waitUntilCalled(createUserInDB);
+    await waitUntilCalled(createUserInDb);
 
     expect(res.status).toHaveBeenCalledWith(201);
-    expect(createUserInDB).toHaveBeenCalledWith(expect.objectContaining({ username: 'new@acme.test', companyName: undefined }));
+    expect(createUserInDb).toHaveBeenCalledWith(expect.objectContaining({ username: 'new@acme.test', companyName: undefined }));
   });
 
   it('sends the existing-account notice to the stored address and creates nothing', async () => {
@@ -260,44 +269,7 @@ describe('registerUser', () => {
     expect(res.status).toHaveBeenCalledWith(201);
     expect(res.json).toHaveBeenCalledWith({});
     expect(sendExistingAccountNoticeToUser).toHaveBeenCalledWith('stored@acme.test');
-    expect(createUserInDB).not.toHaveBeenCalled();
-  });
-});
-
-const currentHash = await bcrypt.hash('OldPassword1', 4);
-
-describe('updateUserPassword', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    getUserPassword.mockResolvedValue({ password: currentHash });
-  });
-
-  it('answers 400 with a stable code when the current password does not match', async () => {
-    const res = mockRes();
-
-    await updateUserPassword({ user: { id: 'user-1' }, sessionID: 'sid-1', body: { currentPassword: 'Wrong1234', newPassword: 'NewPassword1' } }, res);
-
-    expect(res.status).toHaveBeenCalledWith(400);
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'AUTH_CURRENT_PASSWORD_INCORRECT' }));
-    expect(updateUserPasswordInDB).not.toHaveBeenCalled();
-  });
-
-  it('updates the hash and revokes tokens and other sessions in one model transaction, keeping the current session', async () => {
-    updateUserPasswordInDB.mockResolvedValue({ id: 'user-1' });
-    const res = mockRes();
-
-    await updateUserPassword({ user: { id: 'user-1' }, sessionID: 'sid-1', body: { currentPassword: 'OldPassword1', newPassword: 'NewPassword1' } }, res);
-
-    expect(updateUserPasswordInDB).toHaveBeenCalledWith('user-1', expect.stringMatching(/^\$2[aby]\$/), { keepSessionId: 'sid-1' });
-    expect(res.status).toHaveBeenCalledWith(200);
-    expect(res.json).toHaveBeenCalledWith({ userId: 'user-1' });
-  });
-
-  it('propagates transaction errors instead of swallowing them', async () => {
-    updateUserPasswordInDB.mockRejectedValue(new Error('db down'));
-    const res = mockRes();
-
-    await expect(updateUserPassword({ user: { id: 'user-1' }, sessionID: 'sid-1', body: { currentPassword: 'OldPassword1', newPassword: 'NewPassword1' } }, res)).rejects.toThrow('db down');
+    expect(createUserInDb).not.toHaveBeenCalled();
   });
 });
 
@@ -315,7 +287,9 @@ describe('checkSession', () => {
 describe('logoutUser', () => {
   it('clears the session cookie with the same attributes it was set with', () => {
     const req = {
-      logout: (callback) => callback(),
+      user: { id: 'user-1' },
+      //* Passport clears req.user before calling back
+      logout(callback) { delete this.user; callback(); },
       session: { destroy: (callback) => callback() },
     };
     const res = { ...mockRes(), clearCookie: jest.fn() };
@@ -325,6 +299,8 @@ describe('logoutUser', () => {
     expect(res.clearCookie).toHaveBeenCalledWith(SESSION_COOKIE_NAME, SESSION_COOKIE_OPTIONS);
     expect(SESSION_COOKIE_OPTIONS).toEqual(expect.objectContaining({ httpOnly: true }));
     expect(res.status).toHaveBeenCalledWith(200);
+    //* The id captured before req.logout cleared it
+    expect(logAudit).toHaveBeenCalledWith(req, 'auth.logout', { entity: 'user', entityId: 'user-1' });
   });
 });
 
@@ -356,6 +332,7 @@ describe('loginLocal', () => {
     expect(linkSessionToUser).toHaveBeenCalledWith('sid-1', 'user-1');
     expect(res.status).toHaveBeenCalledWith(200);
     expect(posthogUserSuccessLoggedIn).toHaveBeenCalled();
+    expect(logAudit).toHaveBeenCalledWith(req, 'auth.login.succeeded', { entity: 'user', entityId: 'user-1' });
   });
 
   it('fails the login and destroys the session when linking fails', async () => {

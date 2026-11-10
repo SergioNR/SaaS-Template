@@ -2,6 +2,11 @@ export const BCRYPT_SALT_ROUNDS = 12;
 
 export const SESSION_COOKIE_NAME = 'app.sid';
 
+//* One lifetime for both halves of a session: the cookie's maxAge (browser
+//* side) and the store row's expiry (database side), so neither outlives
+//* the other
+export const SESSION_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
 //* Shared by the session middleware (which adds `maxAge`) and every
 //* `res.clearCookie` call: browsers only drop a cookie when the clearing
 //* Set-Cookie carries the same `secure` / `sameSite` attributes it was set

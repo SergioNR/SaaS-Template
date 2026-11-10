@@ -80,8 +80,15 @@ export const sendErrorLogsToTelegram = async (errorMessage, error = {}, addition
     return;
   }
 
+  //* The request id (set by the global error handler) lets whoever reads the
+  //* alert jump straight to the matching access and error lines
+  const requestId = additionalInfo !== null && typeof additionalInfo === 'object'
+    ? additionalInfo.requestId
+    : undefined;
+
   const telegramMessage = `
   🚨 <b>New error logged at ${new Date().toISOString()}</b> 🚨
+  \n<b>Request Id</b>: ${escapeHtml(requestId ?? 'N/A')}
   \n<b>Error Name</b>: ${escapeHtml(error.name ?? 'N/A')}
   \n<b>Error Message</b>: ${escapeHtml(errorMessage)}
   \n<b>Error Details</b>: ${escapeHtml(error.message ?? 'N/A')}

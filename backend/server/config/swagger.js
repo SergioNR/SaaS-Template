@@ -6,7 +6,7 @@ const swaggerOptions = {
     openapi: '3.0.3',
     info: {
       title: 'Express.js Template API',
-      description: 'REST API for the Express.js server template. Interactive documentation is generated from `@openapi` JSDoc annotations declared next to each route definition.',
+      description: 'REST API for the Express.js server template. Interactive documentation is generated from `@openapi` JSDoc annotations declared next to each route definition.\n\nEvery response carries an `X-Request-Id` header: a server-generated UUID that also tags the access-log, audit and error lines of that request. Quote it when reporting a problem. Inbound `X-Request-Id` headers are ignored.',
       version: '1.0.0',
     },
     servers: [
@@ -29,6 +29,97 @@ const swaggerOptions = {
       { name: 'Webhooks', description: 'Inbound third-party webhooks' },
     ],
     components: {
+      //* Shared query parameters - the same rules utils/validators/listQueryFields.js
+      //* enforces and utils/cursorPagination.js applies
+      parameters: {
+        SearchQuery: {
+          in: 'query',
+          name: 'search',
+          required: false,
+          schema: {
+            type: 'string',
+            maxLength: 100,
+          },
+          description: 'Optional case-insensitive partial match (trimmed) - the searched field is named in the endpoint description',
+        },
+        LimitQuery: {
+          in: 'query',
+          name: 'limit',
+          required: false,
+          schema: {
+            type: 'integer',
+            minimum: 1,
+            maximum: 100,
+            default: 50,
+          },
+          description: 'Page size (default 50, capped at 100)',
+        },
+        CursorQuery: {
+          in: 'query',
+          name: 'cursor',
+          required: false,
+          schema: {
+            type: 'string',
+            format: 'uuid',
+          },
+          description: 'Row id to start after (the `nextCursor` of the previous page)',
+        },
+      },
+      //* Shared generic responses. OpenAPI 3.0 ignores siblings of a $ref, so
+      //* endpoint-specific descriptions (stable `code` enums, limiter-specific
+      //* 429s, per-entity 404s) stay inline in the route blocks
+      responses: {
+        Unauthorized: {
+          description: 'Not authenticated - no valid session cookie',
+          content: {
+            'application/json': {
+              schema: {
+                $ref: '#/components/schemas/ErrorMessage',
+              },
+            },
+          },
+        },
+        Forbidden: {
+          description: 'Missing permissions - the caller lacks the platform role, company membership or company permission the route requires',
+          content: {
+            'application/json': {
+              schema: {
+                $ref: '#/components/schemas/ErrorMessage',
+              },
+            },
+          },
+        },
+        NotFound: {
+          description: 'The resource does not exist',
+          content: {
+            'application/json': {
+              schema: {
+                $ref: '#/components/schemas/ErrorMessage',
+              },
+            },
+          },
+        },
+        ValidationError: {
+          description: 'Validation errors',
+          content: {
+            'application/json': {
+              schema: {
+                $ref: '#/components/schemas/ValidationError',
+              },
+            },
+          },
+        },
+        TooManyRequests: {
+          description: 'Rate limited - the route\'s limiter budget is exhausted (see the README rate-limit table)',
+          content: {
+            'application/json': {
+              schema: {
+                $ref: '#/components/schemas/ErrorMessage',
+              },
+            },
+          },
+        },
+      },
       securitySchemes: {
         sessionCookie: {
           type: 'apiKey',
@@ -256,7 +347,7 @@ const swaggerOptions = {
   apis: [
     './server/routers/indexRouter.js',
     './server/routers/docsRouter.js',
-    './server/API/v1/routes/*.js',
+    './server/API/v1/routes/**/*.js',
     './server/webhooks/webhooksRouter.js',
   ],
 };
