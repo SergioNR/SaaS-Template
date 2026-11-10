@@ -7,7 +7,7 @@ Owns the SPA frame of the template: the route tree and its four areas (public, a
 
 ### Requirement: The route tree separates public, auth, user and admin areas
 
-The web app SHALL serve four areas: the public site at `/` (see `public-site`); the auth area under `/auth` (login at `/auth` and `/auth/login`, plus registration, password recovery and restore, and invite acceptance); the user area as one guarded layout covering `/dashboard` and `/user/profile`, `/user/billing`, `/user/team`, with `/user` redirecting to `/dashboard` replacing history; and the admin area under `/admin` (overview, users, companies). Any other path SHALL render the not-found page.
+The web app SHALL serve four areas: the public site at `/` (see `public-site`); the auth area under `/auth` (login at `/auth` and `/auth/login`, registration, password recovery and restore, invite acceptance); the user area as one guarded layout covering `/dashboard` and `/user/profile`, `/user/billing`, `/user/team`, `/user` redirecting to `/dashboard` replacing history; and the admin area under `/admin` (overview, users, companies, account). Any other path SHALL render the not-found page.
 
 #### Scenario: Bare user path
 
@@ -18,6 +18,11 @@ The web app SHALL serve four areas: the public site at `/` (see `public-site`); 
 
 - **WHEN** a visitor opens `/auth` or `/auth/login`
 - **THEN** the login page renders inside the auth layout
+
+#### Scenario: Admin account page
+
+- **WHEN** a superadmin opens `/admin/account`
+- **THEN** the admin account page renders inside the admin layout
 
 #### Scenario: Unknown path
 
@@ -168,7 +173,7 @@ The not-found page SHALL render without the site navigation bar, with its own sk
 
 ### Requirement: Private areas share a navigation shell
 
-The user and admin areas SHALL render a header (brand link home, area title) and a sidebar listing the area's links in a labelled section, highlighting the current page, with logout and, when analytics is configured, the cookie-preferences control at the bottom. The user sidebar SHALL list dashboard, profile, plans/billing and team; the admin one overview, users and companies. On small screens the sidebar SHALL collapse behind a burger exposing its open state; choosing a link SHALL close it.
+The user and admin areas SHALL render a header (brand link, area title) and a sidebar with the area's links under a labelled section, highlighting the current page, and logout plus, when analytics is configured, the cookie-preferences control at the bottom. The user sidebar SHALL list dashboard, profile, plans/billing and team; the admin one overview, users, companies and account. On small screens the sidebar SHALL collapse behind a burger exposing its open state; choosing a link SHALL close it.
 
 #### Scenario: Mobile navigation
 
@@ -184,6 +189,11 @@ The user and admin areas SHALL render a header (brand link home, area title) and
 
 - **WHEN** a signed-in user opens the sidebar on a build with analytics configured
 - **THEN** a cookie-preferences control renders next to logout
+
+#### Scenario: Admin account link
+
+- **WHEN** a superadmin opens the admin sidebar
+- **THEN** it lists an account link leading to `/admin/account`
 
 ### Requirement: Logout ends the session or stays put on failure
 

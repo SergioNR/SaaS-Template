@@ -43,6 +43,7 @@ import {
   AdminUserDetail,
   AdminCompaniesList,
   AdminCompanyDetail,
+  AdminAccount,
 } from './routes/lazyPages.js';
 
 //* A stale tab after a deploy reloads once instead of failing on a missing chunk
@@ -74,6 +75,7 @@ createRoot(document.getElementById('root')).render(
                 <Route path="users/:userId" element={<AdminUserDetail />} />
                 <Route path="companies" element={<AdminCompaniesList />} />
                 <Route path="companies/:companyId" element={<AdminCompanyDetail />} />
+                <Route path="account" element={<AdminAccount />} />
               </Route>
 
               {/* One pathless layout for the whole user area so moving between

@@ -84,7 +84,9 @@ const AdminUsersList = () => {
       const status = err?.response?.status;
       const code = err?.response?.data?.code;
 
-      if (status === 409 && code === 'LAST_COMPANY_OWNER') {
+      if (status === 409 && code === 'LAST_SUPERADMIN') {
+        notifyError(t('admin.users.deleteLastSuperadmin'));
+      } else if (status === 409 && code === 'LAST_COMPANY_OWNER') {
         notifyError(t('admin.users.deleteLastOwner'));
       } else if (status === 409) {
         notifyError(t('admin.users.deleteConflict'));
@@ -104,7 +106,7 @@ const AdminUsersList = () => {
   ];
 
   const rows = users.map((user) => {
-    //* Admins delete their own account from their profile, not from this list
+    //* Admins delete their own account from /admin/account, not from this list
     const isSelf = user.id === sessionUser?.id;
 
     return (

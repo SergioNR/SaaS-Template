@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { IconLayoutDashboard, IconUsers, IconBuilding } from '@tabler/icons-react';
+import { IconLayoutDashboard, IconUsers, IconBuilding, IconUserCircle } from '@tabler/icons-react';
 import apiClient from '../../config/API/axiosConfig.js';
 import { identifyUser } from '../../analytics/posthog.js';
 import PageLoader from '../../components/PageLoader.jsx';
@@ -83,6 +83,7 @@ export const AdminDashboardWrapper = () => {
       { to: '/admin', label: t('admin.nav.overview'), icon: IconLayoutDashboard, end: true },
       { to: '/admin/users', label: t('admin.nav.users'), icon: IconUsers },
       { to: '/admin/companies', label: t('admin.nav.companies'), icon: IconBuilding },
+      { to: '/admin/account', label: t('admin.nav.account'), icon: IconUserCircle },
     ],
     [t],
   );
