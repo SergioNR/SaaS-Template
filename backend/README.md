@@ -120,6 +120,7 @@ See `.env.example` for the full list. Key variables:
 | `TELEGRAM_BOT_API_KEY` / `TELEGRAM_ERRORS_CHAT_ID` | Telegram alerts for `logError` only (info/warn stay in pino). Optional - sending is a no-op when the bot key is unset |
 | `FRONT_WEB_APP_ORIGIN_URL` | Front-end origin (CORS allowlist, CSRF Origin check + Stripe redirects). **Required** outside `DEPLOY_ENVIRONMENT=localhost` |
 | `PORT` | HTTP port (defaults to `3000`) |
+| `API_PUBLIC_ORIGIN_URL` | Optional. Server URL written into the OpenAPI spec (Swagger UI "Try it out" target), e.g. a tunnel in front of the local API. Defaults to `http://localhost:<PORT>` |
 
 ## Request requirements
 
@@ -129,12 +130,12 @@ See `.env.example` for the full list. Key variables:
 
 ## API overview
 
-All routes are versioned under `/api/v1`. Interactive documentation is served by Swagger UI at [`/api/docs`](http://localhost:3000/api/docs) (raw OpenAPI spec at `/api/docs.json`), generated at server start from the `@openapi` JSDoc annotations declared next to each route definition.
+All routes are versioned under `/api/v1`. Interactive documentation is served by Swagger UI at [`/api/docs`](http://localhost:3000/api/docs) (raw OpenAPI spec at `/api/docs.json`), generated at server start from the `@openapi` JSDoc annotations declared next to each route definition. The docs are only mounted when `DEPLOY_ENVIRONMENT=localhost` - deployed environments answer them with the JSON 404.
 
 | Area | Endpoints |
 | --- | --- |
 | Health | `GET /` (liveness), `GET /health` (readiness: `SELECT 1` against the database, 200 / 503, not rate limited) |
-| Docs | `GET /api/docs` (Swagger UI), `GET /api/docs.json` (OpenAPI spec) |
+| Docs | `GET /api/docs` (Swagger UI), `GET /api/docs.json` (OpenAPI spec) - `DEPLOY_ENVIRONMENT=localhost` only |
 | Auth | `POST /api/v1/auth/login`, `POST /api/v1/auth/register`, `POST /api/v1/auth/logout`, `GET /api/v1/auth/session`, password reset (`GET/POST/PATCH /api/v1/auth/password-reset`), `PATCH /api/v1/auth/update-user-password`, team invites (`GET /api/v1/auth/invite`, `POST /api/v1/auth/invite-accept`) |
 | User | `GET /api/v1/user`, `DELETE /api/v1/user` |
 | Billing | `GET/POST /api/v1/billing`, `POST /api/v1/billing/checkout-session`, `POST /api/v1/billing/customer-portal` |
