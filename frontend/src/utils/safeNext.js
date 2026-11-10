@@ -1,6 +1,11 @@
 export const LOGIN_PATH = '/auth/login';
 export const NEXT_PARAM = 'next';
 
+//* The auth pages are `/auth` itself and everything under `/auth/` - a plain
+//* prefix check would also match lookalikes such as `/authors`
+export const isAuthPath = (pathname) =>
+  typeof pathname === 'string' && (pathname === '/auth' || pathname.startsWith('/auth/'));
+
 //* Validates a post-login `next` target. Only same-origin, absolute paths
 //* are honoured: must start with a single '/' (not '//' or '/\' - both are
 //* protocol-relative URLs to another host in browsers), contain no control
@@ -24,7 +29,7 @@ export const safeNextPath = (raw, origin = window.location.origin) => {
     return null;
   }
 
-  if (url.origin !== origin || url.pathname.startsWith('/auth/') || url.pathname === '/auth') {
+  if (url.origin !== origin || isAuthPath(url.pathname)) {
     return null;
   }
 
