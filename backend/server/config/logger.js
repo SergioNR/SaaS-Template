@@ -1,12 +1,33 @@
 import { createRequire } from 'node:module';
 import pino from 'pino';
 
-const redactOptions = {
+//* Exported for the redaction spec
+export const redactOptions = {
   paths: [
     'context.email',
     'context.password',
+    'context.username',
+    'context.currentPassword',
+    'context.newPassword',
+    'context.confirmNewPassword',
     'context.inviteToken',
+    'context.passwordResetToken',
     'context.userData.inviteToken',
+    //* logError/logWarn extra details land under additionalInfo
+    'context.additionalInfo.email',
+    'context.additionalInfo.password',
+    'context.additionalInfo.username',
+    'context.additionalInfo.currentPassword',
+    'context.additionalInfo.newPassword',
+    'context.additionalInfo.confirmNewPassword',
+    'context.additionalInfo.inviteToken',
+    'context.additionalInfo.passwordResetToken',
+    //* Credentials carried by request objects (HTTP access logs, errors that
+    //* attach the request)
+    'req.headers.cookie',
+    'req.headers.authorization',
+    'context.req.headers.cookie',
+    'context.req.headers.authorization',
     //* Request bodies (e.g. body-parser errors carry the raw body, which can
     //* contain passwords) must never reach the logs
     'context.errorDetails.body',
