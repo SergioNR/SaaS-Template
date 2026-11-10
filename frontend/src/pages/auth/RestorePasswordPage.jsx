@@ -19,6 +19,7 @@ import classes from '../../components/auth/ForgotPassword.module.css';
 import { Link } from 'react-router';
 import PageLoader from '../../components/PageLoader.jsx';
 import Seo from '../../components/Seo.jsx';
+import { scrubQueryFromAddressBar } from '../../utils/scrubUrlToken.js';
 
 const RestorePasswordPage = () => {
   const { t } = useTranslation();
@@ -31,10 +32,14 @@ const RestorePasswordPage = () => {
   const [submitError, setSubmitError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // Get a specific query parameter
-  const passwordResetToken = searchParams.get('passwordResetToken');
+  //* Read once: the token is then scrubbed from the address bar
+  const [passwordResetToken] = useState(() => searchParams.get('passwordResetToken'));
 
   const [loading, setLoading] = useState(Boolean(passwordResetToken));
+
+  useEffect(() => {
+    scrubQueryFromAddressBar();
+  }, []);
 
   useEffect(() => {
     const checkPasswordResetTokenValidity = async () => {

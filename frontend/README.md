@@ -6,7 +6,7 @@ React single-page application built with Vite and Mantine. It ships with:
 - **Authentication** — login, registration and password reset/recovery flows
 - **User area** — dashboard, profile and Stripe billing (checkout + customer portal)
 - **Admin area** — user management dashboard
-- **Analytics** — optional PostHog product analytics, enabled when a key is configured
+- **Analytics** — optional PostHog product analytics, enabled when a key is configured. Opt-in: a consent banner asks first, and `posthog-js` is only downloaded (after first paint) once the visitor accepts. Query strings and fragments are stripped from every captured URL, and the reset/invite token pages remove their token from the address bar
 
 ## Getting started
 
@@ -34,13 +34,15 @@ Because the app is built with Vite, all `VITE_*` variables are baked in at build
 | --- | --- | --- |
 | `VITE_API_BASE_URL` | Build (required in Docker) | Base URL of the backend API |
 | `VITE_PUBLIC_POSTHOG_KEY` | Build (optional) | PostHog project key. Analytics stay disabled when unset |
+| `VITE_PUBLIC_POSTHOG_HOST` | Build (optional) | PostHog ingestion host. Defaults to `https://eu.i.posthog.com`; keep `NGINX_CSP_POSTHOG_ORIGINS` in sync |
 | `VITE_SITE_BASE_URL` | Build (required for `npm run build`) | Public URL of the deployed frontend (canonical / `og:url`). The dev server defaults to `http://localhost:5173` |
 | `NGINX_CSP_API_ORIGIN` | Container runtime (optional) | API origin allowed in the CSP `connect-src`. Defaults to the `VITE_API_BASE_URL` build arg; override with `docker run -e NGINX_CSP_API_ORIGIN=https://api.example.com` |
+| `NGINX_CSP_POSTHOG_ORIGINS` | Container runtime (required in the image, may be empty) | Space-separated PostHog origins allowed in the CSP `script-src` and `connect-src` — the ingestion and assets hosts of `VITE_PUBLIC_POSTHOG_HOST` (EU default: `https://eu.i.posthog.com https://eu-assets.i.posthog.com`) |
 | `NGINX_CSP_CONNECT_EXTRA` | Container runtime (optional) | Space-separated extra origins allowed in the CSP `connect-src` — e.g. the S3/MinIO origin that presigned file uploads/downloads go to. Defaults to empty |
 
 ## Docker & deployment
 
-The web app is packaged in a Docker image: an unprivileged nginx (`nginxinc/nginx-unprivileged`, runs as non-root) serving the built bundle on **port 8080**. The server config lives in `nginx/*.template` and is rendered with `envsubst` at container start (SPA history fallback, security headers incl. CSP, `no-cache` for `index.html`, immutable caching for `/assets/`, gzip).
+The web app is packaged in a Docker image: an unprivileged nginx (`nginxinc/nginx-unprivileged`, runs as non-root) serving the built bundle on **port 8080**. The server config lives in `nginx/*.template` and is rendered with `envsubst` at container start (SPA history fallback, security headers incl. CSP, `no-cache` for `index.html`, immutable caching for `/assets/`, gzip). `GET /healthz` returns `200 ok` for container healthchecks, and `/api/*` returns 404 so a mistaken relative API call never gets `index.html`.
 
 Published images are built and pushed by CI (`.github/workflows/`) on `latest`/`next`. To try the image locally:
 

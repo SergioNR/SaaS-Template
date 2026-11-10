@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router';
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import apiClient from '../../config/API/axiosConfig.js';
-import { usePostHog } from 'posthog-js/react';
+import { identifyUser } from '../../analytics/posthog.js';
 import {
   IconHomeFilled,
   IconUserCircle,
@@ -16,7 +16,6 @@ import { SubscriptionProvider } from '../../contexts/SubscriptionContext.jsx';
 
 const UserWrapper = () => {
   const { t } = useTranslation();
-  const posthog = usePostHog();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -79,11 +78,12 @@ const UserWrapper = () => {
     };
   }, [attempt]);
 
+  //* Only reaches PostHog once the visitor consented (analytics/posthog.js)
   useEffect(() => {
     if (userId) {
-      posthog?.identify(userId, {});
+      identifyUser(userId);
     }
-  }, [userId, posthog]);
+  }, [userId]);
 
   const links = [
     { to: '/dashboard', label: t('nav.user.dashboard'), icon: IconHomeFilled },

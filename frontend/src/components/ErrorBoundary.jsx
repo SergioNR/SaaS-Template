@@ -3,7 +3,7 @@ import { useLocation } from 'react-router';
 import PropTypes from 'prop-types';
 import { Button, Container, Stack, Text, Title } from '@mantine/core';
 import { t } from 'i18next';
-import posthog from 'posthog-js';
+import { captureException } from '../analytics/posthog.js';
 
 export class ErrorBoundary extends Component {
   constructor(props) {
@@ -15,11 +15,9 @@ export class ErrorBoundary extends Component {
     return { hasError: true };
   }
 
-  componentDidCatch(error) {
-    // posthog is only initialised when a key is configured (see main.jsx)
-    if (import.meta.env.VITE_PUBLIC_POSTHOG_KEY) {
-      posthog.captureException(error);
-    }
+  componentDidCatch(error, info) {
+    //* No-op unless analytics is configured and the visitor consented
+    captureException(error, { componentStack: info?.componentStack });
   }
 
   componentDidUpdate(prevProps) {

@@ -15,9 +15,22 @@ server {
   gzip_comp_level 6;
   gzip_min_length 1024;
   gzip_proxied any;
-  gzip_types text/plain text/css application/javascript application/json image/svg+xml application/xml;
+  gzip_types text/plain text/css text/javascript application/javascript application/json image/svg+xml application/xml;
 
   include /etc/nginx/conf.d/security-headers.inc;
+
+  # Container healthcheck - answered by nginx itself, never the SPA fallback
+  location = /healthz {
+    access_log off;
+    default_type text/plain;
+    return 200 "ok\n";
+  }
+
+  # The API lives on its own origin (VITE_API_BASE_URL). A mistaken relative
+  # /api/ call must fail loudly instead of receiving index.html with a 200
+  location /api/ {
+    return 404;
+  }
 
   # SPA history fallback - unknown paths render index.html
   location / {

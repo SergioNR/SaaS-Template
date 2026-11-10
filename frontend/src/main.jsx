@@ -32,23 +32,16 @@ import UserBilling from './pages/user/UserBilling.jsx';
 import { PricingPage } from './pages/index/PricingPage.jsx';
 import { RoutedErrorBoundary } from './components/ErrorBoundary.jsx';
 
-import posthog from 'posthog-js';
-import { PostHogProvider } from 'posthog-js/react';
+import { ConsentBanner } from './components/ConsentBanner.jsx';
+import { scheduleAnalytics } from './analytics/posthog.js';
 
-const posthogKey = import.meta.env.VITE_PUBLIC_POSTHOG_KEY;
-
-if (posthogKey) {
-  posthog.init(posthogKey, {
-    api_host: 'https://eu.i.posthog.com',
-    defaults: '2025-05-24',
-    debug: false,
-  });
-}
+//* posthog-js is dynamic-imported after first paint, and only for visitors
+//* who accepted analytics - it never ships in the entry chunk
+scheduleAnalytics();
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <MantineProvider>
-      <PostHogProvider client={posthog}>
         <Notifications />
         <BrowserRouter>
           <RoutedErrorBoundary>
@@ -96,8 +89,8 @@ createRoot(document.getElementById('root')).render(
               <Route path="/*" element={<PageNotFound />} />
             </Routes>
           </RoutedErrorBoundary>
+          <ConsentBanner />
         </BrowserRouter>
-      </PostHogProvider>
     </MantineProvider>
   </StrictMode>
 );

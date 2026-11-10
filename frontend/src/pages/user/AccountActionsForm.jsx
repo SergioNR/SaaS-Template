@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { usePostHog } from 'posthog-js/react';
+import { resetAnalyticsUser } from '../../analytics/posthog.js';
 import apiClient from '../../config/API/axiosConfig.js';
 
 import {
@@ -16,12 +16,9 @@ import {
 import { notifyError, notifySuccess } from '../../utils/notifications.js';
 import { logApiError } from '../../utils/logApiError.js';
 
-const analyticsEnabled = Boolean(import.meta.env.VITE_PUBLIC_POSTHOG_KEY);
-
 export const AccountActionsForm = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const posthog = usePostHog();
   const [confirmOpened, setConfirmOpened] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -31,9 +28,7 @@ export const AccountActionsForm = () => {
     try {
       await apiClient.delete('/api/v1/user');
 
-      if (analyticsEnabled) {
-        posthog?.reset();
-      }
+      resetAnalyticsUser();
 
       notifySuccess(t('user.accountActions.deletedToast'));
       navigate('/', { replace: true });

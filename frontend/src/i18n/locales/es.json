@@ -649,5 +649,13 @@
       "generic": "Ha ocurrido un error. Inténtalo de nuevo.",
       "retry": "No se pudo completar la acción por un conflicto. Inténtalo de nuevo."
     }
+  },
+  "consent": {
+    "ariaLabel": "Preferencias de analítica",
+    "body": "Usamos analítica de producto para entender cómo se usa la aplicación y mejorarla. Solo se activa si la aceptas.",
+    "learnMore": "Más información",
+    "accept": "Aceptar",
+    "decline": "Rechazar",
+    "manage": "Preferencias de cookies"
   }
 }

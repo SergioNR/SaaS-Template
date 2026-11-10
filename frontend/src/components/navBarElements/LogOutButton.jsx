@@ -3,17 +3,14 @@ import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { UnstyledButton } from '@mantine/core';
 import apiClient from '../../config/API/axiosConfig.js';
-import { usePostHog } from 'posthog-js/react';
+import { resetAnalyticsUser } from '../../analytics/posthog.js';
 import { IconLogout } from '@tabler/icons-react';
 import classes from '../partials/AreaShell.module.css';
 import { notifyError } from '../../utils/notifications.js';
 import { logApiError } from '../../utils/logApiError.js';
 
-const analyticsEnabled = Boolean(import.meta.env.VITE_PUBLIC_POSTHOG_KEY);
-
 const LogOutButton = () => {
   const { t } = useTranslation();
-  const posthog = usePostHog();
   const navigate = useNavigate();
   //* Blocks double submits while the logout POST is in flight
   const [loggingOut, setLoggingOut] = useState(false);
@@ -35,10 +32,8 @@ const LogOutButton = () => {
       return;
     }
 
-    // Reset PostHog to clear user session and prevent tracking continuity
-    if (analyticsEnabled) {
-      posthog?.reset();
-    }
+    // Clear the analytics identity so the next user on this browser is not linked
+    resetAnalyticsUser();
 
     navigate('/');
   };
