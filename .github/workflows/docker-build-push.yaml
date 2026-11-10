@@ -3,11 +3,19 @@ name: Build Docker images and push to Docker Hub
 on:
   push:
     branches: [ "latest", "next" ]
+  # PR gate: PRs into the protected branches must pass the same test job
+  # before merging. The image jobs are guarded to push events, so PR runs
+  # (including PRs from forks) never need Docker Hub credentials or the
+  # branch environments
+  pull_request:
+    branches: [ "latest", "next" ]
 
 # A newer push to the same branch supersedes an in-flight run - there is no
-# point finishing (and pushing) an image for a commit that is no longer the tip
+# point finishing (and pushing) an image for a commit that is no longer the
+# tip. The event name keeps PR runs in their own group, so a PR update never
+# cancels a branch push run (and vice versa)
 concurrency:
-  group: docker-${{ github.ref }}
+  group: docker-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 # Least privilege - the jobs only need to read the repository
@@ -36,6 +44,13 @@ jobs:
         working-directory: backend
         run: npm ci
 
+      # The generated client is gitignored and eslint resolves its import
+      # statically - generate it like the Dockerfile does (no database needed:
+      # prisma.config.ts falls back to a placeholder direct URL)
+      - name: Backend - generate Prisma client
+        working-directory: backend
+        run: npx prisma generate
+
       - name: Backend - test
         working-directory: backend
         run: npm test
@@ -52,6 +67,11 @@ jobs:
         working-directory: frontend
         run: npx eslint .
 
+      # --if-present: a no-op until the frontend gains a `test` script
+      - name: Frontend - test
+        working-directory: frontend
+        run: npm run test --if-present
+
       # vite.config.js refuses to build without VITE_SITE_BASE_URL; this build
       # only proves the bundle compiles, so placeholder origins are enough
       - name: Frontend - build
@@ -64,6 +84,8 @@ jobs:
   backend:
     name: Backend image
     needs: test
+    # Images are built and pushed only on branch pushes, never on PRs
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     # Secrets/vars may be defined per GitHub environment (`latest` / `next`)
     # or at repository level - environment values take precedence
@@ -107,6 +129,7 @@ jobs:
   frontend:
     name: Frontend image
     needs: test
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     environment: ${{ github.ref_name }}
     steps:
