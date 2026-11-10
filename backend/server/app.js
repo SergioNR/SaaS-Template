@@ -7,8 +7,10 @@ import { startCronJobs, stopCronJobs } from './cron/jobsContainer.js';
 import { prisma } from './config/prismaClient.js';
 import { client as posthogClient } from './config/posthog-node.js';
 import { logger } from './config/logger.js';
-import { logError, logInfo, logWarn } from './config/loggerFunctions.js';
-import { markShuttingDown, waitForBackgroundTasks } from './utils/processLifecycle.js';
+import {
+  logError, logInfo, logWarn, serializeError,
+} from './config/loggerFunctions.js';
+import { createCrashHandler, createGracefulShutdown } from './utils/processLifecycle.js';
 
 //* Composition root: the app itself is built in createApp.js; this file only
 //* binds it to a port, schedules the cron jobs and owns the process lifecycle
@@ -40,11 +42,14 @@ const flushLogs = () => {
   }
 };
 
-const crashProcess = (message, error) => {
-  logError(message, error);
-  flushLogs();
-  process.exit(1);
-};
+//* Awaits the crash alert (3 s cap) before flushing and exiting 1; a second
+//* crash event while waiting is logged only (see createCrashHandler)
+const crashProcess = createCrashHandler({
+  logError,
+  logLine: (message, error) => logger.error({ message: message, context: { errorDetails: serializeError(error) } }),
+  flushLogs,
+  exit: (code) => process.exit(code),
+});
 
 //* Node's default for both events is to crash with a bare stderr print - keep
 //* the crash semantics (the process state is unknown afterwards) but log the
@@ -60,10 +65,10 @@ process.on('uncaughtException', (error) => {
 //* Hard ceiling for the whole shutdown - container runtimes SIGKILL shortly
 //* after SIGTERM (Docker: 10 s by default)
 const SHUTDOWN_TIMEOUT_MS = 10000;
-//* Detached work (emails, registration, analytics) gets most of that budget;
-//* what is still pending afterwards is logged and abandoned
-const BACKGROUND_TASKS_DRAIN_TIMEOUT_MS = 8000;
-let isShuttingDown = false;
+//* In-flight requests, running cron ticks and detached work (emails,
+//* registration, analytics) share most of that budget; what is still pending
+//* afterwards is logged and abandoned
+const DRAIN_TIMEOUT_MS = 8000;
 
 const closeResources = async () => {
   const results = await Promise.allSettled([
@@ -80,41 +85,18 @@ const closeServer = () => new Promise((resolve) => {
   server.close(() => resolve());
 });
 
-const gracefulShutdown = async (signal) => {
-  if (isShuttingDown) return;
-  isShuttingDown = true;
-
-  //* /health answers 503 from here on so traffic drains away from this replica
-  markShuttingDown();
-
-  logInfo(`Received ${signal}, closing server`);
-
-  stopCronJobs();
-
-  //* Force shutdown after timeout - unref'd so it never keeps the process alive
-  setTimeout(() => {
-    logError('Could not close connections in time, forcefully shutting down', new Error('Shutdown timeout'));
-    flushLogs();
-    process.exit(1);
-  }, SHUTDOWN_TIMEOUT_MS).unref();
-
-  //* In-flight requests and detached background work drain in parallel;
-  //* resources (database, PostHog) close only once both are done, because the
-  //* background tasks still use them
-  const [, backgroundDrained] = await Promise.all([
-    closeServer(),
-    waitForBackgroundTasks(BACKGROUND_TASKS_DRAIN_TIMEOUT_MS),
-  ]);
-
-  if (!backgroundDrained) {
-    logWarn('Background tasks still pending at shutdown - abandoning them');
-  }
-
-  await closeResources();
-  logInfo('Server closed gracefully');
-  flushLogs();
-  process.exit(0);
-};
+const gracefulShutdown = createGracefulShutdown({
+  stopCronJobs,
+  closeServer,
+  closeResources,
+  flushLogs,
+  exit: (code) => process.exit(code),
+  logInfo,
+  logWarn,
+  logError,
+  drainTimeoutMs: DRAIN_TIMEOUT_MS,
+  shutdownTimeoutMs: SHUTDOWN_TIMEOUT_MS,
+});
 
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));

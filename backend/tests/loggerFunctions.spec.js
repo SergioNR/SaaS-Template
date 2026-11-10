@@ -147,6 +147,32 @@ describe('Telegram alert dedupe', () => {
   });
 });
 
+describe('logError return value', () => {
+  beforeEach(() => {
+    resetAlertDedupe();
+    jest.clearAllMocks();
+  });
+
+  it('returns the alert delivery promise, resolved once the send settled', async () => {
+    await expect(logError('crash', new Error('boom'))).resolves.toBeUndefined();
+    expect(sendTelegramMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('resolves even when the integration rejects', async () => {
+    sendTelegramMessage.mockRejectedValueOnce(new Error('telegram down'));
+
+    await expect(logError('crash', new Error('boom'))).resolves.toBeUndefined();
+  });
+
+  it('never throws and still returns a promise when the logger throws', async () => {
+    loggerMock.error.mockImplementationOnce(() => { throw new Error('pino broke'); });
+
+    const result = logError('crash', new Error('boom'));
+
+    await expect(result).resolves.toBeUndefined();
+  });
+});
+
 describe('Telegram alert error code', () => {
   beforeEach(() => {
     resetAlertDedupe();

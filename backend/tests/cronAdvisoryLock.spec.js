@@ -18,6 +18,7 @@ jest.unstable_mockModule('../server/config/loggerFunctions.js', () => ({
 
 const { runWithAdvisoryLockInDb } = await import('../server/models/advisoryLockModel.js');
 const { runExclusiveCronTick, resetCronTransientFailureCounts } = await import('../server/cron/exclusiveCronTick.js');
+const { markShuttingDown, resetProcessLifecycle } = await import('../server/utils/processLifecycle.js');
 const { ADVISORY_LOCK_KEYS } = await import('../server/config/advisoryLockKeys.js');
 const { prisma } = await import('../server/config/prismaClient.js');
 const { logError, logInfo, logWarn } = await import('../server/config/loggerFunctions.js');
@@ -183,6 +184,27 @@ describe('runExclusiveCronTick - transient database errors', () => {
 
     expect(logError).toHaveBeenCalledTimes(2);
     expect(logError).toHaveBeenLastCalledWith(expect.any(String), expect.any(Error), expect.objectContaining({ consecutiveFailures: 3 }));
+  });
+});
+
+describe('runExclusiveCronTick - after shutdown started', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    resetCronTransientFailureCounts();
+    tx.$queryRaw.mockResolvedValue([{ acquired: true }]);
+  });
+
+  afterEach(() => {
+    resetProcessLifecycle();
+  });
+
+  it('downgrades a tick error to a warning once the shutdown started', async () => {
+    markShuttingDown();
+
+    await runExclusiveCronTick('sweep', 1, jest.fn().mockRejectedValue(new Error('Client was disconnected')));
+
+    expect(logError).not.toHaveBeenCalled();
+    expect(logWarn).toHaveBeenCalledWith(expect.stringContaining('shutdown'), expect.any(Error), { jobName: 'sweep' });
   });
 });
 

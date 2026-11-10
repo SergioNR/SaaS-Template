@@ -14,13 +14,19 @@ export const startCronJobs = () => {
   }
 };
 
-//* Called on graceful shutdown so no tick starts while resources are closing
+//* Called on graceful shutdown so no tick starts while resources are closing.
+//* Every job runs with waitForCompletion, so stop() clears its timer at once
+//* and returns a promise that settles when the running tick (if any)
+//* finished - the shutdown awaits these before closing the database
 export const stopCronJobs = () => {
   try {
-    deletePasswordResetTokensScheduler.stop();
-    deleteTeamInvitesScheduler.stop();
-    deletePendingFileUploadsScheduler.stop();
+    return Promise.allSettled([
+      deletePasswordResetTokensScheduler.stop(),
+      deleteTeamInvitesScheduler.stop(),
+      deletePendingFileUploadsScheduler.stop(),
+    ]);
   } catch (error) {
     logError('error on stopCronJobs', error);
+    return Promise.resolve([]);
   }
 };

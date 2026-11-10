@@ -1,6 +1,7 @@
 import { logError, logInfo, logWarn } from '../config/loggerFunctions.js';
 import { runWithAdvisoryLockInDb } from '../models/advisoryLockModel.js';
 import { isTransientDatabaseError } from '../utils/prismaErrors.js';
+import { isShuttingDown } from '../utils/processLifecycle.js';
 
 //* A database restart fails every tick of every job (the lock itself cannot
 //* be taken) and heals by the next one - only an outage that survives 3
@@ -33,6 +34,13 @@ export const runExclusiveCronTick = async (jobName, lockKey, task) => {
       logInfo(`Cron job ${jobName} skipped - another replica holds its lock`);
     }
   } catch (error) {
+    //* A tick abandoned by the shutdown drain fails once the database closes
+    //* under it - expected during a deploy, so it must not page anyone
+    if (isShuttingDown()) {
+      logWarn(`Cron job ${jobName} failed during shutdown`, error, { jobName: jobName });
+      return;
+    }
+
     if (!isTransientDatabaseError(error)) {
       logError(`Error in cron job ${jobName}:`, error);
       return;
