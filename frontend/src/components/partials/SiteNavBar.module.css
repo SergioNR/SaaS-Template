@@ -1,41 +1,52 @@
+/* Public site header. One breakpoint (Mantine sm, 48em): below it
+   the inline links/buttons hide and the burger toggles .mobileNav; at and
+   above it the mobile nav and burger never render, whatever the toggle
+   state - so widening the window cannot show both navs at once */
+
 .header {
+  position: relative;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: var(--mantine-spacing-md);
-  background-color: var(--mantine-color-default);
-  border-bottom: 1px solid var(--mantine-color-default-border);
-  min-height: 60px;
-  flex-wrap: wrap;
   gap: var(--mantine-spacing-sm);
+  min-height: 60px;
+  padding: var(--mantine-spacing-sm) var(--mantine-spacing-md);
+  background-color: var(--mantine-color-body);
+  border-bottom: 1px solid var(--mantine-color-default-border);
 }
 
-.logoContainer {
-  display: flex;
-  align-items: center;
+.brand {
   flex-shrink: 0;
+  color: var(--mantine-color-text);
 }
 
 .navLinks {
   display: flex;
-  gap: var(--mantine-spacing-md);
+  gap: var(--mantine-spacing-xs);
   align-items: center;
   flex-wrap: wrap;
 }
 
 .link {
-  color: black !important;
-  text-decoration: none;
+  color: var(--mantine-color-text);
   padding: var(--mantine-spacing-xs) var(--mantine-spacing-sm);
   border-radius: var(--mantine-radius-sm);
-  transition: background-color 0.2s;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
   font-weight: 500;
   white-space: nowrap;
-}
 
-.link:hover {
-  background-color: var(--mantine-color-default-hover);
-  color: blue !important;
+  @mixin hover {
+    background-color: var(--mantine-color-default-hover);
+    color: var(--mantine-primary-color-filled);
+  }
+
+  /* NavLink marks the current page with aria-current="page" */
+  &[aria-current='page'] {
+    background-color: var(--mantine-primary-color-light);
+    color: var(--mantine-primary-color-light-color);
+  }
 }
 
 .buttonContainer {
@@ -45,119 +56,42 @@
   flex-shrink: 0;
 }
 
+/* Burger visibility is handled by Mantine's hiddenFrom="sm" */
 .mobileMenuButton {
-  display: none;
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: var(--mantine-spacing-xs);
-  border-radius: var(--mantine-radius-sm);
-  transition: background-color 0.2s;
-}
-
-.mobileMenuButton:hover {
-  background-color: var(--mantine-color-default-hover);
+  margin-left: auto;
 }
 
 .mobileNav {
   display: none;
 }
 
-.mobileNavOpen {
-  display: flex !important;
-  flex-direction: column;
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  background-color: var(--mantine-color-default);
-  border-bottom: 1px solid var(--mantine-color-default-border);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  z-index: 1000;
-  width: 100vw;
-  padding: var(--mantine-spacing-md) 0;
-  gap: var(--mantine-spacing-sm);
-  margin: 0;
-  box-sizing: border-box;
-  left: 50%;
-  transform: translateX(-50%);
-}
-
-.mobileNavOpen .link {
-  width: 100%;
-  text-align: center;
-  padding: var(--mantine-spacing-sm);
-  color: black !important;
-  text-decoration: none;
-  border-radius: var(--mantine-radius-sm);
-  transition: background-color 0.2s;
-  font-weight: 500;
-  display: block;
-  margin: 0;
-}
-
-.mobileNavOpen .link:hover {
-  background-color: var(--mantine-color-default-hover);
-  color: blue !important;
-}
-
-.mobileNavOpen button {
-  width: 100% !important;
-  justify-content: center;
-  margin: 0 !important;
-}
-
-/* Tablet and smaller screens */
-@media (max-width: 992px) {
-  .navLinks {
-    gap: var(--mantine-spacing-sm);
-  }
-  
-  .link {
-    padding: var(--mantine-spacing-xs);
-    font-size: 0.9rem;
-  }
-}
-
-/* Mobile screens */
-@media (max-width: 768px) {
-  .header {
-    position: relative;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: nowrap;
-    padding: var(--mantine-spacing-sm) var(--mantine-spacing-md);
-  }
-
-  .navLinks {
-    display: none;
-  }
-
+/* 47.99em: no overlap with the (min-width: 48em) query in SiteNavBar.jsx */
+@media (max-width: 47.99em) {
+  .navLinks,
   .buttonContainer {
     display: none;
   }
 
-  .mobileMenuButton {
-    display: block !important;
-    margin-left: auto;
-    color: black !important;
-    background: none !important;
-    border: none !important;
-    cursor: pointer;
-    padding: var(--mantine-spacing-xs) !important;
-    border-radius: var(--mantine-radius-sm);
-    transition: background-color 0.2s;
-  }
+  .mobileNavOpen {
+    display: flex;
+    flex-direction: column;
+    gap: var(--mantine-spacing-sm);
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 200;
+    padding: var(--mantine-spacing-md);
+    background-color: var(--mantine-color-body);
+    border-bottom: 1px solid var(--mantine-color-default-border);
+    box-shadow: var(--mantine-shadow-sm);
 
-  .mobileMenuButton:hover {
-    background-color: var(--mantine-color-default-hover) !important;
-  }
-
-  .mobileNav .link {
-    width: 100%;
-    text-align: center;
-    padding: var(--mantine-spacing-sm);
+    .link {
+      display: block;
+      width: 100%;
+      text-align: center;
+      padding: var(--mantine-spacing-sm);
+    }
   }
 
   .mobileButtonContainer {
@@ -165,16 +99,10 @@
     flex-direction: column;
     gap: var(--mantine-spacing-sm);
     width: 100%;
-    padding: var(--mantine-spacing-md);
     padding-top: var(--mantine-spacing-sm);
-    box-sizing: border-box;
-    margin: 0;
-  }
-}
 
-/* Very small screens */
-@media (max-width: 480px) {
-  .header {
-    padding: var(--mantine-spacing-xs) var(--mantine-spacing-sm);
+    & > * {
+      width: 100%;
+    }
   }
 }

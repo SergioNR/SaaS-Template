@@ -76,7 +76,7 @@ const AdminUserDetail = () => {
   if (loading) {
     return (
       <Stack gap="lg">
-        <Seo title={t('seo.pages.admin')} />
+        <Seo title={t('seo.pages.adminUserDetail')} />
         <Skeleton height={32} width="40%" />
         <SimpleGrid cols={{ base: 1, md: 2 }}>
           <Skeleton height={220} radius="md" />
@@ -89,7 +89,7 @@ const AdminUserDetail = () => {
   if (notFound || error) {
     return (
       <Stack gap="lg">
-        <Seo title={t('seo.pages.admin')} />
+        <Seo title={t('seo.pages.adminUserDetail')} />
         <Anchor component={Link} to="/admin/users" size="sm">
           <Group gap={4}>
             <IconArrowLeft size={14} stroke={1.5} />
@@ -107,7 +107,7 @@ const AdminUserDetail = () => {
 
   return (
     <Stack gap="lg">
-      <Seo title={t('seo.pages.admin')} />
+      <Seo title={t('seo.pages.adminUserDetail')} />
 
       <Anchor component={Link} to="/admin/users" size="sm">
         <Group gap={4}>

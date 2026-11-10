@@ -40,6 +40,10 @@ Because the app is built with Vite, all `VITE_*` variables are baked in at build
 | `NGINX_CSP_POSTHOG_ORIGINS` | Container runtime (required in the image, may be empty) | Space-separated PostHog origins allowed in the CSP `script-src` and `connect-src` — the ingestion and assets hosts of `VITE_PUBLIC_POSTHOG_HOST` (EU default: `https://eu.i.posthog.com https://eu-assets.i.posthog.com`) |
 | `NGINX_CSP_CONNECT_EXTRA` | Container runtime (optional) | Space-separated extra origins allowed in the CSP `connect-src` — e.g. the S3/MinIO origin that presigned file uploads/downloads go to. Defaults to empty |
 
+## SEO files
+
+`npm run build` emits `robots.txt` and `sitemap.xml` into `dist/` using `VITE_SITE_BASE_URL` as the origin; the indexable routes live in `src/config/publicRoutes.js`. `public/og-image.png` is a neutral 1200×630 placeholder used for `og:image`/`twitter:image` — replace it with your own artwork.
+
 ## Docker & deployment
 
 The web app is packaged in a Docker image: an unprivileged nginx (`nginxinc/nginx-unprivileged`, runs as non-root) serving the built bundle on **port 8080**. The server config lives in `nginx/*.template` and is rendered with `envsubst` at container start (SPA history fallback, security headers incl. CSP, `no-cache` for `index.html`, immutable caching for `/assets/`, gzip). `GET /healthz` returns `200 ok` for container healthchecks, and `/api/*` returns 404 so a mistaken relative API call never gets `index.html`.

@@ -1,21 +1,29 @@
 import { useTranslation } from 'react-i18next';
 import { useState } from 'react';
+import { useNavigate, useOutletContext } from 'react-router';
 import apiClient from '../../config/API/axiosConfig.js';
-import { Card, Button, TextInput, Text, Alert, Box } from '@mantine/core';
+import { Card, Button, PasswordInput, Text, Alert, Box } from '@mantine/core';
 import { IconAlertCircle } from '@tabler/icons-react';
 import { notifySuccess } from '../../utils/notifications.js';
-import { useNavigate } from 'react-router';
 import { currentPath, loginRedirectPath } from '../../utils/safeNext.js';
 import { invalidateSessionCaches } from '../../utils/sessionCaches.js';
 
 const PasswordUpdateForm = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  //* UserWrapper's outlet context - the email fills the hidden username
+  //* field so password managers update the right saved credential
+  const email = useOutletContext()?.user?.email ?? '';
   const [errorMessage, setErrorMessage] = useState(null);
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    if (loading) {
+      return;
+    }
+
     setLoading(true);
     setErrorMessage(null);
 
@@ -60,7 +68,9 @@ const PasswordUpdateForm = () => {
 
   return (
     <Card shadow="sm" padding="lg" radius="md" withBorder mt="lg">
-      <Text size="lg" fw={600} mb="md">{t('auth.passwordUpdate.title')}</Text>
+      <Text size="lg" fw={600} mb="md">
+        {t('auth.passwordUpdate.title')}
+      </Text>
 
       {errorMessage && (
         <Box mb="md">
@@ -71,41 +81,28 @@ const PasswordUpdateForm = () => {
       )}
 
       <form onSubmit={handleSubmit}>
-        <TextInput
-          label={t('auth.passwordUpdate.username')}
-          name="username"
-          type="text"
-          autoComplete='username'
-          placeholder={t('auth.passwordUpdate.usernamePlaceholder')}
-          mb="md"
-          style={{ display: 'none' }}
-        />
+        {/* Never shown or read by the submit handler - only for password managers */}
+        <input type="email" name="username" autoComplete="username" value={email} readOnly hidden />
 
-        <TextInput
+        <PasswordInput
           label={t('auth.passwordUpdate.currentPassword')}
           name="currentPassword"
-          type="password"
-          autoComplete='current-password'
+          autoComplete="current-password"
           placeholder={t('auth.passwordUpdate.currentPasswordPlaceholder')}
           required
           mb="md"
         />
 
-        <TextInput
+        <PasswordInput
           label={t('auth.passwordUpdate.newPassword')}
           name="newPassword"
-          type="password"
-          autoComplete='new-password'
+          autoComplete="new-password"
           placeholder={t('auth.passwordUpdate.newPasswordPlaceholder')}
           required
           mb="md"
         />
 
-        <Button
-          type="submit"
-          loading={loading}
-          fullWidth
-        >
+        <Button type="submit" loading={loading} fullWidth>
           {t('auth.passwordUpdate.submit')}
         </Button>
       </form>

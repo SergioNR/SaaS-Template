@@ -5,6 +5,9 @@ import { AppShell, Anchor, Box, Burger, Group, Image, Text } from '@mantine/core
 import { useDisclosure } from '@mantine/hooks';
 import classes from './AreaShell.module.css';
 import LogOutButton from '../navBarElements/LogOutButton';
+import { MAIN_CONTENT_ID, SkipLink } from '../SkipLink.jsx';
+
+const AREA_NAV_ID = 'area-navbar';
 
 //* Shared AppShell for the private areas (user, admin): header with brand and
 //* burger, sidebar with the area's links and logout as the only exit
@@ -39,6 +42,7 @@ export const AreaShell = ({ homeTo, title, links, sections, outletContext }) => 
       }}
       padding="md"
     >
+      <SkipLink />
       <AppShell.Header>
         <Group h="100%" px="md" gap="sm" wrap="nowrap">
           <Burger
@@ -47,6 +51,8 @@ export const AreaShell = ({ homeTo, title, links, sections, outletContext }) => 
             hiddenFrom="sm"
             size="sm"
             aria-label={t('nav.menu')}
+            aria-controls={AREA_NAV_ID}
+            aria-expanded={opened}
           />
           <Anchor component={Link} to={homeTo} underline="never" inherit>
             <Group gap="xs" wrap="nowrap">
@@ -58,7 +64,7 @@ export const AreaShell = ({ homeTo, title, links, sections, outletContext }) => 
       </AppShell.Header>
 
       {/* AppShell.Navbar provides the <nav> landmark, width, padding and border */}
-      <AppShell.Navbar p="md">
+      <AppShell.Navbar p="md" id={AREA_NAV_ID} aria-label={t('nav.navigation')}>
         <AppShell.Section grow>
           {navSections.map((section) => (
             <Box key={section.label} pb="lg">
@@ -75,7 +81,8 @@ export const AreaShell = ({ homeTo, title, links, sections, outletContext }) => 
         </AppShell.Section>
       </AppShell.Navbar>
 
-      <AppShell.Main>
+      {/* tabIndex -1: the skip link and RouteFocus can focus it programmatically */}
+      <AppShell.Main id={MAIN_CONTENT_ID} tabIndex={-1}>
         {/* Area pages read wrapper data (e.g. the signed-in admin) through useOutletContext() */}
         <Outlet context={outletContext} />
       </AppShell.Main>

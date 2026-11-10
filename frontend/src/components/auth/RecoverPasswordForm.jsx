@@ -86,6 +86,8 @@ const ForgotPasswordForm = () => {
         <form onSubmit={recoverPasswordRequest} method="post">
           <TextInput
             name="email"
+            type="email"
+            autoComplete="email"
             label={t('auth.fields.email')}
             placeholder={t('auth.fields.emailPlaceholder')}
             required

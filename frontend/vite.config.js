@@ -1,7 +1,22 @@
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
+import { buildRobotsTxt, buildSitemapXml } from './src/config/publicRoutes.js';
 
 const DEV_SITE_BASE_URL = 'http://localhost:5173';
+
+//* robots.txt and sitemap.xml need the deployed origin, which is only known
+//* at build time (VITE_SITE_BASE_URL) - emitted into dist/ instead of
+//* living in public/ with a placeholder host
+const seoFilesPlugin = (siteBaseUrl) => ({
+  name: 'seo-files',
+  apply: 'build',
+  generateBundle() {
+    const base = siteBaseUrl.replace(/\/+$/, '');
+
+    this.emitFile({ type: 'asset', fileName: 'robots.txt', source: buildRobotsTxt(base) });
+    this.emitFile({ type: 'asset', fileName: 'sitemap.xml', source: buildSitemapXml(base) });
+  },
+});
 
 // https://vite.dev/config/
 export default defineConfig(({ command, mode }) => {
@@ -25,6 +40,6 @@ export default defineConfig(({ command, mode }) => {
   }
 
   return {
-    plugins: [react()],
+    plugins: [react(), seoFilesPlugin(env.VITE_SITE_BASE_URL || DEV_SITE_BASE_URL)],
   };
 });

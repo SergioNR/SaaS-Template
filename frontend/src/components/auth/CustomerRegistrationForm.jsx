@@ -102,12 +102,15 @@ const CustomerRegistrationForm = () => {
           <form onSubmit={handleRegister}>
             <TextInput
               name="username"
+              type="email"
+              autoComplete="username"
               label={t('auth.fields.email')}
               placeholder={t('auth.fields.emailPlaceholderAlt')}
               required
             />
             <TextInput
               name="companyName"
+              autoComplete="organization"
               label={t('auth.fields.companyName')}
               placeholder={t('auth.fields.companyNamePlaceholder')}
               description={t('auth.register.companyNameHint')}

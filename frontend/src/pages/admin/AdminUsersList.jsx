@@ -149,7 +149,7 @@ const AdminUsersList = () => {
 
   return (
     <Stack gap="lg">
-      <Seo title={t('seo.pages.admin')} />
+      <Seo title={t('seo.pages.adminUsers')} />
 
       <Title order={2}>{t('admin.users.title')}</Title>
 

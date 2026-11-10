@@ -21,7 +21,9 @@
       "profile": "Cambiar contraseña",
       "plans": "Planes",
       "team": "Equipo"
-    }
+    },
+    "main": "Navegación principal",
+    "skipToContent": "Saltar al contenido principal"
   },
   "footer": {
     "ariaLabel": "Pie de página del sitio",
@@ -569,7 +571,12 @@
       "admin": "Administración",
       "notFound": "Página no encontrada",
       "team": "Equipo",
-      "acceptInvite": "Aceptar invitación"
+      "acceptInvite": "Aceptar invitación",
+      "adminOverview": "Resumen · Administración",
+      "adminUsers": "Usuarios · Administración",
+      "adminUserDetail": "Detalle de usuario · Administración",
+      "adminCompanies": "Empresas · Administración",
+      "adminCompanyDetail": "Detalle de empresa · Administración"
     }
   },
   "notFound": {

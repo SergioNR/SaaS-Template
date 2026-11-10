@@ -46,3 +46,9 @@
   border: solid black 2px;
   padding: 8px;
 }
+
+/* Programmatic focus targets (RouteFocus, skip link) - no focus ring for
+   elements that are not in the tab order */
+[tabindex='-1']:focus {
+  outline: none;
+}

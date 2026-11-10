@@ -14,6 +14,7 @@ import Login from './pages/auth/LoginPage.jsx';
 import PageLoader from './components/PageLoader.jsx';
 import { RoutedErrorBoundary } from './components/ErrorBoundary.jsx';
 import { ConsentBanner } from './components/ConsentBanner.jsx';
+import { RouteFocus } from './components/RouteFocus.jsx';
 import { scheduleAnalytics } from './analytics/posthog.js';
 import { installPreloadErrorHandler } from './utils/chunkReload.js';
 import {
@@ -95,6 +96,7 @@ createRoot(document.getElementById('root')).render(
             </Routes>
           </Suspense>
         </RoutedErrorBoundary>
+        <RouteFocus />
         <ConsentBanner />
       </BrowserRouter>
     </MantineProvider>

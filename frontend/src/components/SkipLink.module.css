@@ -1,0 +1,19 @@
+.skipLink {
+  position: absolute;
+  top: var(--mantine-spacing-xs);
+  left: var(--mantine-spacing-xs);
+  z-index: 1000;
+  padding: var(--mantine-spacing-xs) var(--mantine-spacing-md);
+  border-radius: var(--mantine-radius-sm);
+  background-color: var(--mantine-color-body);
+  color: var(--mantine-color-anchor);
+  font-weight: 600;
+  text-decoration: none;
+  box-shadow: var(--mantine-shadow-md);
+  transform: translateY(-200%);
+  transition: transform 150ms ease;
+}
+
+.skipLink:focus {
+  transform: translateY(0);
+}
