@@ -36,7 +36,7 @@ const {
 } = await import('../server/integrations/stripe/checkoutSession.js');
 const { createCompanyIdInStripe } = await import('../server/integrations/stripe/customerId.js');
 const {
-  cancelCompanySubscriptionInStripe,
+  cancelCompanyBillingInStripe,
   hasActiveStripeSubscription,
 } = await import('../server/integrations/stripe/subscription.js');
 const { logError } = await import('../server/config/loggerFunctions.js');
@@ -207,29 +207,84 @@ describe('hasActiveStripeSubscription', () => {
   });
 });
 
-describe('cancelCompanySubscriptionInStripe', () => {
+describe('cancelCompanyBillingInStripe', () => {
+  const deletedCompany = {
+    companyId: 'company-1',
+    stripeCustomerId: 'cus_1',
+    stripeSubscriptionId: 'sub_stored',
+  };
+
   beforeEach(() => {
     jest.clearAllMocks();
+    stripeInstance.checkout.sessions.list.mockResolvedValue({ data: [{ id: 'cs_open_1' }, { id: 'cs_open_2' }] });
+    stripeInstance.checkout.sessions.expire.mockResolvedValue({});
+    stripeInstance.subscriptions.list.mockResolvedValue({
+      data: [
+        { id: 'sub_stored', status: 'active', cancel_at_period_end: false },
+        //* Completed in another tab - the deleted row never tracked it
+        { id: 'sub_other_tab', status: 'trialing', cancel_at_period_end: false },
+        { id: 'sub_ended', status: 'canceled', cancel_at_period_end: false },
+        { id: 'sub_already_cancelling', status: 'active', cancel_at_period_end: true },
+      ],
+    });
     stripeInstance.subscriptions.update.mockResolvedValue({});
   });
 
-  it('cancels a real Stripe subscription at period end', async () => {
-    await cancelCompanySubscriptionInStripe({ id: 'sub_123' });
+  it('expires every open checkout before listing the subscriptions', async () => {
+    await cancelCompanyBillingInStripe(deletedCompany);
 
-    expect(stripeInstance.subscriptions.update).toHaveBeenCalledWith('sub_123', { cancel_at_period_end: true });
+    expect(stripeInstance.checkout.sessions.list).toHaveBeenCalledWith({ customer: 'cus_1', status: 'open', limit: 100 });
+    expect(stripeInstance.checkout.sessions.expire).toHaveBeenCalledWith('cs_open_1');
+    expect(stripeInstance.checkout.sessions.expire).toHaveBeenCalledWith('cs_open_2');
+    expect(Math.max(...stripeInstance.checkout.sessions.expire.mock.invocationCallOrder))
+      .toBeLessThan(stripeInstance.subscriptions.list.mock.invocationCallOrder[0]);
   });
 
-  it('skips trial rows (non sub_ ids) and missing subscriptions', async () => {
-    await cancelCompanySubscriptionInStripe({ id: 'trial-uuid' });
-    await cancelCompanySubscriptionInStripe(null);
+  it('cancels every access-granting subscription of the customer at period end', async () => {
+    await cancelCompanyBillingInStripe(deletedCompany);
 
+    expect(stripeInstance.subscriptions.update.mock.calls).toEqual([
+      ['sub_stored', { cancel_at_period_end: true }],
+      ['sub_other_tab', { cancel_at_period_end: true }],
+    ]);
+    expect(logError).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the stored subscription when the customer cannot be listed', async () => {
+    stripeInstance.subscriptions.list.mockRejectedValue(new Error('stripe down'));
+
+    await cancelCompanyBillingInStripe(deletedCompany);
+
+    expect(stripeInstance.subscriptions.update).toHaveBeenCalledWith('sub_stored', { cancel_at_period_end: true });
+    expect(logError).toHaveBeenCalledWith(
+      expect.stringContaining('list customer subscriptions'),
+      expect.any(Error),
+      expect.objectContaining(deletedCompany),
+    );
+  });
+
+  it('logs each failed step with the ids needed to retry and never throws', async () => {
+    stripeInstance.checkout.sessions.expire.mockRejectedValueOnce(new Error('expire failed'));
+    stripeInstance.subscriptions.update.mockRejectedValueOnce(new Error('update failed'));
+
+    await expect(cancelCompanyBillingInStripe(deletedCompany)).resolves.toBeUndefined();
+
+    expect(logError).toHaveBeenCalledWith(
+      expect.stringContaining('expire checkout session'),
+      expect.any(Error),
+      expect.objectContaining({ ...deletedCompany, checkoutSessionId: 'cs_open_1' }),
+    );
+    expect(logError).toHaveBeenCalledWith(
+      expect.stringContaining('cancel subscription'),
+      expect.any(Error),
+      expect.objectContaining({ ...deletedCompany, cancelSubscriptionId: 'sub_stored' }),
+    );
+  });
+
+  it('does nothing for a company that never reached Stripe', async () => {
+    await cancelCompanyBillingInStripe({ companyId: 'company-1' });
+
+    expect(stripeInstance.checkout.sessions.list).not.toHaveBeenCalled();
     expect(stripeInstance.subscriptions.update).not.toHaveBeenCalled();
-  });
-
-  it('swallows Stripe failures and logs them', async () => {
-    stripeInstance.subscriptions.update.mockRejectedValue(new Error('stripe down'));
-
-    await expect(cancelCompanySubscriptionInStripe({ id: 'sub_123' })).resolves.toBeUndefined();
-    expect(logError).toHaveBeenCalled();
   });
 });

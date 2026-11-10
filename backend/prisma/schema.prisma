@@ -109,12 +109,22 @@ model Session {
 }
 
 model Subscription {
-  id         String    @id @unique @default(uuid())
-  company_id String    @unique
-  Company    Company   @relation(fields: [company_id], references: [id])
-  created_at DateTime  @default(now())
-  updated_at DateTime  @default(now()) @updatedAt
-  expires_at DateTime?
+  id                     String    @id @unique @default(uuid())
+  company_id             String    @unique
+  Company                Company   @relation(fields: [company_id], references: [id])
+  created_at             DateTime  @default(now())
+  updated_at             DateTime  @default(now()) @updatedAt
+  expires_at             DateTime?
+  //* Null for trial rows - set once a Stripe subscription backs the row, so
+  //* the row id stays an internal uuid and "paid" is never inferred from an
+  //* id prefix
+  stripe_subscription_id String?   @unique
+  //* Last Stripe status written by the webhook sync (null for trials)
+  stripe_status          String?
+  //* When the Stripe state written last was read from Stripe. The webhook
+  //* fetches outside the company lock and drops a write whose read is older
+  //* than the stored one, so a slow delivery can never clobber fresher state
+  stripe_synced_at       DateTime?
 }
 
 model File {

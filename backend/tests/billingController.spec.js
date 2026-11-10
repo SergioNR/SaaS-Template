@@ -68,7 +68,7 @@ describe('billingController', () => {
 
   describe('getBillingCheckoutSessionUrl', () => {
     it('refuses with 409 SUBSCRIPTION_ACTIVE while a Stripe subscription is active', async () => {
-      getSubscriptionDataInDb.mockResolvedValue({ id: 'sub_123', expires_at: FUTURE });
+      getSubscriptionDataInDb.mockResolvedValue({ stripe_subscription_id: 'sub_123', expires_at: FUTURE });
       const res = createMockRes();
 
       await getBillingCheckoutSessionUrl(createReq(), res);
@@ -80,7 +80,7 @@ describe('billingController', () => {
     });
 
     it('refuses with 409 SUBSCRIPTION_ACTIVE when Stripe reports an active subscription the row does not know yet', async () => {
-      getSubscriptionDataInDb.mockResolvedValue({ id: 'trial-uuid', expires_at: FUTURE });
+      getSubscriptionDataInDb.mockResolvedValue({ stripe_subscription_id: null, expires_at: FUTURE });
       getCompanyStripeIdInDb.mockResolvedValue('cus_existing');
       hasActiveStripeSubscription.mockResolvedValue(true);
       const res = createMockRes();
@@ -147,7 +147,7 @@ describe('billingController', () => {
     });
 
     it('allows checkout during a trial (non-sub_ id)', async () => {
-      getSubscriptionDataInDb.mockResolvedValue({ id: 'trial-uuid', expires_at: FUTURE });
+      getSubscriptionDataInDb.mockResolvedValue({ stripe_subscription_id: null, expires_at: FUTURE });
       getCompanyStripeIdInDb.mockResolvedValue('cus_existing');
       const res = createMockRes();
 
@@ -159,7 +159,7 @@ describe('billingController', () => {
     });
 
     it('allows checkout after the Stripe subscription ended', async () => {
-      getSubscriptionDataInDb.mockResolvedValue({ id: 'sub_old', expires_at: PAST });
+      getSubscriptionDataInDb.mockResolvedValue({ stripe_subscription_id: 'sub_old', expires_at: PAST });
       getCompanyStripeIdInDb.mockResolvedValue('cus_existing');
       const res = createMockRes();
 

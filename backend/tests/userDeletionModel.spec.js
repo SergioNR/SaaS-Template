@@ -18,6 +18,17 @@ const tx = {
   teamInvites: {
     deleteMany: jest.fn(),
   },
+  subscription: {
+    findUnique: jest.fn(),
+    deleteMany: jest.fn(),
+  },
+  company: {
+    findUnique: jest.fn(),
+    delete: jest.fn(),
+  },
+  file: {
+    findMany: jest.fn(),
+  },
 };
 
 jest.unstable_mockModule('../server/config/prismaClient.js', () => ({
@@ -118,6 +129,29 @@ describe('deleteUserWithCompanyDataInDb', () => {
       expect(result).toEqual(expect.objectContaining({ status: 'deleted', companyDeleted: false }));
       expect(tx.session.deleteMany).toHaveBeenCalledWith({ where: { user_id: 'target' } });
       expect(tx.teamInvites.deleteMany).toHaveBeenCalledWith({ where: { invited_by: 'target' } });
+    });
+
+    it('returns the Stripe customer and subscription ids when the last member takes the company with them', async () => {
+      tx.user.findFirst.mockResolvedValueOnce({ id: 'target', company_id: 'company-1' });
+      tx.userRole.findMany.mockResolvedValue(rolesOf(['company_owner']));
+      tx.user.delete.mockResolvedValue({ id: 'target', role: 'user' });
+      tx.user.count.mockResolvedValue(0);
+      tx.subscription.findUnique.mockResolvedValue({ stripe_subscription_id: 'sub_1', expires_at: null });
+      tx.company.findUnique.mockResolvedValue({ stripe_id: 'cus_1' });
+      tx.file.findMany.mockResolvedValue([{ s3_key: 'company-1/f/a.pdf' }]);
+
+      const result = await deleteUserWithCompanyDataInDb('target');
+
+      expect(result).toEqual({
+        status: 'deleted',
+        deletedUser: { id: 'target', role: 'user' },
+        companyDeleted: true,
+        companyId: 'company-1',
+        stripeCustomerId: 'cus_1',
+        subscription: { stripe_subscription_id: 'sub_1', expires_at: null },
+        fileKeys: ['company-1/f/a.pdf'],
+      });
+      expect(tx.company.delete).toHaveBeenCalledWith({ where: { id: 'company-1' } });
     });
   });
 });

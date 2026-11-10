@@ -444,6 +444,7 @@ export const countUsersInDb = async (filters = {}) => {
 //*
 //* Resolves to { status: 'not_found' | 'last_owner' | 'forbidden' } or
 //* { status: 'deleted', deletedUser, companyDeleted, subscription, fileKeys }
+//* (plus companyId and stripeCustomerId when the company was deleted)
 export const deleteUserWithCompanyDataInDb = async (userId, options = {}) => {
   const {
     companyId,
@@ -565,8 +566,19 @@ export const deleteUserWithCompanyDataInDb = async (userId, options = {}) => {
         company_id: userCompanyId,
       },
       select: {
-        id: true,
+        stripe_subscription_id: true,
         expires_at: true,
+      },
+    });
+
+    //* The Stripe customer is needed after the commit to clean up every
+    //* subscription and open checkout it holds, not only the stored one
+    const company = await tx.company.findUnique({
+      where: {
+        id: userCompanyId,
+      },
+      select: {
+        stripe_id: true,
       },
     });
 
@@ -603,6 +615,8 @@ export const deleteUserWithCompanyDataInDb = async (userId, options = {}) => {
       status: 'deleted',
       deletedUser,
       companyDeleted: true,
+      companyId: userCompanyId,
+      stripeCustomerId: company?.stripe_id ?? null,
       subscription,
       fileKeys: companyFiles.map((file) => file.s3_key),
     };
