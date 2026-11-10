@@ -4,7 +4,7 @@ import bcrypt from 'bcrypt';
 jest.unstable_mockModule('../server/models/userModel.js', () => ({
   getUserById: jest.fn(),
   getUserPassword: jest.fn(),
-  updateUserPasswordInDB: jest.fn(),
+  updateUserPasswordInDb: jest.fn(),
 }));
 
 jest.unstable_mockModule('../server/utils/userDeletionCleanup.js', () => ({
@@ -16,7 +16,7 @@ jest.unstable_mockModule('../server/config/loggerFunctions.js', () => ({
 }));
 
 const { deleteUser, updateUserPassword } = await import('../server/controllers/userController.js');
-const { getUserPassword, updateUserPasswordInDB } = await import('../server/models/userModel.js');
+const { getUserPassword, updateUserPasswordInDb } = await import('../server/models/userModel.js');
 const { deleteUserAndCleanup } = await import('../server/utils/userDeletionCleanup.js');
 const { logAudit } = await import('../server/config/loggerFunctions.js');
 
@@ -129,16 +129,16 @@ describe('updateUserPassword', () => {
 
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'AUTH_CURRENT_PASSWORD_INCORRECT' }));
-    expect(updateUserPasswordInDB).not.toHaveBeenCalled();
+    expect(updateUserPasswordInDb).not.toHaveBeenCalled();
   });
 
   it('updates the hash and revokes tokens and other sessions in one model transaction, keeping the current session', async () => {
-    updateUserPasswordInDB.mockResolvedValue({ id: 'user-1' });
+    updateUserPasswordInDb.mockResolvedValue({ id: 'user-1' });
     const res = mockRes();
 
     await updateUserPassword({ user: { id: 'user-1' }, sessionID: 'sid-1', body: { currentPassword: 'OldPassword1', newPassword: 'NewPassword1' } }, res);
 
-    expect(updateUserPasswordInDB).toHaveBeenCalledWith('user-1', expect.stringMatching(/^\$2[aby]\$/), { keepSessionId: 'sid-1' });
+    expect(updateUserPasswordInDb).toHaveBeenCalledWith('user-1', expect.stringMatching(/^\$2[aby]\$/), { keepSessionId: 'sid-1' });
     expect(res.status).toHaveBeenCalledWith(200);
     expect(res.json).toHaveBeenCalledWith({ userId: 'user-1' });
     expect(logAudit).toHaveBeenCalledWith(expect.anything(), 'user.password.updated', { entity: 'user', entityId: 'user-1' });
@@ -146,7 +146,7 @@ describe('updateUserPassword', () => {
   });
 
   it('propagates transaction errors instead of swallowing them', async () => {
-    updateUserPasswordInDB.mockRejectedValue(new Error('db down'));
+    updateUserPasswordInDb.mockRejectedValue(new Error('db down'));
     const res = mockRes();
 
     await expect(updateUserPassword({ user: { id: 'user-1' }, sessionID: 'sid-1', body: { currentPassword: 'OldPassword1', newPassword: 'NewPassword1' } }, res)).rejects.toThrow('db down');

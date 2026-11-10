@@ -6,7 +6,7 @@ import { posthogUserSuccessLoggedIn } from '../models/posthogModel.js';
 import {
   getUserByEmail,
   canCompanyMemberGrantRoleInDb,
-  createUserInDB,
+  createUserInDb,
   updateUserLastLoginDate,
 } from '../models/userModel.js';
 import {
@@ -193,7 +193,7 @@ export const acceptTeamInvite = async (req, res) => {
   let acceptResult;
 
   try {
-    acceptResult = await createUserInDB({
+    acceptResult = await createUserInDb({
       username: inviteData.email,
       password: hashedPassword,
       companyId: inviteData.company_id,
@@ -312,7 +312,7 @@ const registerUserInBackground = async (email, password, companyName) => {
     const hashedPassword = await bcrypt.hash(password, BCRYPT_SALT_ROUNDS);
 
     //* The registrant founds the company and becomes its company owner
-    await createUserInDB({
+    await createUserInDb({
       username: email,
       password: hashedPassword,
       companyName,

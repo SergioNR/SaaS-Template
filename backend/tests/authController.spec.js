@@ -3,7 +3,7 @@ import { jest } from '@jest/globals';
 jest.unstable_mockModule('../server/models/userModel.js', () => ({
   getUserByEmail: jest.fn(),
   canCompanyMemberGrantRoleInDb: jest.fn(),
-  createUserInDB: jest.fn(),
+  createUserInDb: jest.fn(),
   updateUserLastLoginDate: jest.fn(),
 }));
 
@@ -55,7 +55,7 @@ const {
 } = await import('../server/controllers/authController.js');
 const {
   getUserByEmail,
-  createUserInDB,
+  createUserInDb,
 } = await import('../server/models/userModel.js');
 const { SESSION_COOKIE_NAME, SESSION_COOKIE_OPTIONS } = await import('../server/config/security.js');
 const {
@@ -225,7 +225,7 @@ describe('registerUser', () => {
 
     expect(res.status).toHaveBeenCalledWith(201);
     expect(res.json).toHaveBeenCalledWith({});
-    expect(createUserInDB).not.toHaveBeenCalled();
+    expect(createUserInDb).not.toHaveBeenCalled();
     //* No email, user id or company name - the create may not even happen
     expect(logAudit).toHaveBeenCalledWith(expect.anything(), 'auth.register.requested', { entity: 'user' });
     expect(JSON.stringify(logAudit.mock.calls.map((call) => call.slice(1)))).not.toContain('acme');
@@ -233,13 +233,13 @@ describe('registerUser', () => {
 
   it('creates the account and its company in the background for a new email', async () => {
     getUserByEmail.mockResolvedValue(null);
-    createUserInDB.mockResolvedValue({ id: 'new-user' });
+    createUserInDb.mockResolvedValue({ id: 'new-user' });
     const res = mockRes();
 
     await registerUser({ body: { username: 'new@acme.test', companyName: 'Acme Corp', password: 'Password123' } }, res);
-    await waitUntilCalled(createUserInDB);
+    await waitUntilCalled(createUserInDb);
 
-    expect(createUserInDB).toHaveBeenCalledWith({
+    expect(createUserInDb).toHaveBeenCalledWith({
       username: 'new@acme.test',
       password: expect.stringMatching(/^\$2[aby]\$/),
       companyName: 'Acme Corp',
@@ -249,14 +249,14 @@ describe('registerUser', () => {
 
   it('still creates an unnamed company for clients that omit the company name', async () => {
     getUserByEmail.mockResolvedValue(null);
-    createUserInDB.mockResolvedValue({ id: 'new-user' });
+    createUserInDb.mockResolvedValue({ id: 'new-user' });
     const res = mockRes();
 
     await registerUser({ body: { username: 'new@acme.test', password: 'Password123' } }, res);
-    await waitUntilCalled(createUserInDB);
+    await waitUntilCalled(createUserInDb);
 
     expect(res.status).toHaveBeenCalledWith(201);
-    expect(createUserInDB).toHaveBeenCalledWith(expect.objectContaining({ username: 'new@acme.test', companyName: undefined }));
+    expect(createUserInDb).toHaveBeenCalledWith(expect.objectContaining({ username: 'new@acme.test', companyName: undefined }));
   });
 
   it('sends the existing-account notice to the stored address and creates nothing', async () => {
@@ -269,7 +269,7 @@ describe('registerUser', () => {
     expect(res.status).toHaveBeenCalledWith(201);
     expect(res.json).toHaveBeenCalledWith({});
     expect(sendExistingAccountNoticeToUser).toHaveBeenCalledWith('stored@acme.test');
-    expect(createUserInDB).not.toHaveBeenCalled();
+    expect(createUserInDb).not.toHaveBeenCalled();
   });
 });
 

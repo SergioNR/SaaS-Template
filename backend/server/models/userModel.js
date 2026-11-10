@@ -74,7 +74,7 @@ export const canCompanyMemberGrantRoleInDb = async (memberId, companyId, roleNam
 //* left or can no longer grant the role - the invite is voided) or
 //* { status: 'invite_invalid' } (unknown, expired, already accepted or
 //* revoked meanwhile)
-export const createUserInDB = async (userData) => {
+export const createUserInDb = async (userData) => {
   const {
     username,
     password,
@@ -349,7 +349,7 @@ export const getUserDetailInDb = async (userId) => {
 //* every outstanding reset token and of every other session of the user land
 //* together, so a failure can never leave a changed password with live
 //* sessions (or the reverse). Errors propagate - nothing is swallowed here
-export const updateUserPasswordInDB = async (userId, newPassword, options = {}) => {
+export const updateUserPasswordInDb = async (userId, newPassword, options = {}) => {
   const { keepSessionId = null } = options;
 
   const updatedUser = await prisma.$transaction(async (tx) => {

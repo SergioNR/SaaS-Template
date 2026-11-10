@@ -1,5 +1,5 @@
 import bcrypt from 'bcrypt';
-import { getUserById, getUserPassword, updateUserPasswordInDB } from '../models/userModel.js';
+import { getUserById, getUserPassword, updateUserPasswordInDb } from '../models/userModel.js';
 import { BCRYPT_SALT_ROUNDS, SESSION_COOKIE_NAME, SESSION_COOKIE_OPTIONS } from '../config/security.js';
 import { deleteUserAndCleanup } from '../utils/userDeletionCleanup.js';
 import { logAudit } from '../config/loggerFunctions.js';
@@ -65,7 +65,7 @@ export const updateUserPassword = async (req, res) => {
   //* One transaction: new hash, every outstanding reset token revoked and
   //* every other session revoked - the current one is kept alive. A failure
   //* throws (500) instead of leaving a half-applied credential change
-  const updatedUser = await updateUserPasswordInDB(userId, newHashedPassword, {
+  const updatedUser = await updateUserPasswordInDb(userId, newHashedPassword, {
     keepSessionId: req.sessionID,
   });
 
