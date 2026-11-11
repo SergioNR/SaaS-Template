@@ -7,7 +7,7 @@ Owns the SPA frame of the template: the route tree and its four areas (public, a
 
 ### Requirement: The route tree separates public, auth, user and admin areas
 
-The web app SHALL serve four areas: the public site at `/` (see `public-site`); the auth area under `/auth` (login at `/auth` and `/auth/login`, plus registration, password recovery and restore, and invite acceptance); the user area as one guarded layout covering `/dashboard` and `/user/profile`, `/user/billing`, `/user/team`, with `/user` redirecting to `/dashboard` replacing history; and the admin area under `/admin` (overview, users, companies). Any other path SHALL render the not-found page.
+The web app SHALL serve four areas: the public site at `/` (see `public-site`); the auth area under `/auth` (login at `/auth` and `/auth/login`, registration, password recovery and restore, invite acceptance); the user area as one guarded layout covering `/dashboard` and `/user/profile`, `/user/billing`, `/user/team`, `/user` redirecting to `/dashboard` replacing history; and the admin area under `/admin` (overview, users, companies, account). Any other path SHALL render the not-found page.
 
 #### Scenario: Bare user path
 
@@ -18,6 +18,11 @@ The web app SHALL serve four areas: the public site at `/` (see `public-site`); 
 
 - **WHEN** a visitor opens `/auth` or `/auth/login`
 - **THEN** the login page renders inside the auth layout
+
+#### Scenario: Admin account page
+
+- **WHEN** a superadmin opens `/admin/account`
+- **THEN** the admin account page renders inside the admin layout
 
 #### Scenario: Unknown path
 
@@ -79,7 +84,7 @@ The app SHALL route by session role: after login a `superadmin` lands on `/admin
 
 ### Requirement: An expired session anywhere returns the user to login
 
-When any non-authentication API request answers 401 while the visitor is outside the auth pages, the app SHALL clear all per-session cached data and perform a full-page redirect to the login page with `next` set to the current path. Concurrent 401s SHALL trigger a single redirect. 401s from authentication endpoints SHALL be handled by the calling page instead (for example, an expired session while changing the password returns the user to login with `next` and clears session caches).
+When any non-authentication API request answers 401 while the visitor is outside the auth pages (`/auth` and every path under it), the app SHALL clear all per-session cached data and perform a full-page redirect to the login page with `next` set to the current path. Concurrent 401s SHALL trigger a single redirect. 401s from authentication endpoints SHALL be handled by the calling page instead, which on an expired session also clears session caches and returns the user to login with `next`.
 
 #### Scenario: Session revoked mid-use
 
@@ -96,9 +101,14 @@ When any non-authentication API request answers 401 while the visitor is outside
 - **WHEN** the login request answers 401
 - **THEN** no redirect happens and the login form shows its inline error
 
+#### Scenario: 401 while on the bare auth route
+
+- **WHEN** a non-authentication request answers 401 while the visitor is on `/auth`
+- **THEN** no redirect happens
+
 ### Requirement: Per-session cached data is invalidated on every session change
 
-The app SHALL discard all client-side data cached for the current session (such as the caller's company permissions) on successful login, on logout, on account deletion and when a 401 ends the session, and SHALL discard any in-flight response for such a cache that started before the invalidation, so a later user on the same tab never sees the previous user's data or permission gating.
+The app SHALL discard all client-side data cached for the current session (such as the caller's company permissions) on successful login, on logout, on account deletion and whenever a 401 ends the session — including a private area's session probe answering 401 — and SHALL discard any in-flight response for such a cache that started before the invalidation, so a later user on the same tab never sees the previous user's data or permission gating.
 
 #### Scenario: Different user signs in on the same tab
 
@@ -109,6 +119,11 @@ The app SHALL discard all client-side data cached for the current session (such 
 
 - **WHEN** a permissions request started before logout resolves after it
 - **THEN** its result is dropped and not written into the new session's cache
+
+#### Scenario: Session probe rejected
+
+- **WHEN** the user or admin area's session probe answers 401
+- **THEN** all per-session caches are cleared before the app navigates to login
 
 ### Requirement: Routes outside the entry pages load lazily with a shared loader
 
@@ -158,7 +173,7 @@ The not-found page SHALL render without the site navigation bar, with its own sk
 
 ### Requirement: Private areas share a navigation shell
 
-The user and admin areas SHALL render a header (brand link to the area home and the area title) and a sidebar listing the area's links under a labelled section, highlighting the current page, with logout at the bottom. The user sidebar SHALL list dashboard, profile, plans/billing and team; the admin sidebar overview, users and companies. Below the small breakpoint the sidebar SHALL collapse behind a burger exposing its open state and controlled sidebar; choosing a link SHALL close it.
+The user and admin areas SHALL render a header (brand link, area title) and a sidebar with the area's links under a labelled section, highlighting the current page, and logout plus, when analytics is configured, the cookie-preferences control at the bottom. The user sidebar SHALL list dashboard, profile, plans/billing and team; the admin one overview, users, companies and account. On small screens the sidebar SHALL collapse behind a burger exposing its open state; choosing a link SHALL close it.
 
 #### Scenario: Mobile navigation
 
@@ -169,6 +184,16 @@ The user and admin areas SHALL render a header (brand link to the area home and 
 
 - **WHEN** the admin is on `/admin/users/42`
 - **THEN** the users link is highlighted and the overview link is not
+
+#### Scenario: Cookie preferences in the sidebar
+
+- **WHEN** a signed-in user opens the sidebar on a build with analytics configured
+- **THEN** a cookie-preferences control renders next to logout
+
+#### Scenario: Admin account link
+
+- **WHEN** a superadmin opens the admin sidebar
+- **THEN** it lists an account link leading to `/admin/account`
 
 ### Requirement: Logout ends the session or stays put on failure
 
@@ -232,12 +257,22 @@ The app SHALL report the outcome of one-off actions (saves, invites, role change
 
 ### Requirement: Auth forms block double submission
 
-The login, registration, password-recovery, password-restore, invite-acceptance and password-update forms and the account-deletion confirmation SHALL show a busy submit control while their request is in flight and SHALL NOT send a second request for it. Login, registration and password-recovery SHALL also reject a second submit fired before the busy state renders. A successful registration SHALL keep its form locked until the redirect to login three seconds later.
+The login, registration, password-recovery, password-restore, invite-acceptance and password-update forms and the account-deletion confirmation SHALL show a busy submit control while their request is in flight and SHALL NOT send a second request for it. All but the password-update form SHALL also reject a second submit fired before the busy state renders. A successful registration SHALL keep its form locked until the redirect to login three seconds later.
 
 #### Scenario: Double Enter on login
 
 - **WHEN** the user presses Enter twice in quick succession on the login form
 - **THEN** exactly one login request is sent
+
+#### Scenario: Double Enter on invite acceptance
+
+- **WHEN** the user presses Enter twice in quick succession on the invite-acceptance form
+- **THEN** exactly one acceptance request is sent and no error notice appears for a second attempt
+
+#### Scenario: Double Enter on password restore
+
+- **WHEN** the user presses Enter twice in quick succession on the password-restore form
+- **THEN** exactly one reset request is sent
 
 #### Scenario: Registration succeeded
 
@@ -269,7 +304,7 @@ When the subscription has loaded and no subscription is active, the dashboard SH
 
 ### Requirement: The team page has explicit loading and error states
 
-The team page SHALL show skeleton rows in the members and invites tables while loading; on a load failure it SHALL replace both tables with an error alert offering retry, or a membership message without retry when the caller has no company; with no rows it SHALL show an empty-state line per table. While loading or failed, the invite button SHALL be disabled without a lock tooltip. Invites past expiry SHALL carry an expired badge. Member and invite rules are owned by `team-management`.
+The team page SHALL show skeleton rows in the members and invites tables while loading; on a load failure it SHALL replace both tables with an error alert offering retry, or a membership message without retry when the caller has no company; with no rows, an empty-state line per table. While loading or failed, the invite button SHALL be disabled without a lock tooltip. Dismissing the invite dialog by any means SHALL clear its role choice and error. Invite rules belong to `team-management`.
 
 #### Scenario: Load fails transiently
 
@@ -280,6 +315,16 @@ The team page SHALL show skeleton rows in the members and invites tables while l
 
 - **WHEN** loading the team answers 403 with code `COMPANY_MEMBERSHIP_REQUIRED`
 - **THEN** a membership message renders with no retry button
+
+#### Scenario: Invite dialog cancelled after a role error
+
+- **WHEN** the caller submits the invite dialog without a role, presses cancel and reopens the dialog
+- **THEN** the dialog shows no role error and no preselected role
+
+#### Scenario: Invite rows carry no expiry badge
+
+- **WHEN** the team page lists pending invites
+- **THEN** each row shows email, role and expiry date without an expired badge
 
 ### Requirement: Team mutations reload silently and block duplicates
 

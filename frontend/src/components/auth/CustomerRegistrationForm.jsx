@@ -42,10 +42,11 @@ const CustomerRegistrationForm = () => {
     submittingRef.current = true;
     setSubmitting(true);
 
+    const { elements } = e.currentTarget;
     const data = {
-      username: e.target.username.value,
-      companyName: e.target.companyName.value,
-      password: e.target.password.value,
+      username: elements.username.value,
+      companyName: elements.companyName.value,
+      password: elements.password.value,
     };
 
     try {

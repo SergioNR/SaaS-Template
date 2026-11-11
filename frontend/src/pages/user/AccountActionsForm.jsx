@@ -1,24 +1,21 @@
 import { useState } from 'react';
+import PropTypes from 'prop-types';
 import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { resetAnalyticsUser } from '../../analytics/posthog.js';
 import apiClient from '../../config/API/axiosConfig.js';
 
-import {
-  Card,
-  Button,
-  Modal,
-  Stack,
-  Title,
-  Text,
-  Group,
-} from '@mantine/core';
+import { Alert, Card, Button, Modal, Stack, Title, Text, Group } from '@mantine/core';
 import { notifyError, notifySuccess } from '../../utils/notifications.js';
 import { logApiError } from '../../utils/logApiError.js';
 import { invalidateSessionCaches } from '../../utils/sessionCaches.js';
+import { deletionErrorKey } from './accountDeletion.js';
 
-export const AccountActionsForm = () => {
+//* `variant="superadmin"` swaps the company/team wording for the admin
+//* account page and adds a stronger warning to the confirmation
+export const AccountActionsForm = ({ variant = 'user' }) => {
   const { t } = useTranslation();
+  const isSuperadmin = variant === 'superadmin';
   const navigate = useNavigate();
   const [confirmOpened, setConfirmOpened] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -41,12 +38,9 @@ export const AccountActionsForm = () => {
     } catch (err) {
       logApiError('Account deletion failed', err);
 
-      //* The last company owner cannot leave while other members remain
-      if (err?.response?.status === 409 && err?.response?.data?.code === 'USER_LAST_COMPANY_OWNER') {
-        notifyError(t('user.accountActions.deleteLastOwner'));
-      } else {
-        notifyError(t('user.accountActions.deleteError'));
-      }
+      //* Last company owner with members left / last superadmin: refused,
+      //* the user stays signed in on the page
+      notifyError(t(deletionErrorKey(err)));
 
       setDeleting(false);
       setConfirmOpened(false);
@@ -57,7 +51,7 @@ export const AccountActionsForm = () => {
     <Card shadow="sm" padding="lg" radius="md" withBorder mt="lg">
       <Title order={3} mb="md">{t('user.accountActions.title')}</Title>
       <Text size="sm" c="dimmed" mb="md">
-        {t('user.accountActions.description')}
+        {t(isSuperadmin ? 'user.accountActions.superadmin.description' : 'user.accountActions.description')}
       </Text>
 
       <Group justify="left" mt="md">
@@ -85,8 +79,17 @@ export const AccountActionsForm = () => {
       >
         <Stack>
           <Text size="sm">
-            {t('user.accountActions.deleteConfirmModal.description')}
+            {t(
+              isSuperadmin
+                ? 'user.accountActions.superadmin.deleteConfirmModal.description'
+                : 'user.accountActions.deleteConfirmModal.description',
+            )}
           </Text>
+          {isSuperadmin && (
+            <Alert color="red" variant="light">
+              {t('user.accountActions.superadmin.deleteConfirmModal.warning')}
+            </Alert>
+          )}
           <Group justify="flex-end">
             <Button variant="default" onClick={() => setConfirmOpened(false)} disabled={deleting}>
               {t('user.accountActions.deleteConfirmModal.cancel')}
@@ -99,6 +102,10 @@ export const AccountActionsForm = () => {
       </Modal>
     </Card>
   );
+};
+
+AccountActionsForm.propTypes = {
+  variant: PropTypes.oneOf(['user', 'superadmin']),
 };
 
 export default AccountActionsForm;

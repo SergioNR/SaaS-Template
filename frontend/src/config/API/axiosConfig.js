@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { currentPath, loginRedirectPath } from '../../utils/safeNext.js';
+import { currentPath, isAuthPath, loginRedirectPath } from '../../utils/safeNext.js';
 import { invalidateSessionCaches } from '../../utils/sessionCaches.js';
 import { hardRedirect } from '../../utils/hardRedirect.js';
 
@@ -28,7 +28,7 @@ export const handleUnauthorized = (error) => {
     status === 401 &&
     !redirectingToLogin &&
     !requestUrl.includes(AUTH_ENDPOINT_PREFIX) &&
-    !window.location.pathname.startsWith('/auth/')
+    !isAuthPath(window.location.pathname)
   ) {
     redirectingToLogin = true;
     invalidateSessionCaches();

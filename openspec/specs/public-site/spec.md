@@ -63,7 +63,7 @@ The app SHALL render every plan price from the plan configuration (amount and cu
 
 ### Requirement: Every page renders its own SEO metadata
 
-Every routed page SHALL set a title of the form "<page title> · <site name>", distinct from every other page, a meta description (the page's own for public pages, a default otherwise), a robots meta, Open Graph title, description, type, site name, `es_ES` locale and image with alt text, and Twitter title, description and image with a large-image card. The default image SHALL be `og-image.png`, absolute on the site origin. The static HTML shell SHALL carry only a fallback title.
+Every routed page SHALL set a title of the form "<page title> · <site name>", distinct from every other page, a meta description (the page's own for public pages, else a default), a robots meta, Open Graph title, description, type, site name, `es_ES` locale and image with alt text, and Twitter title, description and image with a large-image card. The default image SHALL be `og-image.png`, absolute on the site origin minus any trailing slash. The HTML shell SHALL carry only a fallback title.
 
 #### Scenario: Pricing page metadata
 
@@ -75,14 +75,24 @@ Every routed page SHALL set a title of the form "<page title> · <site name>", d
 - **WHEN** a user moves from the profile page to the team page
 - **THEN** the document title changes to the team page's own title
 
+#### Scenario: Image URL with a trailing-slash origin
+
+- **WHEN** the site origin is configured as `https://example.com/`
+- **THEN** the Open Graph and Twitter image URLs are `https://example.com/og-image.png`
+
 ### Requirement: Only public pages are indexable and canonical
 
-Public pages (home, pricing, FAQ, terms) SHALL emit `index, follow` robots, a canonical link and an `og:url` built from the configured site origin and the page path. All other pages (auth, user, admin, not-found) SHALL emit `noindex, nofollow` and no canonical link or `og:url`.
+Public pages (home, pricing, FAQ, terms) SHALL emit `index, follow` robots, a canonical link and an `og:url` built from the configured site origin, with any trailing slash removed, and the page path, matching the URL listed for that page in `sitemap.xml`. All other pages (auth, user, admin, not-found) SHALL emit `noindex, nofollow` and no canonical link or `og:url`.
 
 #### Scenario: Public page
 
 - **WHEN** `/terminos-condiciones` renders with site origin `https://example.com`
 - **THEN** the robots meta is `index, follow` and the canonical link is `https://example.com/terminos-condiciones`
+
+#### Scenario: Origin configured with a trailing slash
+
+- **WHEN** `/pricing` renders with site origin `https://example.com/`
+- **THEN** the canonical link and `og:url` are `https://example.com/pricing`, the same URL the sitemap lists
 
 #### Scenario: Internal page
 
@@ -142,12 +152,17 @@ The app SHALL NOT download the analytics client unless analytics is configured a
 
 ### Requirement: Identity and error reporting follow consent
 
-User identification, identity reset on logout or account deletion, and error reports SHALL be no-ops without consent. A user signed in before consenting SHALL be identified once consent is given. After logout or account deletion a consenting visitor SHALL keep being captured anonymously.
+User identification, identity reset on logout or account deletion, and error reports SHALL be no-ops without consent. A signed-in user in either the user or the admin area SHALL be identified by their user id; one signed in before consenting SHALL be identified once consent is given. After logout or account deletion a consenting visitor SHALL keep being captured anonymously.
 
 #### Scenario: Consent given mid-session
 
 - **WHEN** a signed-in user accepts the banner from inside the user area
 - **THEN** the analytics client loads, starts capturing and identifies that user
+
+#### Scenario: Superadmin identified
+
+- **WHEN** a consenting superadmin's admin-area session check succeeds
+- **THEN** the analytics identity is set to that superadmin's user id
 
 #### Scenario: Logout with consent
 
@@ -181,3 +196,17 @@ Pages that receive a one-time token in the URL (password restore and invite acce
 
 - **WHEN** the visitor presses back after the token was scrubbed
 - **THEN** they leave the page instead of returning to a URL containing the token
+
+### Requirement: Consent can be changed from the private areas
+
+When analytics is configured, the user and admin areas SHALL offer the same cookie-preferences control as the site footer, reachable from their navigation sidebar, which stops any active capturing, forgets the stored choice and shows the consent banner again. Without analytics configured the control SHALL NOT render.
+
+#### Scenario: Signed-in user withdraws consent
+
+- **WHEN** a signed-in user who accepted analytics activates the cookie-preferences control in the user area sidebar
+- **THEN** capturing stops immediately and the consent banner reappears without leaving the area
+
+#### Scenario: Admin area without analytics
+
+- **WHEN** a superadmin opens the admin area on a build without an analytics key
+- **THEN** no cookie-preferences control renders in the sidebar

@@ -33,3 +33,4 @@ export const AdminUsersList = lazy(() => import('../pages/admin/AdminUsersList.j
 export const AdminUserDetail = lazy(() => import('../pages/admin/AdminUserDetail.jsx'));
 export const AdminCompaniesList = lazy(() => import('../pages/admin/AdminCompaniesList.jsx'));
 export const AdminCompanyDetail = lazy(() => import('../pages/admin/AdminCompanyDetail.jsx'));
+export const AdminAccount = lazy(() => import('../pages/admin/AdminAccount.jsx'));

@@ -1,11 +1,17 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen } from '@testing-library/react';
 import { BrowserRouter, Route, Routes, useLocation, useOutletContext } from 'react-router';
 import { renderWithProviders } from '../test/renderWithProviders.jsx';
 
 vi.mock('../config/API/axiosConfig.js', () => ({ default: { get: vi.fn(), post: vi.fn() } }));
+vi.mock('../analytics/posthog.js', async (importOriginal) => ({
+  ...(await importOriginal()),
+  identifyUser: vi.fn(),
+}));
 
 const { default: apiClient } = await import('../config/API/axiosConfig.js');
+const { registerSessionCache } = await import('../utils/sessionCaches.js');
+const { identifyUser } = await import('../analytics/posthog.js');
 const { default: UserWrapper } = await import('./user/UserWrapper.jsx');
 const { default: AdminDashboardWrapper } = await import('./admin/AdminDashboardWrapper.jsx');
 
@@ -112,6 +118,28 @@ describe('UserWrapper guard', () => {
 describe('AdminDashboardWrapper guard', () => {
   beforeEach(() => {
     apiClient.get.mockReset();
+    identifyUser.mockClear();
+  });
+
+  it('identifies the superadmin once the session check succeeds', async () => {
+    mockApi({ session: { id: 'a1', role: 'superadmin' } });
+
+    renderAt('/admin/users');
+
+    expect(await screen.findByText('admin-page a1')).toBeInTheDocument();
+    expect(identifyUser).toHaveBeenCalledWith('a1');
+  });
+
+  it('does not identify a non-superadmin it redirects away', async () => {
+    mockApi({ session: { id: 'u1', role: 'user' } });
+
+    renderAt('/admin');
+
+    expect(await screen.findByText('user-page u1')).toBeInTheDocument();
+    //* Only UserWrapper (the redirect target) identifies its user - the admin
+    //* wrapper adds no call of its own
+    expect(identifyUser).toHaveBeenCalledTimes(1);
+    expect(identifyUser).toHaveBeenCalledWith('u1');
   });
 
   it('renders admin pages for a superadmin', async () => {
@@ -138,5 +166,41 @@ describe('AdminDashboardWrapper guard', () => {
     expect(await screen.findByTestId('where')).toHaveTextContent(
       `login /auth/login?next=${encodeURIComponent('/admin/users')}`,
     );
+  });
+});
+
+describe.each([
+  ['UserWrapper', '/user/team'],
+  ['AdminDashboardWrapper', '/admin/users'],
+])('%s session cache reset', (_name, path) => {
+  let resetCache;
+  let unregister;
+
+  beforeEach(() => {
+    apiClient.get.mockReset();
+    resetCache = vi.fn();
+    unregister = registerSessionCache(resetCache);
+  });
+
+  afterEach(() => {
+    unregister();
+  });
+
+  it('clears per-session caches before navigating to login on a 401 probe', async () => {
+    mockApi({ session: httpError(401) });
+
+    renderAt(path);
+
+    expect(await screen.findByTestId('where')).toHaveTextContent(`login /auth/login?next=${encodeURIComponent(path)}`);
+    expect(resetCache).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the caches on a 5xx probe', async () => {
+    mockApi({ session: httpError(503) });
+
+    renderAt(path);
+
+    expect(await screen.findByRole('button', { name: 'Reintentar' })).toBeInTheDocument();
+    expect(resetCache).not.toHaveBeenCalled();
   });
 });

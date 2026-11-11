@@ -392,7 +392,15 @@
         "confirm": "Eliminar mi cuenta"
       },
       "deletedToast": "Tu cuenta se ha eliminado correctamente.",
-      "deleteLastOwner": "Eres el único propietario de la empresa y aún hay otros miembros. Asigna el rol de propietario a otro miembro antes de eliminar tu cuenta."
+      "deleteLastOwner": "Eres el único propietario de la empresa y aún hay otros miembros. Asigna el rol de propietario a otro miembro antes de eliminar tu cuenta.",
+      "deleteLastSuperadmin": "Eres el único superadministrador de la plataforma. Concede el rol de superadministrador a otra cuenta antes de eliminar la tuya.",
+      "superadmin": {
+        "description": "Elimina tu cuenta de superadministrador. Perderás el acceso al panel de administración.",
+        "deleteConfirmModal": {
+          "description": "Se eliminará tu cuenta de superadministrador y se cerrarán todas tus sesiones. Esta acción no se puede deshacer.",
+          "warning": "Perderás inmediatamente el acceso a la administración de la plataforma."
+        }
+      }
     }
   },
   "billing": {
@@ -438,7 +446,8 @@
     "nav": {
       "overview": "Resumen",
       "users": "Usuarios",
-      "companies": "Empresas"
+      "companies": "Empresas",
+      "account": "Mi cuenta"
     },
     "roles": {
       "user": "Usuario",
@@ -500,10 +509,10 @@
       "deleteAction": "Eliminar a {{email}}",
       "deletedToast": "Usuario {{email}} eliminado correctamente.",
       "deleteError": "No se pudo eliminar el usuario. Inténtalo de nuevo.",
-      "deleteConflict": "No se puede eliminar esta cuenta desde aquí. Si es tu propia cuenta, usa tu perfil.",
+      "deleteConflict": "No se puede eliminar esta cuenta desde aquí. Si es tu propia cuenta, usa «Mi cuenta».",
       "deleteLastOwner": "Este usuario es el único propietario de su empresa y aún hay otros miembros. Asigna otro propietario antes de eliminarlo.",
       "deleteNotFound": "El usuario ya no existe.",
-      "deleteSelfLocked": "No puedes eliminar tu propia cuenta desde aquí. Usa tu perfil.",
+      "deleteSelfLocked": "No puedes eliminar tu propia cuenta desde aquí. Hazlo desde «Mi cuenta».",
       "deleteModal": {
         "title": "Eliminar usuario",
         "description": "¿Seguro que quieres eliminar la cuenta de {{email}}? Esta acción no se puede deshacer.",
@@ -512,7 +521,8 @@
         "confirm": "Eliminar"
       },
       "searchLabel": "Buscar usuarios por email",
-      "roleFilterLabel": "Filtrar por rol"
+      "roleFilterLabel": "Filtrar por rol",
+      "deleteLastSuperadmin": "Es el único superadministrador de la plataforma. Concede el rol a otra cuenta antes de eliminarla."
     },
     "userDetail": {
       "notFound": "El usuario no existe o ha sido eliminado.",
@@ -542,6 +552,11 @@
       "userCount": "Usuarios",
       "users": "Usuarios de la empresa",
       "noUsers": "Esta empresa todavía no tiene usuarios."
+    },
+    "account": {
+      "title": "Mi cuenta",
+      "email": "Email",
+      "emailUnavailable": "No se pudo cargar tu email."
     }
   },
   "loading": {
@@ -573,7 +588,8 @@
       "adminUsers": "Usuarios · Administración",
       "adminUserDetail": "Detalle de usuario · Administración",
       "adminCompanies": "Empresas · Administración",
-      "adminCompanyDetail": "Detalle de empresa · Administración"
+      "adminCompanyDetail": "Detalle de empresa · Administración",
+      "adminAccount": "Mi cuenta · Administración"
     }
   },
   "notFound": {
@@ -618,7 +634,6 @@
     "invites": {
       "title": "Invitaciones pendientes",
       "empty": "No hay invitaciones pendientes.",
-      "expiredBadge": "Caducada",
       "sentToast": "Invitación enviada",
       "resentToast": "Invitación reenviada",
       "revokedToast": "Invitación revocada",
