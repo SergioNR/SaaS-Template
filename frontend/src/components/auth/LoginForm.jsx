@@ -1,18 +1,7 @@
 import { useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import {
-  Anchor,
-  Button,
-  Container,
-  Group,
-  Paper,
-  PasswordInput,
-  Text,
-  TextInput,
-  Title,
-  Alert,
-} from '@mantine/core';
+import { Anchor, Button, Container, Group, Paper, PasswordInput, Text, TextInput, Title, Alert } from '@mantine/core';
 import { IconAlertCircle, IconMailExclamation } from '@tabler/icons-react';
 import classes from './AuthenticationTitle.module.css';
 import apiClient from '../../config/API/axiosConfig.js';
@@ -49,7 +38,7 @@ export function LoginForm() {
 
     //* `elements.<name>` rather than the form's named properties - jsdom
     //* (the test runner) does not implement HTMLFormElement named access
-    const { username, password } = e.target.elements;
+    const { username, password } = e.currentTarget.elements;
     const data = {
       username: username.value,
       password: password.value,

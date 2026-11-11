@@ -4,14 +4,14 @@ import PropTypes from 'prop-types';
 import { subscriptionStatus } from '../../utils/subscriptionStatus.js';
 
 const BADGES = {
-  paid: { color: 'teal', key: 'billing.statusPaid' },
-  active: { color: 'teal', key: 'billing.statusActive' },
+  paid: { color: 'teal', key: 'billing.statusActive' },
   trial: { color: 'yellow', key: 'billing.statusTrial' },
   inactive: { color: 'red', key: 'billing.statusInactive' },
 };
 
-//* Same rules as SubscriptionContext (utils/subscriptionStatus.js), computed
-//* during render - no first paint with a wrong "inactive" badge
+//* Same rules and labels as the user's billing page (SubscriptionContext +
+//* utils/subscriptionStatus.js), computed during render - no first paint with
+//* a wrong "inactive" badge
 export const SubscriptionStatusBadge = ({ subscription }) => {
   const { t } = useTranslation();
   const badge = BADGES[subscriptionStatus(subscription)];
@@ -25,9 +25,7 @@ export const SubscriptionStatusBadge = ({ subscription }) => {
 
 SubscriptionStatusBadge.propTypes = {
   subscription: PropTypes.shape({
-    expires_at: PropTypes.string,
     status: PropTypes.oneOf(['paid', 'trial', 'inactive']),
-    is_paid: PropTypes.bool,
   }),
 };
 

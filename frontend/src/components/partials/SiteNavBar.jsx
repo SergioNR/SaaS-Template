@@ -17,7 +17,7 @@ const MOBILE_NAV_ID = 'site-mobile-nav';
 //* Matches the 48em (sm) breakpoint in SiteNavBar.module.css
 const DESKTOP_QUERY = '(min-width: 48em)';
 
-const SiteNavBar = () => {
+export const SiteNavBar = () => {
   const { t } = useTranslation();
   const [mobileMenuOpened, setMobileMenuOpened] = useState(false);
   const isDesktop = useMediaQuery(DESKTOP_QUERY);

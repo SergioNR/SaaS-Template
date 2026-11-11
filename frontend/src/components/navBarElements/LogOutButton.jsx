@@ -10,7 +10,7 @@ import { notifyError } from '../../utils/notifications.js';
 import { logApiError } from '../../utils/logApiError.js';
 import { invalidateSessionCaches } from '../../utils/sessionCaches.js';
 
-const LogOutButton = () => {
+export const LogOutButton = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   //* Blocks double submits while the logout POST is in flight

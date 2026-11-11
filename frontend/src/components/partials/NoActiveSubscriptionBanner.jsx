@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useSubscription } from '../../contexts/useSubscription.js';
 import { useNavigate } from 'react-router';
 
-const NoActiveSubscriptionBanner = () => {
+export const NoActiveSubscriptionBanner = () => {
   const { t } = useTranslation();
   const { hasActiveSubscription, loading, error } = useSubscription();
   const navigate = useNavigate();

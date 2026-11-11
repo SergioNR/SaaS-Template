@@ -37,16 +37,8 @@ const redirectToStripe = (url, expectedPrefix) => {
 const UserBilling = () => {
   const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
-  const {
-    subscription,
-    loading,
-    error,
-    errorKind,
-    hasPaidSubscription,
-    isTrial,
-    hasBillingId,
-    refresh,
-  } = useSubscription();
+  const { subscription, loading, error, errorKind, hasPaidSubscription, isTrial, hasBillingId, refresh } =
+    useSubscription();
   //* Shared session cache (one /api/v1/team fetch per session). While
   //* loading or after a failed fetch the actions stay enabled - the backend
   //* still enforces the permission (403 -> toast)
@@ -75,10 +67,13 @@ const UserBilling = () => {
     }
 
     //* Strip the param so a reload doesn't replay the toast
-    setSearchParams((params) => {
-      params.delete(CHECKOUT_STATUS_PARAM);
-      return params;
-    }, { replace: true });
+    setSearchParams(
+      (params) => {
+        params.delete(CHECKOUT_STATUS_PARAM);
+        return params;
+      },
+      { replace: true },
+    );
   }, [checkoutStatus, refresh, setSearchParams, t]);
 
   useEffect(() => {
@@ -137,6 +132,8 @@ const UserBilling = () => {
         notifyError(t('billing.errors.forbidden'));
       } else if (status === 409 && code === 'SUBSCRIPTION_ACTIVE') {
         notifyError(t('billing.errors.subscriptionActive'));
+      } else if (status === 409 && code === 'CHECKOUT_IN_PROGRESS') {
+        notifyError(t('billing.errors.checkoutInProgress'));
       } else if (status === 400 || status === 409 || status === 422) {
         notifyError(t('billing.errors.invalid'));
       } else {
@@ -173,6 +170,7 @@ const UserBilling = () => {
     return (
       <Container size="sm">
         <Seo title={t('seo.pages.billing')} />
+        <Title order={2}>{t('billing.title')}</Title>
         <PageLoader label={t('loading.billing')} />
       </Container>
     );
@@ -182,6 +180,9 @@ const UserBilling = () => {
     return (
       <Container size="sm">
         <Seo title={t('seo.pages.billing')} />
+        <Title order={2} mb="lg">
+          {t('billing.title')}
+        </Title>
         <Alert color="red" title={t('common.error')}>
           <Stack gap="sm" align="flex-start">
             <Text size="sm">{error}</Text>
@@ -206,16 +207,15 @@ const UserBilling = () => {
   return (
     <Container size="sm">
       <Seo title={t('seo.pages.billing')} />
+      <Title order={2} mb="lg">
+        {t('billing.title')}
+      </Title>
       <Stack gap="lg">
-
         <Card withBorder p="lg" radius="md">
           <Stack gap="sm" mt="sm">
             <Group gap="xs">
               <Text fw={700}>{t('billing.status')}</Text>
-              <Badge
-                color={hasPaidSubscription ? 'teal' : isTrial ? 'yellow' : 'red'}
-                variant="light"
-              >
+              <Badge color={hasPaidSubscription ? 'teal' : isTrial ? 'yellow' : 'red'} variant="light">
                 {statusLabel}
               </Badge>
             </Group>
@@ -230,7 +230,7 @@ const UserBilling = () => {
 
         {/* The plan card stays visible during the free trial - that's when
             the user needs to pick a plan */}
-        { !hasPaidSubscription &&
+        {!hasPaidSubscription && (
           <SimpleGrid cols={1} spacing="lg">
             <Card
               withBorder
@@ -243,9 +243,13 @@ const UserBilling = () => {
                 <Text fw={700} size="xl">
                   {t('billing.monthly.pricePerMonth', { price: formatPlanPrice(PLANS.PRO) })}
                 </Text>
-                <Text size="sm" c="dimmed">{t('billing.monthly.vatIncluded')}</Text>
+                <Text size="sm" c="dimmed">
+                  {t('billing.monthly.vatIncluded')}
+                </Text>
               </Group>
-              <Text c="dimmed" mt="md">{t('billing.monthly.description')}</Text>
+              <Text c="dimmed" mt="md">
+                {t('billing.monthly.description')}
+              </Text>
               <Box mt="auto">
                 <LockedTooltip locked={billingLocked} label={t('billing.locked.manage')} block>
                   <Button
@@ -262,7 +266,7 @@ const UserBilling = () => {
               </Box>
             </Card>
           </SimpleGrid>
-        }
+        )}
 
         <Card withBorder p="lg" radius="md">
           <Title order={3}>{t('billing.invoices.title')}</Title>

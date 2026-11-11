@@ -2,23 +2,13 @@ import { useTranslation, Trans } from 'react-i18next';
 import apiClient from '../../config/API/axiosConfig.js';
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router';
-import {
-  Alert,
-  Anchor,
-  Button,
-  Container,
-  Paper,
-  PasswordInput,
-  Text,
-  TextInput,
-  Title,
-} from '@mantine/core';
+import { Alert, Anchor, Button, Container, Paper, PasswordInput, Text, TextInput, Title } from '@mantine/core';
 import { IconAlertCircle, IconCheck } from '@tabler/icons-react';
 import classes from './AuthenticationTitle.module.css';
 import { useNavigate } from 'react-router';
 import Seo from '../Seo.jsx';
 
-const CustomerRegistrationForm = () => {
+export const CustomerRegistrationForm = () => {
   const { t } = useTranslation();
   const [registerResponse, setRegisterResponse] = useState(null);
   const [registerError, setRegisterError] = useState(null);
@@ -137,7 +127,10 @@ const CustomerRegistrationForm = () => {
             <Trans
               i18nKey="auth.register.terms"
               t={t}
-              components={[<Link key="terms" to="/terminos-condiciones" />, <Link key="terms-label" to="/terminos-condiciones" />]}
+              components={[
+                <Link key="terms" to="/terminos-condiciones" />,
+                <Link key="terms-label" to="/terminos-condiciones" />,
+              ]}
             />
           </Text>
         </Paper>
