@@ -52,6 +52,13 @@ services:
   frontend:
     image: ${DOCKERHUB_USERNAME:?set DOCKERHUB_USERNAME in .env}/expressjs-template-front:${NEXT_TAG:-next}
     restart: unless-stopped
+    environment:
+      #* Runtime CSP origins (frontend/README.md). The defaults equal the
+      #* image's: no extra connect-src origin, the EU PostHog cloud. Set
+      #* NGINX_CSP_CONNECT_EXTRA to the S3 bucket origin when file uploads are
+      #* enabled - presigned uploads are blocked by the CSP otherwise
+      NGINX_CSP_CONNECT_EXTRA: ${NGINX_CSP_CONNECT_EXTRA:-}
+      NGINX_CSP_POSTHOG_ORIGINS: ${NGINX_CSP_POSTHOG_ORIGINS:-https://eu.i.posthog.com https://eu-assets.i.posthog.com}
     ports:
       - 127.0.0.1:${NEXT_FRONTEND_PORT:-8081}:8080
     depends_on:

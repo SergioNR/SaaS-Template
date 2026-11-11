@@ -18,7 +18,7 @@
 
 - [ ] 3.1 Locally: `docker build -t tpl-api ./backend` and `docker build --build-arg VITE_API_BASE_URL=http://localhost:3000 --build-arg VITE_SITE_BASE_URL=http://localhost:8080 -t tpl-web ./frontend`; check image sizes, non-root user, `docker inspect` healthcheck
 - [ ] 3.2 Root `.env` from `.env.example`; `docker compose config` and `docker compose -f compose.dev.yaml config` render without errors; database port bound to `127.0.0.1` only
-- [ ] 3.3 `docker compose up -d --wait` (and the dev stack): all services reach `healthy`; `curl` `/health` on the API and `/` on the frontend; CSP/security headers present on the frontend responses
+- [ ] 3.3 Before CI images exist: `TAG=local docker compose -f compose.yaml -f compose.build.yaml up -d --build --wait` (builds from the checkout); afterwards `docker compose up -d --wait` (and the dev stack): all services reach `healthy`; `curl` `/health` on the API and `/` on the frontend; CSP/security headers present on the frontend responses
 - [ ] 3.4 Staging host: `docker compose -f compose.dev.yaml pull && ... up -d --wait` with the CI `next` images; register, log in, open every area
 
 ## 4. Migrations against real data
