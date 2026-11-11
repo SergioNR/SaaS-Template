@@ -47,7 +47,7 @@ Because the app is built with Vite, all `VITE_*` variables are baked in at build
 
 ## SEO files
 
-`npm run build` emits `robots.txt` and `sitemap.xml` into `dist/` using `VITE_SITE_BASE_URL` as the origin; the indexable routes live in `src/config/publicRoutes.js`. `public/og-image.png` is a neutral 1200×630 placeholder used for `og:image`/`twitter:image` — replace it with your own artwork.
+`npm run build` emits `robots.txt` and `sitemap.xml` into `dist/` using `VITE_SITE_BASE_URL` as the origin; the indexable routes live in `src/config/publicRoutes.js`. `public/og-image.png` is a neutral 1200×630 placeholder used for `og:image`/`twitter:image` — replace it with your own artwork (see the root README [Forking checklist](../README.md#forking-checklist)).
 
 ## Docker & deployment
 

@@ -16,10 +16,10 @@ The template itself must keep its placeholders, so nothing is replaced here. No 
 ## What Changes
 
 - **Recommended:** add a "Forking checklist" section to the root `README.md` listing every placeholder above with its file, so a fork has one place to work through; link it from `frontend/README.md` and the `og-image`/`theme.js` notes.
-- Keep this change open as the tracker: its tasks are the checklist a fork (or the template, when the list changes) ticks; the template's own apply is only the README section.
+- The README checklist is the tracker: a fork ticks it (or turns it into its own OpenSpec change); the template keeps it current whenever a placeholder is added. This change is archived once the section exists, so the template's open-work queue only holds work the template itself does.
 - Optional: a small `grep`-based check (`npm run check:placeholders` or a documented command) that lists remaining placeholder strings, for forks to run before their first deploy.
 
-Alternative considered: README only, no change. Rejected as the sole home because a change gives a fork an `/opsx:apply`-able checklist and the template a place to record new placeholders.
+Alternative considered: README only, no change. Rejected at first because a change gives a fork an `/opsx:apply`-able checklist; on apply, an open change in the template that the template can never finish proved the worse home — the README checkbox list carries the same items and a fork can propose its own change from it.
 
 ## Capabilities
 

@@ -68,3 +68,43 @@ The `VITE_*` values are baked into the public JS bundle, so they are Actions *va
 Also in `.github/`: `codeql.yml` (CodeQL code scanning on pushes, PRs and weekly) and `dependabot.yml` (weekly grouped updates for both npm packages, Actions and Docker images). The test job also runs a non-blocking `npm audit --omit=dev --audit-level=high` per package.
 
 Recommended branch protection for `latest` and `next`: require a PR and the status checks **Test, lint and build** and **Analyze (javascript-typescript)**.
+
+## Forking checklist
+
+The template ships deliberate placeholders. A product forked from it replaces every item below before its first production deploy; the template itself keeps them.
+
+**Brand assets**
+
+- [ ] `frontend/public/og-image.png` — 1200×630 social image (`og:image` / `twitter:image`); check the built `/pricing` page loads it
+- [ ] `frontend/public/logo.svg` — favicon and brand mark
+- [ ] `frontend/src/theme/theme.js` — the `brand` colour scale (10 shades) and font; check primary button and link contrast
+
+**Copy** (`frontend/src/i18n/locales/es.json` unless noted)
+
+- [ ] `common.siteName`, `common.contactEmail`, `seo.defaultTitle`, `footer.tagline`
+- [ ] Homepage sections (hero, features, how-it-works), FAQ, pricing plan copy, the other `seo.*` defaults
+- [ ] Terms page copy, including the support email — needs legal review
+- [ ] `frontend/index.html` — fallback `<title>`
+
+**Names**
+
+- [ ] Image names `expressjs-template` / `expressjs-template-front` in `.github/workflows/docker-build-push.yaml`, `compose.yaml`, `compose.dev.yaml`, `frontend/README.md`; create the matching Docker Hub repositories
+- [ ] Package names in `backend/package.json` and `frontend/package.json` (then `npm install --package-lock-only` in each); the project name in `backend/compose.yaml`
+- [ ] OpenAPI title and description in `backend/server/config/swagger.js`
+
+**Billing and email**
+
+- [ ] Plans in `frontend/src/config/plans.js` and `backend/server/config/planPrices.js`; create the Stripe products/prices (boot fails unless every plan resolves to a price)
+- [ ] Brevo sender and template ids (`BREVO_*` in `backend/.env.example` / the root `.env`)
+
+**Verify**
+
+- [ ] The placeholder scan below prints nothing; `npm test`, lint and `npm run build` pass in both packages
+
+```bash
+grep -rnE "Your App|yourapp\.com|expressjs-template|Express\.js Template" \
+  --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=openspec --exclude-dir=.claude \
+  --exclude=package-lock.json --exclude=README.md .
+```
+
+On the template the scan lists exactly the placeholders above. Add any new placeholder to this list in the same change that introduces it.
