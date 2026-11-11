@@ -18,10 +18,10 @@
         "test": "NODE_OPTIONS='--experimental-vm-modules' jest"
     },
     "dependencies": {
-        "@aws-sdk/client-s3": "^3.1161.0",
-        "@aws-sdk/s3-request-presigner": "^3.1161.0",
+        "@aws-sdk/client-s3": "^3.1164.0",
+        "@aws-sdk/s3-request-presigner": "^3.1164.0",
         "@getbrevo/brevo": "^6.2.0",
-        "@logtail/pino": "^0.5.13",
+        "@logtail/pino": "^0.6.1",
         "@prisma/adapter-pg": "^7.10.1",
         "@prisma/client": "^7.10.1",
         "@quixo3/prisma-session-store": "^3.1.13",
@@ -39,7 +39,7 @@
         "passport-local": "^1.0.0",
         "pino": "^10.1.0",
         "pino-http": "^11.0.0",
-        "posthog-node": "^5.61.2",
+        "posthog-node": "^5.63.1",
         "prisma": "^7.10.1",
         "stripe": "^23.1.0",
         "swagger-ui-express": "^5.0.1",
