@@ -1,16 +1,20 @@
 import { Link, NavLink, Outlet } from 'react-router';
 import PropTypes from 'prop-types';
 import { useTranslation } from 'react-i18next';
-import { AppShell, Anchor, Box, Burger, Group, Image, Text } from '@mantine/core';
+import { AppShell, Anchor, Box, Burger, Group, Image, Text, UnstyledButton } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
+import { IconCookie } from '@tabler/icons-react';
 import classes from './AreaShell.module.css';
 import LogOutButton from '../navBarElements/LogOutButton';
 import { MAIN_CONTENT_ID, SkipLink } from '../SkipLink.jsx';
+import { analyticsEnabled, resetAnalyticsConsent } from '../../analytics/posthog.js';
 
 const AREA_NAV_ID = 'area-navbar';
 
 //* Shared AppShell for the private areas (user, admin): header with brand and
-//* burger, sidebar with the area's links and logout as the only exit
+//* burger, sidebar with the area's links and logout as the only exit. With
+//* analytics configured the sidebar footer also offers the cookie-preferences
+//* control (the private areas have no SiteFooter)
 export const AreaShell = ({ homeTo, title, links, sections, outletContext }) => {
   const { t } = useTranslation();
   const [opened, { toggle, close }] = useDisclosure();
@@ -77,6 +81,20 @@ export const AreaShell = ({ homeTo, title, links, sections, outletContext }) => 
         </AppShell.Section>
 
         <AppShell.Section pt="md">
+          {analyticsEnabled && (
+            <UnstyledButton
+              type="button"
+              className={classes.link}
+              onClick={() => {
+                //* Stops capturing and re-opens the consent banner
+                resetAnalyticsConsent();
+                close();
+              }}
+            >
+              <IconCookie className={classes.linkIcon} stroke={1.5} aria-hidden />
+              <span>{t('consent.manage')}</span>
+            </UnstyledButton>
+          )}
           <LogOutButton />
         </AppShell.Section>
       </AppShell.Navbar>

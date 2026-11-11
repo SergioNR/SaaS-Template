@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import apiClient from '../../config/API/axiosConfig.js';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { Anchor, Box, Button, Center, Container, Group, Paper, PasswordInput, Title, Alert } from '@mantine/core';
 import { IconAlertCircle, IconCheck, IconArrowLeft } from '@tabler/icons-react';
@@ -28,6 +28,9 @@ const RestorePasswordPage = () => {
   const [passwordMismatch, setPasswordMismatch] = useState(false);
   const [submitError, setSubmitError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  //* Synchronous guard - `submitting` is stale until the re-render, so a
+  //* second Enter fired before it would otherwise send a second request
+  const submittingRef = useRef(false);
 
   useEffect(() => {
     scrubQueryFromAddressBar();
@@ -61,13 +64,13 @@ const RestorePasswordPage = () => {
   const updateRecoveredPassword = async (e) => {
     e.preventDefault();
 
-    if (submitting) {
+    if (submittingRef.current) {
       return;
     }
 
     const form = e.currentTarget;
-    const newPassword = form.newPassword.value;
-    const confirmNewPassword = form.confirmNewPassword.value;
+    const newPassword = form.elements.newPassword.value;
+    const confirmNewPassword = form.elements.confirmNewPassword.value;
 
     if (newPassword !== confirmNewPassword) {
       setPasswordMismatch(true);
@@ -76,6 +79,7 @@ const RestorePasswordPage = () => {
 
     setPasswordMismatch(false);
     setSubmitError(null);
+    submittingRef.current = true;
     setSubmitting(true);
 
     try {
@@ -99,6 +103,7 @@ const RestorePasswordPage = () => {
         setSubmitError(t('auth.restore.errors.generic'));
       }
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   };

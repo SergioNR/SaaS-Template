@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { loginRedirectPath, safeNextPath } from './safeNext.js';
+import { isAuthPath, loginRedirectPath, safeNextPath } from './safeNext.js';
 
 const ORIGIN = 'https://app.example.com';
 
@@ -49,5 +49,20 @@ describe('loginRedirectPath', () => {
   it('drops an unsafe current path', () => {
     expect(loginRedirectPath('/auth/login')).toBe('/auth/login');
     expect(loginRedirectPath('//evil.example.com')).toBe('/auth/login');
+  });
+});
+
+describe('isAuthPath', () => {
+  it.each(['/auth', '/auth/', '/auth/login', '/auth/accept-invite'])('treats %s as an auth page', (pathname) => {
+    expect(isAuthPath(pathname)).toBe(true);
+  });
+
+  it.each(['/', '/authors-page', '/authx', '/user/auth', '', undefined])('treats %s as a non-auth page', (pathname) => {
+    expect(isAuthPath(pathname)).toBe(false);
+  });
+
+  it('keeps safeNextPath rejecting the bare /auth route', () => {
+    expect(safeNextPath('/auth', ORIGIN)).toBeNull();
+    expect(safeNextPath('/authors-page', ORIGIN)).toBe('/authors-page');
   });
 });

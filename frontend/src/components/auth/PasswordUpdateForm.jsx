@@ -1,3 +1,4 @@
+import PropTypes from 'prop-types';
 import { useTranslation } from 'react-i18next';
 import { useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router';
@@ -8,12 +9,14 @@ import { notifySuccess } from '../../utils/notifications.js';
 import { currentPath, loginRedirectPath } from '../../utils/safeNext.js';
 import { invalidateSessionCaches } from '../../utils/sessionCaches.js';
 
-const PasswordUpdateForm = () => {
+const PasswordUpdateForm = ({ email: emailProp }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  //* UserWrapper's outlet context - the email fills the hidden username
-  //* field so password managers update the right saved credential
-  const email = useOutletContext()?.user?.email ?? '';
+  //* The email fills the hidden username field so password managers update
+  //* the right saved credential: UserWrapper's outlet context in the user
+  //* area, an explicit prop where the context has no profile (admin account)
+  const contextEmail = useOutletContext()?.user?.email;
+  const email = emailProp ?? contextEmail ?? '';
   const [errorMessage, setErrorMessage] = useState(null);
   const [loading, setLoading] = useState(false);
 
@@ -30,8 +33,8 @@ const PasswordUpdateForm = () => {
     //* Captured before the await - React reuses the event object afterwards
     const form = e.currentTarget;
     const passwordUpdateData = {
-      currentPassword: form.currentPassword.value,
-      newPassword: form.newPassword.value,
+      currentPassword: form.elements.currentPassword.value,
+      newPassword: form.elements.newPassword.value,
     };
 
     try {
@@ -108,6 +111,10 @@ const PasswordUpdateForm = () => {
       </form>
     </Card>
   );
+};
+
+PasswordUpdateForm.propTypes = {
+  email: PropTypes.string,
 };
 
 export default PasswordUpdateForm;

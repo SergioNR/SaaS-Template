@@ -18,9 +18,13 @@ The user profile page (`pages/user/CustomerProfile.jsx`) composes `PasswordUpdat
 
 ### Data shown
 
-Email from `sessionUser` (outlet context). No extra `GET /api/v1/user` fetch — nothing else is displayed.
+The session check (`GET /api/v1/auth/session`) only returns `{ id, role }`, so `sessionUser` has no email. Options:
 
-## Open questions
+- **A. `AdminAccount` fetches `GET /api/v1/user` once per mount (chosen).** The endpoint already admits both platform roles (`account`), so no API change is needed; the email renders behind an inline `Skeleton` and falls back to an "email unavailable" line on failure — the forms stay usable either way. The email is passed to `PasswordUpdateForm` through a new optional `email` prop (the user area keeps reading it from `UserWrapper`'s outlet context).
+- B. Add the email to the session payload. Rejected: changes an `auth` contract owned by another batch for a single page.
 
-- Should the page also show `activeSessionCount` (available only from the admin user-detail endpoint)? Default: no.
-- Should self-deletion of a non-last superadmin require typing the email to confirm, given its blast radius? Default: same confirmation dialog as the user area, with a stronger warning line.
+## Resolved questions
+
+- `activeSessionCount` on the page: **no** (conservative default; it is only on the admin user-detail endpoint).
+- Typed-email confirmation for a non-last superadmin's self-deletion: **no** — same confirmation dialog as the user area, with superadmin wording and an extra red warning line (`variant="superadmin"`).
+- `LAST_SUPERADMIN` on self-deletion surfaces as an error toast (as the other deletion refusals already do); the dialog closes and the session, caches and analytics identity stay untouched.

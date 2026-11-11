@@ -9,6 +9,7 @@ import PageLoader from '../../components/PageLoader.jsx';
 import SessionCheckError from '../../components/SessionCheckError.jsx';
 import { SubscriptionProvider } from '../../contexts/SubscriptionContext.jsx';
 import { currentPath, loginRedirectPath } from '../../utils/safeNext.js';
+import { invalidateSessionCaches } from '../../utils/sessionCaches.js';
 
 const UserWrapper = () => {
   const { t } = useTranslation();
@@ -63,6 +64,10 @@ const UserWrapper = () => {
         //* Only a rejected session sends the user to login; a network/server
         //* error keeps them here with a retry
         if (err?.response?.status === 401) {
+          //* The session probe sits under /api/v1/auth/, which the axios 401
+          //* interceptor skips - clear per-session caches here before the
+          //* client-side navigation (no reload) to login
+          invalidateSessionCaches();
           navigateRef.current(loginRedirectPath(currentPath()), { replace: true });
         } else {
           setError(true);

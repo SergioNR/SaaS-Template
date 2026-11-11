@@ -38,7 +38,7 @@ const ForgotPasswordForm = () => {
     setSubmitting(true);
 
     const data = {
-      email: e.target.email.value,
+      email: e.currentTarget.elements.email.value,
     };
 
     try {

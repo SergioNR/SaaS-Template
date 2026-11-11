@@ -52,6 +52,23 @@ describe('401 interceptor', () => {
     expect(hardRedirect).not.toHaveBeenCalled();
   });
 
+  it('does not redirect while on the bare /auth route', async () => {
+    window.history.replaceState(null, '', '/auth');
+
+    await expect(handleUnauthorized(axiosError(401, '/api/v1/team'))).rejects.toBeDefined();
+
+    expect(hardRedirect).not.toHaveBeenCalled();
+    expect(invalidateSessionCaches).not.toHaveBeenCalled();
+  });
+
+  it('still redirects on a path that only shares the /auth prefix', async () => {
+    window.history.replaceState(null, '', '/authors-page');
+
+    await expect(handleUnauthorized(axiosError(401, '/api/v1/team'))).rejects.toBeDefined();
+
+    expect(hardRedirect).toHaveBeenCalledWith(`/auth/login?next=${encodeURIComponent('/authors-page')}`);
+  });
+
   it.each([403, 404, 500, undefined])('ignores status %s', async (status) => {
     await expect(handleUnauthorized(axiosError(status, '/api/v1/team'))).rejects.toBeDefined();
 

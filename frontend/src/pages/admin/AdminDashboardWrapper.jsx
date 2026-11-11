@@ -1,12 +1,14 @@
 import { useNavigate } from 'react-router';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { IconLayoutDashboard, IconUsers, IconBuilding } from '@tabler/icons-react';
+import { IconLayoutDashboard, IconUsers, IconBuilding, IconUserCircle } from '@tabler/icons-react';
 import apiClient from '../../config/API/axiosConfig.js';
+import { identifyUser } from '../../analytics/posthog.js';
 import PageLoader from '../../components/PageLoader.jsx';
 import SessionCheckError from '../../components/SessionCheckError.jsx';
 import AreaShell from '../../components/partials/AreaShell.jsx';
 import { currentPath, loginRedirectPath } from '../../utils/safeNext.js';
+import { invalidateSessionCaches } from '../../utils/sessionCaches.js';
 
 export const AdminDashboardWrapper = () => {
   const { t } = useTranslation();
@@ -48,6 +50,10 @@ export const AdminDashboardWrapper = () => {
         //* Only a rejected session sends the user to login; a network/server
         //* error keeps them here with a retry
         if (err?.response?.status === 401) {
+          //* The session probe sits under /api/v1/auth/, which the axios 401
+          //* interceptor skips - clear per-session caches here before the
+          //* client-side navigation (no reload) to login
+          invalidateSessionCaches();
           navigateRef.current(loginRedirectPath(currentPath()), { replace: true });
         } else {
           setError(true);
@@ -62,11 +68,22 @@ export const AdminDashboardWrapper = () => {
     };
   }, [attempt]);
 
+  const sessionUserId = sessionUser?.id ?? null;
+
+  //* Only reaches PostHog once the visitor consented (analytics/posthog.js);
+  //* remembered so consent given later still identifies the admin
+  useEffect(() => {
+    if (sessionUserId) {
+      identifyUser(sessionUserId);
+    }
+  }, [sessionUserId]);
+
   const links = useMemo(
     () => [
       { to: '/admin', label: t('admin.nav.overview'), icon: IconLayoutDashboard, end: true },
       { to: '/admin/users', label: t('admin.nav.users'), icon: IconUsers },
       { to: '/admin/companies', label: t('admin.nav.companies'), icon: IconBuilding },
+      { to: '/admin/account', label: t('admin.nav.account'), icon: IconUserCircle },
     ],
     [t],
   );
@@ -82,14 +99,7 @@ export const AdminDashboardWrapper = () => {
   }
 
   //* Child pages read the signed-in admin via useOutletContext()
-  return (
-    <AreaShell
-      homeTo="/admin"
-      title={t('admin.areaTitle')}
-      links={links}
-      outletContext={outletContext}
-    />
-  );
+  return <AreaShell homeTo="/admin" title={t('admin.areaTitle')} links={links} outletContext={outletContext} />;
 };
 
 export default AdminDashboardWrapper;

@@ -39,14 +39,9 @@ export function Team() {
   const [callerPermissions, setCallerPermissions] = useState([]);
   const [assignableRoles, setAssignableRoles] = useState([]);
   const [callerId, setCallerId] = useState(null);
-  const [now, setNow] = useState(null);
   //* Rows with a mutation in flight (role change, resend, revoke) - their
   //* controls are disabled so a double click cannot fire the request twice
   const [pendingIds, setPendingIds] = useState(() => new Set());
-
-  useEffect(() => {
-    setNow(Date.now());
-  }, []);
 
   const [inviteModalOpened, setInviteModalOpened] = useState(false);
   const [inviteRole, setInviteRole] = useState(null);
@@ -143,6 +138,18 @@ export function Team() {
     label: roleLabel(t, roleName),
   }));
 
+  //* Shared by the modal's onClose and its Cancel button - dismissing the
+  //* dialog by any means resets the role choice and its error
+  const closeInviteModal = () => {
+    if (inviting) {
+      return;
+    }
+
+    setInviteModalOpened(false);
+    setInviteRole(null);
+    setInviteRoleError(false);
+  };
+
   const submitInvite = async (event) => {
     event.preventDefault();
 
@@ -163,7 +170,7 @@ export function Team() {
 
     try {
       await apiClient.post('/api/v1/team/invites', {
-        email: form.email.value,
+        email: form.elements.email.value,
         roleName: inviteRole,
       });
 
@@ -345,7 +352,6 @@ export function Team() {
   });
 
   const inviteRows = invites.map((invite) => {
-    const expired = now !== null && new Date(invite.token_expires).getTime() < now;
     const { locked: inviteLocked, lockLabel: inviteLockLabel } = inviteLocks({ invite, capabilities });
     const pending = isPending(inviteKey(invite.id));
 
@@ -360,14 +366,7 @@ export function Team() {
           </Badge>
         </Table.Td>
         <Table.Td>
-          <Group gap={6} wrap="nowrap">
-            <Text fz="sm">{formatDateTime(invite.token_expires)}</Text>
-            {expired && (
-              <Badge color="red" variant="light" size="sm">
-                {t('team.invites.expiredBadge')}
-              </Badge>
-            )}
-          </Group>
+          <Text fz="sm">{formatDateTime(invite.token_expires)}</Text>
         </Table.Td>
         <Table.Td>
           <Group gap={0} justify="flex-end" wrap="nowrap">
@@ -504,13 +503,7 @@ export function Team() {
 
       <Modal
         opened={inviteModalOpened}
-        onClose={() => {
-          if (inviting) {
-            return;
-          }
-          setInviteModalOpened(false);
-          setInviteRoleError(false);
-        }}
+        onClose={closeInviteModal}
         title={t('team.inviteModal.title')}
       >
         <form onSubmit={submitInvite}>
@@ -536,7 +529,7 @@ export function Team() {
               required
             />
             <Group justify="flex-end">
-              <Button variant="default" onClick={() => setInviteModalOpened(false)} disabled={inviting}>
+              <Button variant="default" onClick={closeInviteModal} disabled={inviting}>
                 {t('team.inviteModal.cancel')}
               </Button>
               <Button type="submit" loading={inviting}>
