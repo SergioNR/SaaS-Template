@@ -33,3 +33,15 @@ Purge rows with `reset_at < now() - 1 day` from a lock-guarded scheduled job (da
 
 - Offer `RATE_LIMIT_STORE_SCOPE=all` to put the global limiter and slow-down on the shared store too? Recommended: not now.
 - Should the password-change limiter also key by IP to slow distributed guessing against many accounts from one IP? Recommended: no - the global per-IP limiter covers that.
+
+## Decisions taken at implementation
+
+- Option 1 (custom Prisma-backed store). Migration `20261111000002_rate_limit_hits` (hand-written, checked with `prisma migrate diff --from-schema <previous schema> --to-schema prisma/schema.prisma --script`). `reset_at` is `timestamptz` because it is written and compared with the database `now()`.
+- No `RATE_LIMIT_STORE_SCOPE`: the global limiter, slow-down and webhook limiter stay in memory.
+- The password-change limiter keys by account only (`pwchange:<userId>`).
+- To count only `AUTH_CURRENT_PASSWORD_INCORRECT`, the limiter middleware wraps `res.json` to mirror the body `code` into `res.locals.responseCode`. `requestWasSuccessful` then treats every other outcome as successful, and `skipSuccessfulRequests` refunds it.
+- The limiter is mounted on both `PATCH /api/v1/user/password` and the deprecated alias `PATCH /api/v1/auth/update-user-password`, because the alias still exists. The SPA form still calls the alias, so moving it is left to the legacy-route change.
+- Store errors: `passOnStoreError: true` plus a `logger` that maps the library's error and warn calls to `logWarn`.
+- The store loads `models/rateLimitModel.js` lazily, so the default memory store never imports the Prisma client.
+- Purge job: `deleteExpiredRateLimitHits` daily at 03:30 under `cronExpiredRateLimitHits` (7300005). It deletes rows whose `reset_at` is more than 1 day old and does nothing with the memory store.
+- `PasswordUpdateForm` reads its inputs through `form.elements`, as the frontend AGENTS.md requires. Without that its new spec cannot run in jsdom.
