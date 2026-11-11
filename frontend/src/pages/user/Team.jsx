@@ -22,7 +22,7 @@ import LockedTooltip from '../../components/LockedTooltip.jsx';
 import { notifyError, notifySuccess } from '../../utils/notifications.js';
 import { formatDateTime } from '../../utils/formatDate.js';
 import { primeCompanyPermissions } from '../../hooks/useCompanyPermissions.js';
-import { callerCapabilities, inviteButtonState, inviteLocks, memberLocks } from './teamLocks.js';
+import { callerCapabilities, holdsOwnerRole, inviteButtonState, inviteLocks, memberLocks } from './teamLocks.js';
 
 const roleLabel = (t, roleName) => t(`team.roles.${roleName}`, roleName);
 
@@ -54,6 +54,8 @@ export function Team() {
   const [inviting, setInviting] = useState(false);
 
   const [removeTarget, setRemoveTarget] = useState(null);
+  //* { member, roleName } while an owner's demotion awaits confirmation
+  const [demoteTarget, setDemoteTarget] = useState(null);
   const [removing, setRemoving] = useState(false);
 
   //* Every load aborts the previous one and bumps the request id, so a slow
@@ -332,7 +334,11 @@ export function Team() {
                 disabled={roleLocked || pending}
                 data={assignableRoleOptions}
                 value={roleNotAssignable ? null : currentRole}
-                onChange={(roleName) => changeMemberRole(member.id, roleName)}
+                onChange={(roleName) =>
+                  holdsOwnerRole(member) && roleName && roleName !== 'company_owner'
+                    ? setDemoteTarget({ member, roleName })
+                    : changeMemberRole(member.id, roleName)
+                }
                 aria-label={t('team.members.roleChange', { email: member.email })}
                 aria-busy={pending}
               />
@@ -567,13 +573,51 @@ export function Team() {
         title={t('team.members.removeModal.title')}
       >
         <Stack>
-          <Text size="sm">{t('team.members.removeModal.description', { email: removeTarget?.email ?? '' })}</Text>
+          <Text size="sm">
+            {t(
+              holdsOwnerRole(removeTarget)
+                ? 'team.members.removeModal.ownerDescription'
+                : 'team.members.removeModal.description',
+              { email: removeTarget?.email ?? '' },
+            )}
+          </Text>
           <Group justify="flex-end">
             <Button variant="default" onClick={() => setRemoveTarget(null)} disabled={removing}>
               {t('team.members.removeModal.cancel')}
             </Button>
             <Button color="red" onClick={confirmRemove} loading={removing}>
               {t('team.members.removeModal.confirm')}
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+
+      <Modal
+        opened={demoteTarget !== null}
+        onClose={() => setDemoteTarget(null)}
+        title={t('team.members.demoteOwnerModal.title')}
+      >
+        <Stack>
+          <Text size="sm">
+            {t('team.members.demoteOwnerModal.description', {
+              email: demoteTarget?.member.email ?? '',
+              role: demoteTarget ? roleLabel(t, demoteTarget.roleName) : '',
+            })}
+          </Text>
+          <Group justify="flex-end">
+            <Button variant="default" onClick={() => setDemoteTarget(null)}>
+              {t('team.members.demoteOwnerModal.cancel')}
+            </Button>
+            <Button
+              color="red"
+              onClick={() => {
+                const { member, roleName } = demoteTarget;
+
+                setDemoteTarget(null);
+                changeMemberRole(member.id, roleName);
+              }}
+            >
+              {t('team.members.demoteOwnerModal.confirm')}
             </Button>
           </Group>
         </Stack>

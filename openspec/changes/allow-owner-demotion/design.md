@@ -28,3 +28,9 @@ Owners A and B demote each other at the same time. The company lock serializes t
 
 - Add a stronger SPA confirmation (typed confirmation) when the target is an owner? Recommended: a distinct confirmation message is enough.
 - Should the API refuse demoting an owner whose account has the Stripe customer email? Recommended: no - billing contact is the company's, not the user's.
+
+## Implementation decisions (resolved open questions)
+
+- Scope: both demotion and removal (option 1), one predicate `canManageMember` used by the listing hint, the controllers and the under-lock model checks.
+- SPA confirmation: a distinct confirmation text (no typed confirmation) for removing an owner, and a confirmation modal before demoting an owner (role changes of other members still apply immediately).
+- Billing contact: no special case for the owner whose email the Stripe customer carries.

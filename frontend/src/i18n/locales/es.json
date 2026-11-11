@@ -633,7 +633,14 @@
         "title": "Eliminar miembro",
         "description": "Se eliminará la cuenta de {{email}} y se cerrarán todas sus sesiones. Esta acción no se puede deshacer.",
         "cancel": "Cancelar",
-        "confirm": "Eliminar miembro"
+        "confirm": "Eliminar miembro",
+        "ownerDescription": "{{email}} es propietario de la empresa. Se eliminará su cuenta, perderá el control de la empresa y se cerrarán todas sus sesiones. Esta acción no se puede deshacer."
+      },
+      "demoteOwnerModal": {
+        "title": "Quitar rol de propietario",
+        "description": "{{email}} es propietario de la empresa. Pasará a ser {{role}} y perderá el control total de la empresa, incluida la facturación.",
+        "cancel": "Cancelar",
+        "confirm": "Cambiar rol"
       }
     },
     "invites": {
@@ -667,7 +674,7 @@
       "manageRoles": "No tienes permiso para cambiar los roles de los miembros",
       "roleNotAssignable": "No puedes cambiar el rol de este miembro",
       "self": "No puedes modificar tu propia cuenta",
-      "notOutranked": "Solo puedes gestionar a miembros con un rol inferior al tuyo",
+      "notOutranked": "Solo puedes gestionar a miembros con un rol inferior al tuyo (los propietarios también pueden gestionar a otros propietarios)",
       "inviteRole": "No puedes gestionar invitaciones para este rol"
     },
     "errors": {

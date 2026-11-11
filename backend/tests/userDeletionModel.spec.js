@@ -195,6 +195,31 @@ describe('deleteUserWithCompanyDataInDb', () => {
       expect(tx.user.delete).not.toHaveBeenCalled();
     });
 
+    it('lets an owner remove a co-owner under the lock', async () => {
+      tx.user.findFirst
+        .mockResolvedValueOnce({ id: 'target', role: 'user', company_id: 'company-1' })
+        .mockResolvedValueOnce({ UserRoles: rolesOf(['company_owner']) }) //* target
+        .mockResolvedValueOnce({ UserRoles: rolesOf(['company_owner']) }); //* caller
+      tx.user.count.mockResolvedValue(2);
+      tx.user.delete.mockResolvedValue({ id: 'target', role: 'user' });
+
+      const result = await deleteUserWithCompanyDataInDb('target', { companyId: 'company-1', callerId: 'caller', protectLastOwner: true });
+
+      expect(result).toEqual(expect.objectContaining({ status: 'deleted', companyDeleted: false }));
+    });
+
+    it('refuses a calling owner demoted concurrently (mutual removal race)', async () => {
+      tx.user.findFirst
+        .mockResolvedValueOnce({ id: 'target', role: 'user', company_id: 'company-1' })
+        .mockResolvedValueOnce({ UserRoles: rolesOf(['company_owner']) })
+        .mockResolvedValueOnce({ UserRoles: rolesOf(['company_admin']) });
+
+      const result = await deleteUserWithCompanyDataInDb('target', { companyId: 'company-1', callerId: 'caller', protectLastOwner: true });
+
+      expect(result).toEqual({ status: 'forbidden' });
+      expect(tx.user.delete).not.toHaveBeenCalled();
+    });
+
     it('deletes the member, their sessions and the invites they issued', async () => {
       tx.user.findFirst
         .mockResolvedValueOnce({ id: 'target', company_id: 'company-1' })

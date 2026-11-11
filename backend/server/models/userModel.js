@@ -11,7 +11,7 @@ import { ADVISORY_LOCK_KEYS } from '../config/advisoryLockKeys.js';
 import { deleteUserSessionsInTx } from './sessionModel.js';
 import { deleteUserPasswordResetTokensInTx } from './passwordResetTokensModel.js';
 import { hashSecureToken } from '../utils/secureToken.js';
-import { canGrantRole, outranksAllRoles, rolesGrantableBy } from '../utils/companyRoleHierarchy.js';
+import { canGrantRole, canManageMember, rolesGrantableBy } from '../utils/companyRoleHierarchy.js';
 
 const COMPANY_OWNER_ROLE = 'company_owner';
 
@@ -92,8 +92,9 @@ export const canCompanyMemberGrantRoleInDb = async (memberId, companyId, roleNam
 //* - protectLastOwner: refuse to delete the last company owner while other
 //*   members remain (they would be left without anyone able to manage them)
 //* - callerId: refuse unless the caller - a member of the same company whose
-//*   role rows are re-read under the lock - outranks every role the user
-//*   holds (a stale pre-check outside the lock can never be trusted)
+//*   role rows are re-read under the lock - may manage the user
+//*   (canManageMember: outranks every role it holds, or both are owners - a
+//*   stale pre-check outside the lock can never be trusted)
 //* - onlyIfUnverified: only delete while the account is still unverified,
 //*   re-read under a user row lock (purge job, invite claim) - otherwise
 //*   resolves to { status: 'verified' }
@@ -213,7 +214,7 @@ const deleteUserWithCompanyDataInTx = async (tx, userId, options = {}) => {
   if (callerId) {
     const callerRoleNames = await getMemberRoleNamesInTx(tx, callerId, userCompanyId);
 
-    if (!callerRoleNames || !outranksAllRoles(callerRoleNames, userRoleNames)) {
+    if (!callerRoleNames || !canManageMember(callerRoleNames, userRoleNames)) {
       return { status: 'forbidden' };
     }
   }
@@ -810,8 +811,8 @@ export const getOneCompanyMemberInDb = async (userId, companyId) => {
 //*
 //* Options:
 //* - callerId: refuse unless the caller - a member of the same company whose
-//*   role rows are re-read under the lock - outranks every role the member
-//*   currently holds AND may grant the new role
+//*   role rows are re-read under the lock - may manage the member
+//*   (canManageMember) AND may grant the new role
 //*
 //* Resolves to { status: 'not_found' | 'last_owner' | 'forbidden' } or
 //* { status: 'updated', member }
@@ -831,7 +832,7 @@ export const updateCompanyMemberRoleInDb = async (userId, companyId, role, optio
       const callerRoleNames = await getMemberRoleNamesInTx(tx, callerId, companyId);
 
       if (!callerRoleNames
-        || !outranksAllRoles(callerRoleNames, targetRoleNames)
+        || !canManageMember(callerRoleNames, targetRoleNames)
         || !canGrantRole(callerRoleNames, role.name)) {
         return { status: 'forbidden' };
       }

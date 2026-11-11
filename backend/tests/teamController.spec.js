@@ -158,6 +158,31 @@ describe('getTeamData', () => {
     ]);
   });
 
+  it('flags other owners as manageable for an owner caller', async () => {
+    getCompanyMembersInDb.mockResolvedValue([
+      memberRecord('caller-id', 'owner@acme.test', ['company_owner']),
+      memberRecord('owner-2', 'owner2@acme.test', ['company_owner']),
+      memberRecord('admin-id', 'admin@acme.test', ['company_admin']),
+      memberRecord('member-id', 'member@acme.test', ['company_member']),
+    ]);
+    getCompanyPendingInvitesInDb.mockResolvedValue([]);
+    getUserCompanyPermissions.mockResolvedValue(['team.view']);
+    getUserCompanyRoleNames.mockResolvedValue(['company_owner']);
+
+    const res = mockRes();
+
+    await getTeamData({ user: caller }, res);
+
+    const { members, assignableRoles } = res.json.mock.calls[0][0];
+    expect(members.map(({ id, manageable }) => ({ id, manageable }))).toEqual([
+      { id: 'caller-id', manageable: false },
+      { id: 'owner-2', manageable: true },
+      { id: 'admin-id', manageable: true },
+      { id: 'member-id', manageable: true },
+    ]);
+    expect(assignableRoles).toEqual(['company_admin', 'company_member', 'company_owner']);
+  });
+
   it('never flags the caller as manageable, even when their role would allow it', async () => {
     getCompanyMembersInDb.mockResolvedValue([memberRecord('caller-id', 'owner@acme.test', ['company_member'])]);
     getCompanyPendingInvitesInDb.mockResolvedValue([]);
@@ -634,7 +659,7 @@ describe('removeTeamMember', () => {
     expect(deleteUserAndCleanup).not.toHaveBeenCalled();
   });
 
-  it('returns 403 for peers - an admin cannot remove another admin, an owner cannot remove another owner', async () => {
+  it('returns 403 for admin peers - an admin cannot remove another admin', async () => {
     getOneCompanyMemberInDb.mockResolvedValue(memberRecord('target', 'admin2@acme.test', ['company_admin']));
     getUserCompanyRoleNames.mockResolvedValue(['company_admin']);
     const adminRes = mockRes();
@@ -642,15 +667,19 @@ describe('removeTeamMember', () => {
     await removeTeamMember({ user: caller, params: { userId: 'target' } }, adminRes);
 
     expect(adminRes.status).toHaveBeenCalledWith(403);
+    expect(deleteUserAndCleanup).not.toHaveBeenCalled();
+  });
 
+  it('lets an owner remove another owner (the model keeps the last-owner guard)', async () => {
     getOneCompanyMemberInDb.mockResolvedValue(memberRecord('target', 'owner2@acme.test', ['company_owner']));
     getUserCompanyRoleNames.mockResolvedValue(['company_owner']);
-    const ownerRes = mockRes();
+    deleteUserAndCleanup.mockResolvedValue({ status: 'deleted', deletedUser: { id: 'target' } });
+    const res = mockRes();
 
-    await removeTeamMember({ user: caller, params: { userId: 'target' } }, ownerRes);
+    await removeTeamMember({ user: caller, params: { userId: 'target' } }, res);
 
-    expect(ownerRes.status).toHaveBeenCalledWith(403);
-    expect(deleteUserAndCleanup).not.toHaveBeenCalled();
+    expect(deleteUserAndCleanup).toHaveBeenCalledWith('target', expect.objectContaining({ callerId: 'caller-id', protectLastOwner: true }));
+    expect(res.status).toHaveBeenCalledWith(200);
   });
 
   it('returns 409 when the transaction reports the last company owner', async () => {
@@ -763,6 +792,35 @@ describe('updateTeamMemberRole', () => {
 
     expect(res.status).toHaveBeenCalledWith(403);
     expect(updateCompanyMemberRoleInDb).not.toHaveBeenCalled();
+  });
+
+  it('lets an owner demote another owner to admin', async () => {
+    getOneCompanyMemberInDb.mockResolvedValue(memberRecord('target', 'owner2@acme.test', ['company_owner']));
+    const adminRole = { id: 'role-admin', name: 'company_admin' };
+    getRoleByName.mockResolvedValue(adminRole);
+    getUserCompanyRoleNames.mockResolvedValue(['company_owner']);
+    updateCompanyMemberRoleInDb.mockResolvedValue({
+      status: 'updated',
+      member: memberRecord('target', 'owner2@acme.test', ['company_admin']),
+    });
+    const res = mockRes();
+
+    await updateTeamMemberRole({ user: caller, params: { userId: 'target' }, body: { roleName: 'company_admin' } }, res);
+
+    expect(updateCompanyMemberRoleInDb).toHaveBeenCalledWith('target', 'company-1', adminRole, { callerId: 'caller-id' });
+    expect(res.status).toHaveBeenCalledWith(200);
+  });
+
+  it('answers 403 when the caller was demoted concurrently (under-lock re-check)', async () => {
+    getOneCompanyMemberInDb.mockResolvedValue(memberRecord('target', 'owner2@acme.test', ['company_owner']));
+    getRoleByName.mockResolvedValue({ id: 'role-admin', name: 'company_admin' });
+    getUserCompanyRoleNames.mockResolvedValue(['company_owner']);
+    updateCompanyMemberRoleInDb.mockResolvedValue({ status: 'forbidden' });
+    const res = mockRes();
+
+    await updateTeamMemberRole({ user: caller, params: { userId: 'target' }, body: { roleName: 'company_admin' } }, res);
+
+    expect(res.status).toHaveBeenCalledWith(403);
   });
 
   it('lets an owner promote a member to admin', async () => {

@@ -20,7 +20,7 @@ import {
 } from '../models/roleModel.js';
 import { getCompanyByIdInDb } from '../models/companyModel.js';
 import { deleteUserAndCleanup } from '../utils/userDeletionCleanup.js';
-import { canGrantRole, outranksAllRoles, rolesGrantableBy } from '../utils/companyRoleHierarchy.js';
+import { canGrantRole, canManageMember, rolesGrantableBy } from '../utils/companyRoleHierarchy.js';
 import { logAudit, logError } from '../config/loggerFunctions.js';
 import { sendTeamInviteToUser } from '../integrations/brevo/transactionalEmails/sendTeamInviteToUser.js';
 import { trackBackground } from '../utils/processLifecycle.js';
@@ -63,14 +63,15 @@ export const getTeamData = async (req, res) => {
   const assignableRoles = rolesGrantableBy(callerRoleNames);
 
   //* `manageable` mirrors the server-side rules so the SPA only offers the
-  //* actions that can succeed: members follow the strict "outrank every
-  //* role, never yourself" rule, invites the "at or below own rank" rule.
+  //* actions that can succeed: members follow canManageMember ("outrank every
+  //* role, or owner on owner - never yourself"), invites the "at or below own
+  //* rank" rule.
   //* The write endpoints re-check both - these flags are hints, not guards
   return res.status(200).json({
     callerId: userId,
     members: companyMembers.map((member) => ({
       ...toMemberShape(member),
-      manageable: outranksAllRoles(callerRoleNames, targetRoleNames(member)) && member.id !== userId,
+      manageable: canManageMember(callerRoleNames, targetRoleNames(member)) && member.id !== userId,
     })),
     invites: companyInvites.map((invite) => ({
       ...toInviteShape(invite, invite.Role.name),
@@ -291,9 +292,11 @@ export const revokeTeamInvite = async (req, res) => {
   return res.status(200).json({});
 };
 
-//* Callers may only manage members they outrank - every role the target
-//* holds must rank strictly below the caller's own, so an admin can never
-//* demote or remove an owner nor another admin. The controller checks only
+//* Callers may only manage members they may manage (canManageMember): every
+//* role the target holds ranks strictly below the caller's own, or both are
+//* owners - so an admin can never demote or remove an owner nor another
+//* admin, while owners can manage co-owners (the last-owner guard keeps at
+//* least one). The controller checks only
 //* answer early; the model repeats them under the company lock with fresh
 //* role rows
 export const removeTeamMember = async (req, res) => {
@@ -320,9 +323,9 @@ export const removeTeamMember = async (req, res) => {
 
   const callerRoleNames = await getUserCompanyRoleNames(callerId);
 
-  if (!outranksAllRoles(callerRoleNames, targetRoleNames(targetMember))) {
+  if (!canManageMember(callerRoleNames, targetRoleNames(targetMember))) {
     return res.status(403).json({
-      message: 'You can only remove members whose every role ranks below your own',
+      message: 'You can only remove members you outrank (owners may also remove other owners)',
     });
   }
 
@@ -342,7 +345,7 @@ export const removeTeamMember = async (req, res) => {
 
   if (deletionResult.status === 'forbidden') {
     return res.status(403).json({
-      message: 'You can only remove members whose every role ranks below your own',
+      message: 'You can only remove members you outrank (owners may also remove other owners)',
     });
   }
 
@@ -400,9 +403,9 @@ export const updateTeamMemberRole = async (req, res) => {
     });
   }
 
-  if (!outranksAllRoles(callerRoleNames, targetRoleNames(targetMember))) {
+  if (!canManageMember(callerRoleNames, targetRoleNames(targetMember))) {
     return res.status(403).json({
-      message: 'You can only change the role of members whose every role ranks below your own',
+      message: 'You can only change the role of members you outrank (owners may also change other owners)',
     });
   }
 
@@ -420,7 +423,7 @@ export const updateTeamMemberRole = async (req, res) => {
 
   if (updateResult.status === 'forbidden') {
     return res.status(403).json({
-      message: 'You can only change the role of members whose every role ranks below your own',
+      message: 'You can only change the role of members you outrank (owners may also change other owners)',
     });
   }
 

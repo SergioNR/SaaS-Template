@@ -325,6 +325,45 @@ describe('updateCompanyMemberRoleInDb', () => {
     expect(result).toEqual({ status: 'forbidden' });
   });
 
+  it('lets an owner demote a co-owner when another owner remains, voiding the demoted owner\'s owner invites', async () => {
+    tx.user.findFirst
+      .mockResolvedValueOnce(memberWithRoles(['company_owner'])) //* target
+      .mockResolvedValueOnce(memberWithRoles(['company_owner'])); //* caller
+    tx.user.count.mockResolvedValue(2); //* owners
+    tx.user.update.mockResolvedValue({ id: 'target', UserRoles: [{ Role: { name: 'company_admin' } }] });
+
+    const result = await updateCompanyMemberRoleInDb('target', 'company-1', { id: 'role-admin', name: 'company_admin' }, { callerId: 'caller' });
+
+    expect(result.status).toBe('updated');
+    expect(tx.teamInvites.deleteMany).toHaveBeenCalledWith({
+      where: {
+        invited_by: 'target',
+        Role: { name: { notIn: ['company_admin', 'company_member'] } },
+      },
+    });
+  });
+
+  it('answers forbidden when the calling owner was demoted concurrently (mutual demotion race)', async () => {
+    tx.user.findFirst
+      .mockResolvedValueOnce(memberWithRoles(['company_owner'])) //* target
+      .mockResolvedValueOnce(memberWithRoles(['company_admin'])); //* caller, demoted by the target first
+
+    const result = await updateCompanyMemberRoleInDb('target', 'company-1', { id: 'role-admin', name: 'company_admin' }, { callerId: 'caller' });
+
+    expect(result).toEqual({ status: 'forbidden' });
+    expect(tx.user.update).not.toHaveBeenCalled();
+  });
+
+  it('keeps the last-owner guard reachable when the caller check is bypassed', async () => {
+    tx.user.findFirst.mockResolvedValueOnce(memberWithRoles(['company_owner']));
+    tx.user.count.mockResolvedValue(1);
+
+    const result = await updateCompanyMemberRoleInDb('target', 'company-1', { id: 'role-admin', name: 'company_admin' });
+
+    expect(result).toEqual({ status: 'last_owner' });
+    expect(tx.user.update).not.toHaveBeenCalled();
+  });
+
   it('updates the role and voids the invites the demoted member can no longer vouch for', async () => {
     tx.user.findFirst
       .mockResolvedValueOnce(memberWithRoles(['company_admin']))
