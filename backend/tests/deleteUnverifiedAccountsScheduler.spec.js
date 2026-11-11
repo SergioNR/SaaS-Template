@@ -22,6 +22,10 @@ jest.unstable_mockModule('../server/utils/userDeletionCleanup.js', () => ({
   deleteUserAndCleanup: jest.fn(),
 }));
 
+jest.unstable_mockModule('../server/utils/processLifecycle.js', () => ({
+  isShuttingDown: jest.fn().mockReturnValue(false),
+}));
+
 jest.unstable_mockModule('../server/config/loggerFunctions.js', () => ({
   logError: jest.fn(),
   logInfo: jest.fn(),
@@ -38,6 +42,7 @@ const { getUnverifiedUserIdsRegisteredBeforeInDb } = await import('../server/mod
 const { deleteExpiredEmailVerificationTokensInDb } = await import('../server/models/emailVerificationTokensModel.js');
 const { deleteUserAndCleanup } = await import('../server/utils/userDeletionCleanup.js');
 const { logError } = await import('../server/config/loggerFunctions.js');
+const { isShuttingDown } = await import('../server/utils/processLifecycle.js');
 
 describe('deleteUnverifiedAccountsScheduler', () => {
   beforeEach(() => {
@@ -73,8 +78,8 @@ describe('deleteUnverifiedAccountsScheduler', () => {
 
     expect(UNVERIFIED_ACCOUNT_MAX_AGE_MS).toBe(7 * 24 * 60 * 60 * 1000);
     expect(getUnverifiedUserIdsRegisteredBeforeInDb).toHaveBeenCalledWith(new Date(now.getTime() - UNVERIFIED_ACCOUNT_MAX_AGE_MS));
-    expect(deleteUserAndCleanup).toHaveBeenCalledWith('old-1', { onlyIfUnverified: true });
-    expect(deleteUserAndCleanup).toHaveBeenCalledWith('old-2', { onlyIfUnverified: true });
+    expect(deleteUserAndCleanup).toHaveBeenCalledWith('old-1', { onlyIfUnverified: true, actorKind: 'system' });
+    expect(deleteUserAndCleanup).toHaveBeenCalledWith('old-2', { onlyIfUnverified: true, actorKind: 'system' });
     expect(result).toEqual({ deletedCount: 1, deletedTokenCount: 4 });
   });
 
@@ -89,5 +94,27 @@ describe('deleteUnverifiedAccountsScheduler', () => {
     expect(logError).toHaveBeenCalledWith('Could not purge unverified account bad', expect.any(Error));
     expect(result.deletedCount).toBe(1);
     expect(deleteExpiredEmailVerificationTokensInDb).toHaveBeenCalled();
+  });
+
+  //* runExclusiveCronTick owns the warn-first rules for outages and
+  //* shutdowns - one alert per remaining account would bypass them
+  it('rethrows a transient database error instead of alerting per account', async () => {
+    getUnverifiedUserIdsRegisteredBeforeInDb.mockResolvedValue(['a', 'b']);
+    deleteUserAndCleanup.mockRejectedValue(Object.assign(new Error('connection refused'), { code: 'ECONNREFUSED' }));
+
+    await expect(deleteUnverifiedAccounts()).rejects.toMatchObject({ code: 'ECONNREFUSED' });
+
+    expect(deleteUserAndCleanup).toHaveBeenCalledTimes(1);
+    expect(logError).not.toHaveBeenCalled();
+  });
+
+  it('rethrows any failure once the shutdown started', async () => {
+    getUnverifiedUserIdsRegisteredBeforeInDb.mockResolvedValue(['a', 'b']);
+    deleteUserAndCleanup.mockRejectedValue(new Error('pool closed'));
+    isShuttingDown.mockReturnValueOnce(true);
+
+    await expect(deleteUnverifiedAccounts()).rejects.toThrow('pool closed');
+
+    expect(logError).not.toHaveBeenCalled();
   });
 });

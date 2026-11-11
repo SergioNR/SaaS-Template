@@ -4,6 +4,8 @@ import { ADVISORY_LOCK_KEYS } from '../config/advisoryLockKeys.js';
 import { getUnverifiedUserIdsRegisteredBeforeInDb } from '../models/userModel.js';
 import { deleteExpiredEmailVerificationTokensInDb } from '../models/emailVerificationTokensModel.js';
 import { deleteUserAndCleanup } from '../utils/userDeletionCleanup.js';
+import { isTransientDatabaseError } from '../utils/prismaErrors.js';
+import { isShuttingDown } from '../utils/processLifecycle.js';
 import { runExclusiveCronTick } from './exclusiveCronTick.js';
 
 //* Must exceed the 24 h verification token lifetime so a registrant always
@@ -25,12 +27,19 @@ export const deleteUnverifiedAccounts = async (now = new Date()) => {
 
   for (const userId of userIds) {
     try {
-      const result = await deleteUserAndCleanup(userId, { onlyIfUnverified: true });
+      const result = await deleteUserAndCleanup(userId, { onlyIfUnverified: true, actorKind: 'system' });
 
       if (result.status === 'deleted') {
         deletedCount += 1;
       }
     } catch (error) {
+      //* A database outage or a shutdown fails every remaining account the
+      //* same way - rethrown so runExclusiveCronTick applies its warn-first
+      //* rules instead of one alert per account
+      if (isTransientDatabaseError(error) || isShuttingDown()) {
+        throw error;
+      }
+
       logError(`Could not purge unverified account ${userId}`, error);
     }
   }

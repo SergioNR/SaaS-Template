@@ -1,5 +1,8 @@
 import { jest } from '@jest/globals';
 
+//* Redirect URLs are built from it (utils/frontendUrl.js)
+process.env.FRONT_WEB_APP_ORIGIN_URL ??= 'https://app.example.com';
+
 jest.unstable_mockModule('../server/config/stripe.js', () => ({
   stripeInstance: {
     checkout: {
@@ -11,6 +14,11 @@ jest.unstable_mockModule('../server/config/stripe.js', () => ({
     },
     customers: {
       create: jest.fn(),
+    },
+    billingPortal: {
+      sessions: {
+        create: jest.fn(),
+      },
     },
     subscriptions: {
       list: jest.fn(),
@@ -35,6 +43,7 @@ const {
   reuseOrExpireOpenStripeCheckoutSessions,
 } = await import('../server/integrations/stripe/checkoutSession.js');
 const { createCompanyIdInStripe } = await import('../server/integrations/stripe/customerId.js');
+const { createStripeCustomerPortalSession } = await import('../server/integrations/stripe/customerPortalSession.js');
 const {
   cancelCompanyBillingInStripe,
   hasActiveStripeSubscription,
@@ -57,6 +66,23 @@ describe('createStripeCheckoutSession', () => {
 
     expect(firstKey).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
     expect(checkoutKey()).not.toBe(firstKey);
+  });
+
+  //* A trailing slash or a path in FRONT_WEB_APP_ORIGIN_URL never yields
+  //* `//user/billing` - only its origin is used
+  it('builds the success and cancel URLs from the front-end origin only', async () => {
+    const previous = process.env.FRONT_WEB_APP_ORIGIN_URL;
+    process.env.FRONT_WEB_APP_ORIGIN_URL = 'https://app.example.com/';
+
+    try {
+      await createStripeCheckoutSession('company-1', 'cus_1', 'user-1', 'pro', 'monthly');
+    } finally {
+      process.env.FRONT_WEB_APP_ORIGIN_URL = previous;
+    }
+
+    const [params] = stripeInstance.checkout.sessions.create.mock.calls[0];
+    expect(params.success_url).toBe('https://app.example.com/user/billing?status=paid');
+    expect(params.cancel_url).toBe('https://app.example.com/user/billing?status=cancelled');
   });
 
   it('stores the plan, cycle and price id in the session metadata for later reuse', async () => {
@@ -286,5 +312,24 @@ describe('cancelCompanyBillingInStripe', () => {
 
     expect(stripeInstance.checkout.sessions.list).not.toHaveBeenCalled();
     expect(stripeInstance.subscriptions.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('createStripeCustomerPortalSession', () => {
+  it('returns to the billing page on the front-end origin only', async () => {
+    const previous = process.env.FRONT_WEB_APP_ORIGIN_URL;
+    process.env.FRONT_WEB_APP_ORIGIN_URL = 'https://app.example.com/base/';
+    stripeInstance.billingPortal.sessions.create.mockResolvedValue({ url: 'https://billing.stripe.test/p' });
+
+    try {
+      await createStripeCustomerPortalSession('cus_1');
+    } finally {
+      process.env.FRONT_WEB_APP_ORIGIN_URL = previous;
+    }
+
+    expect(stripeInstance.billingPortal.sessions.create).toHaveBeenCalledWith({
+      customer: 'cus_1',
+      return_url: 'https://app.example.com/user/billing',
+    });
   });
 });

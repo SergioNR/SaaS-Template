@@ -78,6 +78,11 @@ describe('buildBusinessEventMessage', () => {
       .toBe('📈 <b>Platform admin account deleted</b>');
   });
 
+  it('names automatic cleanups as the actor', () => {
+    expect(buildBusinessEventMessage('company.deleted', { actorKind: 'system', companyName: 'Squat Co' }))
+      .toContain('automatic cleanup (unverified account)');
+  });
+
   it('returns null for an unknown event', () => {
     expect(buildBusinessEventMessage('user.logged_in', {})).toBeNull();
   });

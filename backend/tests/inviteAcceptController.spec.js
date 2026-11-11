@@ -73,7 +73,7 @@ const { getUserByEmail, canCompanyMemberGrantRoleInDb, createUserInDb } = await 
 const { getTeamInviteByTokenInDb, deleteTeamInviteByIdSafe } = await import('../server/models/teamInvitesModel.js');
 const { logAudit } = await import('../server/config/loggerFunctions.js');
 const { cleanupAfterUserDeletion } = await import('../server/utils/userDeletionCleanup.js');
-const { notifyInviteAccepted } = await import('../server/utils/businessEvents.js');
+const { notifyInviteAccepted, notifyUserDeleted } = await import('../server/utils/businessEvents.js');
 
 const mockRes = () => {
   const res = {
@@ -298,6 +298,7 @@ describe('acceptTeamInvite', () => {
 
     expect(createUserInDb).toHaveBeenCalled();
     expect(cleanupAfterUserDeletion).toHaveBeenCalledWith(claimedDeletion);
+    expect(notifyUserDeleted).toHaveBeenCalledWith(claimedDeletion, 'system');
     expect(res.status).toHaveBeenCalledWith(201);
   });
 
