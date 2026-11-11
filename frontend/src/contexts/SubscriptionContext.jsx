@@ -10,6 +10,9 @@ export const SubscriptionProvider = ({ children }) => {
   const [subscription, setSubscription] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  //* Machine-readable companion of `error`: 'membership' (no company - a retry
+  //* cannot help) | 'load' (network/5xx - retryable) | null
+  const [errorKind, setErrorKind] = useState(null);
 
   //* `silent` re-fetches in the background (post-checkout polling) without
   //* flipping the page back to its loader. A failed silent refresh keeps the
@@ -18,6 +21,7 @@ export const SubscriptionProvider = ({ children }) => {
     if (!silent) {
       setLoading(true);
       setError(null);
+      setErrorKind(null);
     }
 
     try {
@@ -38,8 +42,10 @@ export const SubscriptionProvider = ({ children }) => {
       } else if (status === 403 && code === 'COMPANY_MEMBERSHIP_REQUIRED') {
         setSubscription(null);
         setError(t('billing.errors.membershipRequired'));
+        setErrorKind('membership');
       } else {
         setError(t('billing.errors.load'));
+        setErrorKind('load');
       }
     } finally {
       if (!silent) {
@@ -74,9 +80,10 @@ export const SubscriptionProvider = ({ children }) => {
       hasBillingId: Boolean(subscription?.has_billing_id),
       loading,
       error,
+      errorKind,
       refresh: fetchSubscription,
     };
-  }, [subscription, loading, error, fetchSubscription]);
+  }, [subscription, loading, error, errorKind, fetchSubscription]);
 
   return (
     <SubscriptionContext.Provider value={value}>

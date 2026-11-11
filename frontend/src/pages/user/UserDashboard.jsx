@@ -22,6 +22,7 @@ import {
 } from '@mantine/core';
 import {
   IconActivity,
+  IconAlertTriangle,
   IconArrowUpRight,
   IconCalendarClock,
   IconCalendarUp,
@@ -30,6 +31,7 @@ import {
   IconClockHour3,
   IconCreditCard,
   IconExternalLink,
+  IconHelpCircle,
   IconHistory,
   IconKey,
   IconReceipt2,
@@ -86,6 +88,9 @@ const UserDashboard = () => {
     hasPaidSubscription,
     isTrial,
     loading: subscriptionLoading,
+    error: subscriptionError,
+    errorKind: subscriptionErrorKind,
+    refresh: refreshSubscription,
   } = useSubscription();
   //* Loaded once by UserWrapper and shared through its outlet context
   const { user, userLoading } = useOutletContext();
@@ -111,11 +116,27 @@ const UserDashboard = () => {
   }, [subscription, now]);
 
   const loading = userLoading || subscriptionLoading;
+  //* A failed subscription load is NOT "no subscription": the derived cards
+  //* show an unknown state and nothing nudges a possibly paying company to buy
+  const subscriptionUnknown = Boolean(subscriptionError);
 
   return (
     <Stack gap="lg">
       <Seo title={t('seo.pages.dashboard')} />
       <NoActiveSubscriptionBanner />
+
+      {!subscriptionLoading && subscriptionError && (
+        <Alert color="red" variant="light" icon={<IconAlertTriangle size={16} />} title={t('common.error')}>
+          <Group justify="space-between" align="center" wrap="wrap" gap="sm">
+            <Text size="sm">{subscriptionError}</Text>
+            {subscriptionErrorKind === 'load' && (
+              <Button size="xs" variant="light" color="red" onClick={() => refreshSubscription()}>
+                {t('common.retry')}
+              </Button>
+            )}
+          </Group>
+        </Alert>
+      )}
 
       <Group justify="space-between" align="flex-start" wrap="wrap">
         <Box>
@@ -147,6 +168,10 @@ const UserDashboard = () => {
         <StatCard label={t('user.dashboard.stats.subscription')} icon={<IconCreditCard size={20} stroke={1.5} />}>
           {loading ? (
             <Skeleton height={28} width="60%" />
+          ) : subscriptionUnknown ? (
+            <Badge color="gray" variant="light" size="lg">
+              {t('user.dashboard.stats.unknown')}
+            </Badge>
           ) : hasPaidSubscription ? (
             <Badge color="teal" variant="light" size="lg">
               {t('billing.statusActive')}
@@ -165,6 +190,10 @@ const UserDashboard = () => {
         <StatCard label={t('user.dashboard.stats.daysRemaining')} icon={<IconCalendarClock size={20} stroke={1.5} />}>
           {loading ? (
             <Skeleton height={28} width="40%" />
+          ) : subscriptionUnknown ? (
+            <Text c="dimmed" size="sm">
+              {t('user.dashboard.stats.unknownDetail')}
+            </Text>
           ) : hasActiveSubscription && daysRemaining !== null ? (
             <Group gap={6} align="baseline">
               <Text fw={700} style={{ fontSize: '1.5rem' }}>
@@ -206,7 +235,9 @@ const UserDashboard = () => {
         <Card withBorder radius="md" p="lg">
           <Title order={4}>{t('user.dashboard.plan.title')}</Title>
           <Text c="dimmed" size="sm" mt={4} mb="lg">
-            {hasPaidSubscription
+            {subscriptionUnknown
+              ? t('user.dashboard.plan.unknownDescription')
+              : hasPaidSubscription
               ? t('user.dashboard.plan.activeDescription')
               : isTrial
                 ? t('user.dashboard.plan.trialDescription')
@@ -215,6 +246,15 @@ const UserDashboard = () => {
 
           {loading ? (
             <Skeleton height={120} radius="md" />
+          ) : subscriptionUnknown ? (
+            <Stack gap="md" align="center" py="xl">
+              <ThemeIcon size={48} radius="xl" variant="light" color="gray">
+                <IconHelpCircle size={26} stroke={1.5} />
+              </ThemeIcon>
+              <Text c="dimmed" size="sm" ta="center" maw={320}>
+                {t('user.dashboard.stats.unknownDetail')}
+              </Text>
+            </Stack>
           ) : hasActiveSubscription ? (
             <Stack gap="md">
               {periodProgress !== null && (
@@ -305,7 +345,9 @@ const UserDashboard = () => {
               icon={<IconClockHour3 size={20} stroke={1.5} />}
               title={t('user.dashboard.quick.renewal.title')}
               description={
-                hasPaidSubscription
+                subscriptionUnknown
+                  ? t('user.dashboard.stats.unknownDetail')
+                  : hasPaidSubscription
                   ? t('user.dashboard.quick.renewal.renewsOn', {
                       date: formatRelativeDays(subscription.expires_at),
                     })
@@ -319,9 +361,11 @@ const UserDashboard = () => {
                 <Badge
                   size="sm"
                   variant="light"
-                  color={hasPaidSubscription ? 'teal' : isTrial ? 'yellow' : 'gray'}
+                  color={subscriptionUnknown ? 'gray' : hasPaidSubscription ? 'teal' : isTrial ? 'yellow' : 'gray'}
                 >
-                  {hasPaidSubscription
+                  {subscriptionUnknown
+                    ? t('user.dashboard.stats.unknown')
+                    : hasPaidSubscription
                     ? t('user.dashboard.quick.renewal.enabled')
                     : isTrial
                       ? t('user.dashboard.quick.renewal.trial')
@@ -361,15 +405,19 @@ const UserDashboard = () => {
               </Timeline.Item>
               <Timeline.Item
                 bullet={<IconCircleCheck size={12} stroke={1.5} />}
-                color={hasActiveSubscription ? 'teal' : 'gray'}
-                title={hasActiveSubscription
-                  ? t('user.dashboard.activity.subscriptionActive')
-                  : t('user.dashboard.activity.noSubscription')}
+                color={!subscriptionUnknown && hasActiveSubscription ? 'teal' : 'gray'}
+                title={subscriptionUnknown
+                  ? t('user.dashboard.stats.unknown')
+                  : hasActiveSubscription
+                    ? t('user.dashboard.activity.subscriptionActive')
+                    : t('user.dashboard.activity.noSubscription')}
               >
                 <Text c="dimmed" size="xs">
-                  {hasActiveSubscription
-                    ? t('user.dashboard.activity.expiresOn', { date: formatDate(subscription.expires_at) })
-                    : t('user.dashboard.activity.activateAnytime')}
+                  {subscriptionUnknown
+                    ? t('user.dashboard.stats.unknownDetail')
+                    : hasActiveSubscription
+                      ? t('user.dashboard.activity.expiresOn', { date: formatDate(subscription.expires_at) })
+                      : t('user.dashboard.activity.activateAnytime')}
                 </Text>
               </Timeline.Item>
             </Timeline>
@@ -377,7 +425,7 @@ const UserDashboard = () => {
         </Stack>
       </SimpleGrid>
 
-      {!loading && !hasActiveSubscription && (
+      {!loading && !subscriptionUnknown && !hasActiveSubscription && (
         <Alert color="gray" variant="light" icon={<IconCreditCard size={16} />}>
           <Trans
             i18nKey="user.dashboard.subscriptionAlert"

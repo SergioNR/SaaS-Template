@@ -4,7 +4,7 @@
 
 ### Requirement: Billing page status
 
-The SPA's billing page SHALL show the status as paid (`is_paid` with a future expiry), trial (`is_paid: false` with a future expiry) or inactive (no row, 404, or a past expiry), with the expiry or trial-end date when present. It SHALL show a specific error without retry for `COMPANY_MEMBERSHIP_REQUIRED` and a generic error with a retry action for other load failures; retry SHALL re-run the status load with its loader.
+The SPA's billing page SHALL show the status as paid, trial or inactive from the API's `status` (a missing row or 404 counts as inactive), with the expiry or trial-end date when present. It SHALL show a specific error without retry for `COMPANY_MEMBERSHIP_REQUIRED` and a generic error with a retry action for other load failures; retry SHALL re-run the status load with its loader.
 
 #### Scenario: Trial company
 

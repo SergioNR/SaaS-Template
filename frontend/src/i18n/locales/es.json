@@ -356,7 +356,9 @@
         "untilDate": "hasta el {{date}}",
         "noActiveSubscription": "Sin suscripción activa",
         "lastLogin": "Último acceso",
-        "memberSince": "Miembro desde"
+        "memberSince": "Miembro desde",
+        "unknown": "Desconocido",
+        "unknownDetail": "No hemos podido cargar el estado de la suscripción."
       },
       "plan": {
         "title": "Estado de tu plan",
@@ -366,7 +368,8 @@
         "periodStart": "Inicio del periodo",
         "periodEnd": "Renovación / fin del periodo",
         "noSubscription": "No tienes ninguna suscripción activa en este momento.",
-        "viewPlans": "Ver planes disponibles"
+        "viewPlans": "Ver planes disponibles",
+        "unknownDescription": "No hemos podido comprobar tu plan en este momento. Vuelve a intentarlo en unos segundos."
       },
       "quick": {
         "title": "Accesos rápidos",
