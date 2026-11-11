@@ -13,7 +13,7 @@ A production-ready Express.js backend template with authentication, billing, and
 - **Analytics** — PostHog product analytics
 - **Logging** — Pino structured logs (pretty-printed on localhost, JSON elsewhere) with Telegram alerts for errors
 - **Security** — Helmet, CORS, rate limiting, request throttling, input validation (express-validator), bcrypt password hashing
-- **Scheduled jobs** — cron-based cleanup (expired password reset tokens at 03:00, expired team invites at 03:15, abandoned file uploads every 15 min). Each tick takes a Postgres advisory lock, so with several replicas only one runs it
+- **Scheduled jobs** — cron-based cleanup (expired password reset tokens at 03:00, expired team invites at 03:15, abandoned file uploads every 15 min, expired sessions every 15 min, expired shared rate-limit counters at 03:30, accounts left unverified for 7 days at 03:45). Each tick takes a Postgres advisory lock, so with several replicas only one runs it
 - **Docker** — production image (tini + non-root + `/health` HEALTHCHECK), Docker Compose for the local database
 
 ## Requirements
@@ -118,7 +118,9 @@ See `.env.example` for the full list. Key variables:
 | `BREVO_VERIFY_EMAIL_TEMPLATE_ID` | Brevo template id for the registration email-verification email - **required** at startup. Params: `appOrigin` and `emailVerificationUrl` (`<origin>/auth/verify-email?emailVerificationToken=...`, built by the API - link it as `{{ params.emailVerificationUrl }}`) |
 | `BREVO_ACCOUNT_EXISTS_TEMPLATE_ID` | Template id for the duplicate-registration notice (optional - notice is skipped when unset) |
 | `POSTHOG_API_KEY` | Product analytics |
-| `TELEGRAM_BOT_API_KEY` / `TELEGRAM_ERRORS_CHAT_ID` | Telegram alerts for `logError` only (info/warn stay in pino). Optional - sending is a no-op when the bot key is unset. Each send times out after 5 s and the same alert is sent at most once per minute per process |
+| `TELEGRAM_BOT_API_KEY` / `TELEGRAM_ERRORS_CHAT_ID` | Telegram alerts for `logError` only (info/warn stay in pino). Optional - sending is a no-op when the bot key is unset. Each send times out after 5 s and the same alert (message + error name, code and message) is sent at most once per minute per process. Alerts include the error code |
+| `TELEGRAM_EVENTS_CHAT_ID` | Optional business-events chat: company registered, subscription started (converted trial / resubscribed), cancellation scheduled, subscription ended, team invite accepted, account deleted, company deleted. Requires `TELEGRAM_BOT_API_KEY`; every event is a no-op when unset. Messages carry company names, plans, dates, role names, actor kind and member counts only - never emails, user/company ids or Stripe ids. Delivery failures only log a warning |
+| `RATE_LIMIT_STORE` | Optional, `memory` (default) or `postgres`. With `postgres` the credential-path limiters - shared auth budget, per-account login, password-reset email and password-change budgets - keep their counters in the `RateLimitHit` table, so budgets hold across replicas and restarts; use it whenever more than one replica runs. The global limiter, slow-down and webhook limiter always stay per process. Store errors let the request through and log a warning. Unknown values refuse to boot outside localhost |
 | `LOG_LEVEL` | Optional pino log level (`trace`, `debug`, `info`, `warn`, `error`, `fatal`, `silent`; default `info`, unknown values fall back to `info`), shared by stdout and Better Stack |
 | `BETTER_STACK_SOURCE_TOKEN` / `BETTER_STACK_INGESTING_HOST` | Optional Better Stack log shipping through the `@logtail/pino` transport (ingest endpoint `https://$BETTER_STACK_INGESTING_HOST`). Only active when **both** are set; every pino line (access, audit, info/warn/error) is shipped in addition to stdout |
 | `FRONT_WEB_APP_ORIGIN_URL` | Front-end origin (CORS allowlist, CSRF Origin check + Stripe redirects). **Required** outside `DEPLOY_ENVIRONMENT=localhost` |

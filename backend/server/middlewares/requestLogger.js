@@ -75,11 +75,15 @@ export const generateRequestId = (req, res) => {
 
 //* customProps runs at response finish, after the session middlewares further
 //* down the chain populated req.user, so the acting user id and its company
-//* are available even though this middleware is mounted before them
+//* are available even though this middleware is mounted before them.
+//* reqId is set explicitly: pino-http only binds req.id through the req
+//* serializer (which keeps method + path only), so without it the access
+//* line could not be correlated with its audit/error lines and alerts
 export const requestLogProps = (req) => ({
   userId: req.user?.id ?? null,
   companyId: req.user?.company_id ?? null,
   ip: req.ip,
+  reqId: req.id ?? null,
 });
 
 export const requestLogger = () => pinoHttp({

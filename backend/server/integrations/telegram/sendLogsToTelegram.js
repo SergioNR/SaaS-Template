@@ -72,11 +72,36 @@ export const shouldSendAlert = (alertKey, now = Date.now()) => {
 
 export const resetAlertDedupe = () => lastSentAtByAlert.clear();
 
+//* With the pg driver adapter a database outage throws a Prisma error whose
+//* message is only the "Invalid `prisma.x.y()` invocation:" header and whose
+//* meaning lives in `code` (ECONNREFUSED, ...) - fall back to the code so the
+//* alert always says what happened
+const PRISMA_INVOCATION_HEADER_ONLY = /^\s*Invalid `[^`]+` invocation:\s*$/;
+
+export const resolveErrorDetails = (error = {}) => {
+  const message = typeof error?.message === 'string' ? error.message : '';
+
+  if (message.trim() === '' || PRISMA_INVOCATION_HEADER_ONLY.test(message)) {
+    return error?.code ?? 'N/A';
+  }
+
+  return message;
+};
+
+export const buildAlertKey = (errorMessage, error = {}) => [
+  errorMessage,
+  error?.name ?? '',
+  error?.code ?? '',
+  error?.message ?? '',
+].join('|');
+
 //* Only errors reach Telegram - info and warnings stay in pino (see
 //* config/loggerFunctions.js), so there is no info chat sender anymore
 export const sendErrorLogsToTelegram = async (errorMessage, error = {}, additionalInfo = 'N/A') => {
-  //* Keyed on what identifies the incident - not the timestamp or details
-  if (!shouldSendAlert(`${errorMessage}|${error?.name ?? ''}|${error?.message ?? ''}`)) {
+  //* Keyed on what identifies the incident - not the timestamp or details.
+  //* The code is part of it: two failures with the same empty message but
+  //* different codes are different incidents
+  if (!shouldSendAlert(buildAlertKey(errorMessage, error))) {
     return;
   }
 
@@ -89,9 +114,10 @@ export const sendErrorLogsToTelegram = async (errorMessage, error = {}, addition
   const telegramMessage = `
   🚨 <b>New error logged at ${new Date().toISOString()}</b> 🚨
   \n<b>Request Id</b>: ${escapeHtml(requestId ?? 'N/A')}
-  \n<b>Error Name</b>: ${escapeHtml(error.name ?? 'N/A')}
+  \n<b>Error Name</b>: ${escapeHtml(error?.name ?? 'N/A')}
+  \n<b>Error Code</b>: ${escapeHtml(error?.code ?? 'N/A')}
   \n<b>Error Message</b>: ${escapeHtml(errorMessage)}
-  \n<b>Error Details</b>: ${escapeHtml(error.message ?? 'N/A')}
+  \n<b>Error Details</b>: ${escapeHtml(resolveErrorDetails(error))}
   \n<b>Additional Info</b>: ${escapeHtml(additionalInfo)}
   `;
 

@@ -27,6 +27,9 @@ export const serializeError = (error) => {
 //* Severity decides the channel: errors page a human through Telegram, while
 //* warnings and info stay in pino only - routine events must never flood the
 //* alert chat, or real incidents drown in them
+//* Returns the alert delivery promise - it never rejects and resolves
+//* undefined - so the crash handler can wait for the alert before exiting.
+//* Every other caller ignores it: never `await` logError on a request path
 export const logError = (errorMessage, error, additionalInfo = 'N/A') => {
   try {
     logger.error({
@@ -39,9 +42,11 @@ export const logError = (errorMessage, error, additionalInfo = 'N/A') => {
 
     //* Fire-and-forget on purpose - the integration swallows its own errors,
     //* so a Telegram outage must never break or delay the log call
-    sendErrorLogsToTelegram(errorMessage, serializeError(error), additionalInfo);
+    return Promise.resolve(sendErrorLogsToTelegram(errorMessage, serializeError(error), additionalInfo))
+      .then(() => undefined, () => undefined);
   } catch {
     // Fail silently
+    return Promise.resolve(undefined);
   }
 };
 

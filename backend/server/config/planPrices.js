@@ -42,6 +42,21 @@ export const assertPlanPricesConfigured = () => {
   }
 };
 
+//* Reverse lookup for display only (business events). With the
+//* STRIPE_PRICE_ID fallback several plans can share one price id - an
+//* ambiguous or unknown id resolves to null instead of a guess
+export const getPlanForStripePriceId = (priceId) => {
+  if (!priceId) {
+    return null;
+  }
+
+  const matches = Object.entries(PLAN_PRICE_MAP).flatMap(([planName, cycles]) => Object.entries(cycles)
+    .filter(([, cyclePriceId]) => cyclePriceId === priceId)
+    .map(([planBillingCycle]) => ({ planName, planBillingCycle })));
+
+  return matches.length === 1 ? matches[0] : null;
+};
+
 export const getStripePriceId = (planName, planBillingCycle) => {
   const priceId = PLAN_PRICE_MAP[planName]?.[planBillingCycle];
 

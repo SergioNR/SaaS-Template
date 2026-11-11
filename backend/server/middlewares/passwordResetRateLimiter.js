@@ -1,5 +1,6 @@
 import rateLimit from 'express-rate-limit';
 import { logRateLimited } from '../config/loggerFunctions.js';
+import { sharedCredentialLimiterOptions } from '../config/rateLimitStore.js';
 
 //* Dedicated limiter for the password-reset email request so email bombing is
 //* throttled on its own budget instead of sharing the login/register/invite
@@ -9,6 +10,8 @@ export const passwordResetLimiter = rateLimit({
   limit: 5, // Limit each IP to 5 password reset requests per window
   standardHeaders: 'draft-8',
   legacyHeaders: false,
+  //* Shared across replicas when RATE_LIMIT_STORE=postgres; fails open
+  ...sharedCredentialLimiterOptions('pwreset:'),
   handler: (req, res /* , next, options */) => {
     logRateLimited(req);
     res.status(429).json({

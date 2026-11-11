@@ -3,6 +3,8 @@ import { deletePasswordResetTokensScheduler } from './deletePasswordResetTokensS
 import { deleteTeamInvitesScheduler } from './deleteTeamInvitesScheduler.js';
 import { deletePendingFileUploadsScheduler } from './deletePendingFileUploadsScheduler.js';
 import { deleteUnverifiedAccountsScheduler } from './deleteUnverifiedAccountsScheduler.js';
+import { deleteExpiredSessionsScheduler } from './deleteExpiredSessionsScheduler.js';
+import { deleteExpiredRateLimitHitsScheduler } from './deleteExpiredRateLimitHitsScheduler.js';
 
 export const startCronJobs = () => {
   logInfo('Starting cron jobs');
@@ -11,19 +13,29 @@ export const startCronJobs = () => {
     deleteTeamInvitesScheduler.start();
     deletePendingFileUploadsScheduler.start();
     deleteUnverifiedAccountsScheduler.start();
+    deleteExpiredSessionsScheduler.start();
+    deleteExpiredRateLimitHitsScheduler.start();
   } catch (error) {
     logError('error on startCronJobs', error);
   }
 };
 
-//* Called on graceful shutdown so no tick starts while resources are closing
+//* Called on graceful shutdown so no tick starts while resources are closing.
+//* Every job runs with waitForCompletion, so stop() clears its timer at once
+//* and returns a promise that settles when the running tick (if any)
+//* finished - the shutdown awaits these before closing the database
 export const stopCronJobs = () => {
   try {
-    deletePasswordResetTokensScheduler.stop();
-    deleteTeamInvitesScheduler.stop();
-    deletePendingFileUploadsScheduler.stop();
-    deleteUnverifiedAccountsScheduler.stop();
+    return Promise.allSettled([
+      deletePasswordResetTokensScheduler.stop(),
+      deleteTeamInvitesScheduler.stop(),
+      deletePendingFileUploadsScheduler.stop(),
+      deleteExpiredSessionsScheduler.stop(),
+      deleteExpiredRateLimitHitsScheduler.stop(),
+      deleteUnverifiedAccountsScheduler.stop(),
+    ]);
   } catch (error) {
     logError('error on stopCronJobs', error);
+    return Promise.resolve([]);
   }
 };

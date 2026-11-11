@@ -1,13 +1,12 @@
 import { paginationQueryFields, searchQueryField } from './listQueryFields.js';
+import { buildAdminListFilterRules } from '../adminColumnFilters.js';
+import { buildAdminListSortRules } from '../adminColumnSorts.js';
 
+//* Filters (`role`, `company_id`, date ranges) and `sort` / `order` are
+//* generated from the admin column registry - add them there, not here
 export const adminUserListQueryValidationSchema = {
-  role: {
-    optional: true,
-    isIn: {
-      options: [['user', 'superadmin']],
-      errorMessage: 'Role filter must be one of: user, superadmin',
-    },
-  },
+  ...buildAdminListFilterRules('users'),
+  ...buildAdminListSortRules('users'),
   search: searchQueryField,
   ...paginationQueryFields,
 };

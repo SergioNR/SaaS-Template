@@ -65,4 +65,8 @@ describe('storeSessions', () => {
     expect(storeOptions[0].dbRecordIdIsSessionId).toBe(true);
     expect(sessionOptions.store.client).toBe(prisma);
   });
+
+  it('never runs the store\'s own prune interval (the expired-session job prunes)', () => {
+    expect(storeOptions[0]).not.toHaveProperty('checkPeriod');
+  });
 });

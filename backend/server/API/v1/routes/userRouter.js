@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { checkSchema } from 'express-validator';
 import { getUserProfile, deleteUser, updateUserPassword } from '../../../controllers/userController.js';
+import { passwordChangeLimiter } from '../../../middlewares/passwordChangeRateLimiter.js';
 import { sanitizerResult } from '../../../middlewares/sanitizerResult.js';
 import { updatePasswordSchema } from '../../../utils/validators/updatePasswordSchema.js';
 
@@ -102,8 +103,14 @@ userRouter.get('/', getUserProfile);
  *         $ref: '#/components/responses/NotFound'
  *       422:
  *         $ref: '#/components/responses/ValidationError'
+ *       429:
+ *         description: Too many failed password change attempts - at most 5 wrong current passwords per account per 15 minutes; answered before the current password is checked
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorMessage'
  */
-userRouter.patch('/password', checkSchema(updatePasswordSchema), sanitizerResult, updateUserPassword);
+userRouter.patch('/password', checkSchema(updatePasswordSchema), sanitizerResult, passwordChangeLimiter, updateUserPassword);
 
 /**
  * @openapi

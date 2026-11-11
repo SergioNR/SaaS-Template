@@ -2,6 +2,7 @@ import { passwordByteLengthValidator } from './passwordByteLength.js';
 
 export const updatePasswordSchema = {
   currentPassword: {
+    in: ['body'],
     isString: {
       errorMessage: 'Current password must be a string',
       bail: true,
@@ -16,6 +17,7 @@ export const updatePasswordSchema = {
     },
   },
   newPassword: {
+    in: ['body'],
     isString: {
       errorMessage: 'Password must be a string',
       bail: true,

@@ -42,11 +42,11 @@ export const deleteUnverifiedAccounts = async (now = new Date()) => {
   return { deletedCount, deletedTokenCount };
 };
 
-//* 03:30 - staggered after the 03:00 reset-token and 03:15 invite cleanups.
+//* 03:45 - staggered after the 03:00 reset-token, 03:15 invite and 03:30 rate-limit-hit cleanups.
 //* waitForCompletion: a tick still running is never overlapped by the next
 //* one; the advisory lock keeps other replicas from running it concurrently
 export const deleteUnverifiedAccountsScheduler = CronJob.from({
-  cronTime: '30 3 * * *',
+  cronTime: '45 3 * * *',
   onTick: () => runExclusiveCronTick(
     'deleteUnverifiedAccounts',
     ADVISORY_LOCK_KEYS.cronUnverifiedAccounts,

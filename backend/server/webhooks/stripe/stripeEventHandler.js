@@ -10,6 +10,9 @@ import {
   isStoredSubscriptionActive,
 } from '../../config/stripeSubscriptionStatuses.js';
 import { retrieveStripeSubscription } from '../../integrations/stripe/subscription.js';
+import { getPlanForStripePriceId } from '../../config/planPrices.js';
+import { trackBackground } from '../../utils/processLifecycle.js';
+import { notifySubscriptionTransition } from '../../utils/businessEvents.js';
 
 const getStripeObjectId = (value) => (typeof value === 'string' ? value : value?.id ?? null);
 
@@ -89,6 +92,86 @@ export const resolveSubscriptionWrite = (subscription, storedSubscription, {
   };
 };
 
+const getSubscriptionPlan = (subscription) => getPlanForStripePriceId(
+  subscription?.items?.data?.[0]?.price?.id ?? null,
+);
+
+//* Was cancellation off before this update? `previous_attributes` only holds
+//* the fields that changed - the trigger, confirmed by the fresh read below
+const wasCancellationUnset = (previousAttributes) => Boolean(previousAttributes) && (
+  (Object.hasOwn(previousAttributes, 'cancel_at_period_end') && previousAttributes.cancel_at_period_end === false)
+  || (Object.hasOwn(previousAttributes, 'cancel_at') && previousAttributes.cancel_at === null)
+);
+
+const isCancellationSet = (subscription) => subscription?.cancel_at_period_end === true || Boolean(subscription?.cancel_at);
+
+//* Did the stored row grant access through this same subscription? Rows
+//* synced before `stripe_status` existed have no status - their expiry decides
+const previouslyGrantedAccess = (previous, written) => {
+  if (!previous || previous.stripe_subscription_id !== written.stripeSubscriptionId) {
+    return false;
+  }
+
+  if (previous.stripe_status) {
+    return ACCESS_GRANTING_STATUSES.includes(previous.stripe_status);
+  }
+
+  return isStoredSubscriptionActive(previous);
+};
+
+//* Pure - classifies a committed sync for the business-events channel.
+//* `previous` / `written` come from syncSubscriptionWithCompanyLockInDb
+//* (null when the write was skipped or stale - then nothing is emitted).
+//* Returns { event, fields } or null
+export const classifySubscriptionTransition = (previous, written, {
+  eventType,
+  previousAttributes = null,
+  subscription = null,
+} = {}) => {
+  if (!written) {
+    return null;
+  }
+
+  const plan = getSubscriptionPlan(subscription);
+  const grantsAccessNow = ACCESS_GRANTING_STATUSES.includes(written.status);
+  const grantedAccessBefore = previouslyGrantedAccess(previous, written);
+
+  if (grantsAccessNow && !grantedAccessBefore) {
+    return {
+      event: 'subscription.started',
+      fields: {
+        //* A trial row has no Stripe subscription; any earlier paid
+        //* subscription (ended, or a different one) makes it a comeback
+        startKind: previous?.stripe_subscription_id ? 'resubscribed' : 'converted',
+        plan,
+        periodEndsAt: written.expiresAt,
+      },
+    };
+  }
+
+  if (grantedAccessBefore && ENDED_STATUSES.includes(written.status)) {
+    return {
+      event: 'subscription.ended',
+      fields: { plan, status: written.status },
+    };
+  }
+
+  if (eventType === 'customer.subscription.updated'
+    && grantsAccessNow
+    && wasCancellationUnset(previousAttributes)
+    && isCancellationSet(subscription)) {
+    return {
+      event: 'subscription.cancellation_scheduled',
+      fields: {
+        plan,
+        accessEndsAt: subscription.cancel_at ? new Date(subscription.cancel_at * 1000) : written.expiresAt,
+      },
+    };
+  }
+
+  return null;
+};
+
 //* Always derives the state from a fresh Stripe read instead of the event
 //* payload, so out-of-order or retried deliveries converge on the current
 //* state. The read happens BEFORE the company lock is taken (a slow Stripe
@@ -101,6 +184,7 @@ export const resolveSubscriptionWrite = (subscription, storedSubscription, {
 const syncSubscriptionFromStripe = async (subscriptionId, eventType, {
   expectedCompanyId = null,
   expectedCustomerId = null,
+  previousAttributes = null,
 } = {}) => {
   //* Taken before the read starts so it never postdates the state it describes
   const syncedAt = new Date();
@@ -149,7 +233,7 @@ const syncSubscriptionFromStripe = async (subscriptionId, eventType, {
 
   //* Awaited so a DB failure surfaces as a 500 and Stripe retries the event
   //* instead of treating it as processed
-  await syncSubscriptionWithCompanyLockInDb(
+  const syncResult = await syncSubscriptionWithCompanyLockInDb(
     companyId,
     (storedSubscription) => resolveSubscriptionWrite(subscription, storedSubscription, {
       eventType,
@@ -157,6 +241,17 @@ const syncSubscriptionFromStripe = async (subscriptionId, eventType, {
       syncedAt,
     }),
   );
+
+  const transition = classifySubscriptionTransition(syncResult?.previous ?? null, syncResult?.written ?? null, {
+    eventType,
+    previousAttributes,
+    subscription,
+  });
+
+  //* After the commit, detached - never delays or changes the acknowledgement
+  if (transition) {
+    trackBackground(notifySubscriptionTransition(companyId, transition));
+  }
 };
 
 const handleCheckoutSession = async (checkoutSession, eventType) => {
@@ -235,7 +330,9 @@ export const stripeEventHandler = async (req, res) => {
         //* expires_at to the end date, so the company can still resubscribe
         //* and reach the customer portal
         // TODO -- send an email to the user about the subscription end
-        await syncSubscriptionFromStripe(eventObject.id, event.type);
+        await syncSubscriptionFromStripe(eventObject.id, event.type, {
+          previousAttributes: event.data.previous_attributes ?? null,
+        });
         break;
       }
 

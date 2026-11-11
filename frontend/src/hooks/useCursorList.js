@@ -15,6 +15,8 @@ export function useCursorList({ fetchPage, rowsKey, countKey, onLoadMoreError })
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState(false);
+  //* HTTP status of the failed first page (422 = rejected filters/sort)
+  const [errorStatus, setErrorStatus] = useState(null);
 
   const requestIdRef = useRef(0);
   const abortRef = useRef(null);
@@ -34,6 +36,7 @@ export function useCursorList({ fetchPage, rowsKey, countKey, onLoadMoreError })
 
     setLoading(true);
     setError(false);
+    setErrorStatus(null);
     setNextCursor(null);
 
     try {
@@ -46,9 +49,10 @@ export function useCursorList({ fetchPage, rowsKey, countKey, onLoadMoreError })
       setRows(data[rowsKey] ?? []);
       setRowCount(data[countKey] ?? 0);
       setNextCursor(data.nextCursor ?? null);
-    } catch {
+    } catch (err) {
       if (requestId === requestIdRef.current) {
         setError(true);
+        setErrorStatus(err?.response?.status ?? null);
       }
     } finally {
       if (requestId === requestIdRef.current) {
@@ -100,6 +104,7 @@ export function useCursorList({ fetchPage, rowsKey, countKey, onLoadMoreError })
     loading,
     loadingMore,
     error,
+    errorStatus,
     reload: loadFirstPage,
     loadMore,
   };
