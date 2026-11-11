@@ -44,11 +44,11 @@ The system SHALL, every 15 minutes, find uploads still `pending` more than 60 mi
 
 ### Requirement: Upload cleanup alerts once, then warns
 
-The system SHALL log an error (which alerts) when a sweep fails on object keys that did not fail on the previous sweep in the same process, and only a warning while the same keys keep failing, so a persistent outage does not alert on every tick.
+The system SHALL log an error (which alerts) when a sweep fails on object keys that had never failed before on any replica, and only a warning while already-failed keys keep failing, so a persistent outage does not alert on every tick, whichever replica runs it and across restarts. The failure memory SHALL be persisted with the pending rows.
 
 #### Scenario: New failures alert
 
-- **WHEN** a sweep fails on keys that did not fail before
+- **WHEN** a sweep fails on keys that never failed before
 - **THEN** an error-level line is logged and an alert is attempted
 
 #### Scenario: Stuck keys downgrade
@@ -56,14 +56,24 @@ The system SHALL log an error (which alerts) when a sweep fails on object keys t
 - **WHEN** the next sweep fails on the same keys
 - **THEN** only a warning is logged
 
+#### Scenario: Another replica runs the next sweep
+
+- **WHEN** replica A's sweep alerted for a key and replica B runs the next sweep, which fails on the same key
+- **THEN** replica B logs only a warning
+
 ### Requirement: Expired sessions are pruned
 
-The system SHALL prune expired session rows from the session store every 2 minutes in each running process.
+The system SHALL delete expired session rows from the session store every 15 minutes as a scheduled job that follows the single-replica, non-overlapping and error-containment rules of the other jobs. Expired sessions SHALL be refused on read regardless of when they are pruned.
 
 #### Scenario: Session expiry
 
 - **WHEN** a session's 24-hour lifetime has passed
-- **THEN** its row is removed by the next prune
+- **THEN** its row is removed by the next prune and any request using it is unauthenticated even before that
+
+#### Scenario: Two replicas prune
+
+- **WHEN** two replicas reach the same prune tick
+- **THEN** exactly one deletes the expired rows and the other logs that it skipped
 
 ### Requirement: Each scheduled job runs on one replica at a time
 
@@ -85,30 +95,54 @@ The system SHALL never start a job's next tick while its previous tick in the sa
 
 ### Requirement: Job errors are contained
 
-The system SHALL catch any error raised in a tick, including a lock-holding tick that exceeds its 10-minute ceiling, log it at error level with the job name, and never let it crash the process or affect request handling.
+The system SHALL catch any error raised in a tick, including a lock-holding tick that exceeds its 10-minute ceiling, log it with the job name, and never let it crash the process or affect request handling. Errors SHALL be logged at error level unless they are transient database connectivity errors, which follow the downgrade rule.
 
 #### Scenario: Database error in a tick
 
-- **WHEN** the token sweep's query fails
+- **WHEN** the token sweep's query fails with a non-connectivity error
 - **THEN** an error naming the job is logged and the server keeps running
 
 ### Requirement: Jobs follow the process lifecycle
 
-The system SHALL start the scheduled jobs when the server starts and stop scheduling them as soon as a graceful shutdown begins.
+The system SHALL start the scheduled jobs when the server starts and stop scheduling them as soon as a graceful shutdown begins, then let a tick that is already running finish within the shutdown drain budget before the database is closed. A tick still running when the budget ends SHALL be abandoned with a warning; its lock SHALL be released and the job SHALL resume safely on a later tick.
 
 #### Scenario: Shutdown
 
 - **WHEN** SIGTERM is received
 - **THEN** no new job tick starts afterwards
 
+#### Scenario: Tick outlives the drain budget
+
+- **WHEN** a tick is still running when the shutdown drain budget ends
+- **THEN** a warning is logged, the database closes, and the next replica to win the lock repeats the work without losing data
+
+### Requirement: Transient database outages downgrade job alerts
+
+The system SHALL treat a tick failure whose error (or its cause) has code `P1001`, `P1017`, `ECONNREFUSED`, `ECONNRESET` or `ETIMEDOUT` as transient: it SHALL log a warning with the job name, code and consecutive count, and log an error only on the third consecutive transient failure of that job in the process. A successful or lock-skipped tick SHALL reset the count.
+
+#### Scenario: Short database restart
+
+- **WHEN** one upload sweep fails with `ECONNREFUSED` and the next tick succeeds
+- **THEN** only a warning is logged and no alert is attempted
+
+#### Scenario: Prolonged outage
+
+- **WHEN** the same job fails with a transient connectivity error on three consecutive ticks
+- **THEN** the third failure is logged at error level and an alert is attempted, and further transient failures stay warnings until a tick succeeds
+
+#### Scenario: Non-transient error alerts at once
+
+- **WHEN** a tick fails with an error whose code is not transient
+- **THEN** it is logged at error level on the first occurrence
+
 ### Requirement: Unverified accounts are purged daily
 
-The system SHALL, once a day at 03:30 server time under the single-replica rules, delete every account still unverified 7 days after registration together with its company data (as for a last-member deletion), and delete every expired email-verification token.
+The system SHALL, once a day at 03:45 server time under the single-replica rules, delete every account still unverified 7 days after registration together with its company data (as for a last-member deletion), and delete every expired email-verification token.
 
 #### Scenario: Abandoned registration
 
 - **WHEN** an account registered 8 days ago has never been verified
-- **THEN** the 03:30 job deletes it and its company, freeing the address
+- **THEN** the 03:45 job deletes it and its company, freeing the address
 
 #### Scenario: Recent registration kept
 

@@ -143,5 +143,15 @@ describe('useCursorList', () => {
 
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.error).toBe(true);
+    expect(result.current.errorStatus).toBeNull();
+  });
+
+  it('exposes the HTTP status of a failed first page (422 = rejected filters)', async () => {
+    const fetchPage = vi.fn().mockRejectedValue({ response: { status: 422 } });
+
+    const { result } = renderList(fetchPage);
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.errorStatus).toBe(422);
   });
 });

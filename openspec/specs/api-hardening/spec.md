@@ -39,7 +39,7 @@ The system SHALL apply a shared per-IP budget of 10 requests per 15 minutes to l
 
 ### Requirement: Per-account login budget
 
-The system SHALL allow at most 5 failed login attempts per 15 minutes per normalized email together with the client IP (successful logins do not count), answering 429 with a JSON `message` beyond it. IPv6 clients SHALL be keyed by their /56 subnet in this and every other IP-keyed limiter. Limiter state is per process.
+The system SHALL allow at most 5 failed login attempts per 15 minutes per normalized email together with the client IP (successful logins do not count), answering 429 with a JSON `message` beyond it. IPv6 clients SHALL be keyed by their /56 subnet in this and every other IP-keyed limiter. Limiter state is per process unless the shared credential store is enabled.
 
 #### Scenario: Account brute force from one source
 
@@ -328,3 +328,55 @@ The system SHALL give the verification-email resend request its own per-IP budge
 
 - **WHEN** one IP requests a 6th verification email within an hour
 - **THEN** the API responds 429
+
+### Requirement: Validated fields come from one location
+
+The system SHALL validate and read every request field from exactly one documented location: JSON body fields from the body, list filters and tokens from the query string, ids from the path. A field supplied only in another location SHALL count as missing and answer 422 with the standard validation shape; a copy in another location SHALL be ignored, so validation and the handler always see the same value.
+
+#### Scenario: Body field sent in the query
+
+- **WHEN** a client sends a body field only as a query parameter, with an empty JSON body
+- **THEN** the API responds 422 naming that field and no handler logic runs
+
+#### Scenario: Conflicting copy in the query ignored
+
+- **WHEN** a request carries a valid body field and a different value for the same name in the query string
+- **THEN** the body value is validated and used and the query value has no effect
+
+#### Scenario: List filter sent in the body
+
+- **WHEN** a list request carries `limit` in a JSON body instead of the query string
+- **THEN** the body value is ignored and the default page size applies
+
+### Requirement: Credential budgets can be shared across replicas
+
+When `RATE_LIMIT_STORE=postgres`, the system SHALL keep the shared credential budget, the per-account login budget, the password-reset email budget and the password-change budget in a database-backed store, so every replica and restart sees the same counters. Without it (default `memory`) counters SHALL be per process. Store errors SHALL let the request through and log a warning.
+
+#### Scenario: Two replicas share the auth budget
+
+- **WHEN** the shared store is enabled and one IP spreads 11 credential requests within 15 minutes across two replicas
+- **THEN** the 11th request responds 429
+
+#### Scenario: Store unavailable
+
+- **WHEN** the shared store fails while a login is attempted
+- **THEN** the limiter lets the request through and logs a warning
+
+#### Scenario: Unknown store value
+
+- **WHEN** a deployed environment boots with `RATE_LIMIT_STORE=redis`
+- **THEN** the server refuses to start
+
+### Requirement: Password-change budget
+
+The system SHALL allow at most 5 failed current-password checks per 15 minutes per authenticated user on the password-change endpoint, answering 429 with a JSON `message` and logging a rate-limit warning beyond it, in every environment. Only rejections with `code: "AUTH_CURRENT_PASSWORD_INCORRECT"` SHALL count.
+
+#### Scenario: Stolen session guessing the current password
+
+- **WHEN** one session sends a 6th wrong current password within 15 minutes
+- **THEN** the API responds 429 without checking the password
+
+#### Scenario: Other rejections do not count
+
+- **WHEN** a user receives `AUTH_PASSWORD_UNCHANGED` or 422 several times
+- **THEN** those attempts do not consume the budget

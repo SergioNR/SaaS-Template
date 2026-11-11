@@ -21,11 +21,22 @@ jest.unstable_mockModule('../server/config/loggerFunctions.js', () => ({
   logError: jest.fn(),
 }));
 
+//* Business events are covered by their own specs - stubbed here so the
+//* real models behind them never load
+jest.unstable_mockModule('../server/utils/businessEvents.js', () => ({
+  notifyCompanyRegistered: jest.fn().mockResolvedValue(undefined),
+  notifyInviteAccepted: jest.fn().mockResolvedValue(undefined),
+  notifySubscriptionTransition: jest.fn().mockResolvedValue(undefined),
+  notifyUserDeleted: jest.fn().mockResolvedValue(undefined),
+}));
+
 const { cleanupAfterUserDeletion, deleteUserAndCleanup } = await import('../server/utils/userDeletionCleanup.js');
 const { deleteUserWithCompanyDataInDb } = await import('../server/models/userModel.js');
 const { cancelCompanyBillingInStripe } = await import('../server/integrations/stripe/subscription.js');
 const { deleteS3Objects } = await import('../server/integrations/s3/deleteS3Objects.js');
 const { logError } = await import('../server/config/loggerFunctions.js');
+const { notifyUserDeleted } = await import('../server/utils/businessEvents.js');
+const { resetProcessLifecycle, pendingBackgroundTaskCount } = await import('../server/utils/processLifecycle.js');
 
 const companyDeletion = {
   status: 'deleted',
@@ -122,5 +133,45 @@ describe('cleanupAfterUserDeletion', () => {
 
     await expect(cleanupAfterUserDeletion(companyDeletion)).resolves.toBeUndefined();
     expect(logError).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('deleteUserAndCleanup business events', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    resetProcessLifecycle();
+  });
+
+  afterAll(() => {
+    resetProcessLifecycle();
+  });
+
+  it('emits the deletion events after the commit and the cleanup, with the actor kind, and keeps it out of the model options', async () => {
+    deleteUserWithCompanyDataInDb.mockResolvedValueOnce(companyDeletion);
+    notifyUserDeleted.mockReturnValueOnce(new Promise(() => {}));
+
+    //* Resolves although the send hangs - it is tracked background work
+    await deleteUserAndCleanup('user-1', { protectLastOwner: true, actorKind: 'team' });
+
+    expect(deleteUserWithCompanyDataInDb).toHaveBeenCalledWith('user-1', { protectLastOwner: true });
+    expect(notifyUserDeleted).toHaveBeenCalledWith(companyDeletion, 'team');
+    expect(cancelCompanyBillingInStripe.mock.invocationCallOrder[0]).toBeLessThan(notifyUserDeleted.mock.invocationCallOrder[0]);
+    expect(pendingBackgroundTaskCount()).toBe(1);
+  });
+
+  it('defaults the actor kind to self', async () => {
+    deleteUserWithCompanyDataInDb.mockResolvedValueOnce({ status: 'deleted', deletedUser: { id: 'user-1' }, companyDeleted: false });
+
+    await deleteUserAndCleanup('user-1');
+
+    expect(notifyUserDeleted).toHaveBeenCalledWith(expect.anything(), 'self');
+  });
+
+  it.each(['not_found', 'forbidden', 'last_owner', 'last_superadmin'])('emits nothing when the deletion answers %s', async (status) => {
+    deleteUserWithCompanyDataInDb.mockResolvedValueOnce({ status });
+
+    await deleteUserAndCleanup('user-1', { actorKind: 'admin' });
+
+    expect(notifyUserDeleted).not.toHaveBeenCalled();
   });
 });

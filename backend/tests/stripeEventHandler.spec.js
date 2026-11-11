@@ -23,7 +23,17 @@ jest.unstable_mockModule('../server/config/loggerFunctions.js', () => ({
   logInfo: jest.fn(),
 }));
 
-const { stripeEventHandler } = await import('../server/webhooks/stripe/stripeEventHandler.js');
+//* Business events are covered by their own specs - stubbed here so the
+//* real models behind them never load
+jest.unstable_mockModule('../server/utils/businessEvents.js', () => ({
+  notifyCompanyRegistered: jest.fn().mockResolvedValue(undefined),
+  notifyInviteAccepted: jest.fn().mockResolvedValue(undefined),
+  notifySubscriptionTransition: jest.fn().mockResolvedValue(undefined),
+  notifyUserDeleted: jest.fn().mockResolvedValue(undefined),
+}));
+
+const { stripeEventHandler, classifySubscriptionTransition } = await import('../server/webhooks/stripe/stripeEventHandler.js');
+const { notifySubscriptionTransition } = await import('../server/utils/businessEvents.js');
 const { stripeInstance } = await import('../server/config/stripe.js');
 const { retrieveStripeSubscription } = await import('../server/integrations/stripe/subscription.js');
 const {
@@ -75,6 +85,14 @@ const stripeSubscription = (overrides = {}) => ({
   ...overrides,
 });
 
+const givenEventWithPreviousAttributes = (type, object, previousAttributes) => {
+  stripeInstance.webhooks.constructEvent.mockReturnValue({
+    id: 'evt_1',
+    type,
+    data: { object, previous_attributes: previousAttributes },
+  });
+};
+
 const run = async () => {
   const res = createMockRes();
   await stripeEventHandler(createReq(), res);
@@ -92,11 +110,11 @@ describe('stripeEventHandler', () => {
       const write = resolveSubscriptionWrite(storedSubscription);
 
       if (!write) {
-        return false;
+        return null;
       }
 
       upsertCalls.push({ companyId, ...write });
-      return true;
+      return { previous: storedSubscription, written: write };
     });
   });
 
@@ -432,5 +450,168 @@ describe('stripeEventHandler', () => {
     const res = await run();
 
     expect(res.status).toHaveBeenCalledWith(500);
+  });
+});
+
+describe('stripeEventHandler business events', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    givenStoredSubscription(null);
+    getCompanyIdByStripeCustomerIdInDb.mockResolvedValue('company-1');
+    retrieveStripeSubscription.mockResolvedValue(stripeSubscription());
+    syncSubscriptionWithCompanyLockInDb.mockImplementation(async (companyId, resolveSubscriptionWrite) => {
+      const write = resolveSubscriptionWrite(storedSubscription);
+
+      return write ? { previous: storedSubscription, written: write } : null;
+    });
+  });
+
+  it('emits subscription.started (converted) when a trial company pays for the first time', async () => {
+    givenStoredSubscription({ stripe_subscription_id: null, stripe_status: null, expires_at: FUTURE });
+    givenEvent('invoice.paid', { subscription: 'sub_new' });
+
+    const res = await run();
+
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(notifySubscriptionTransition).toHaveBeenCalledWith('company-1', expect.objectContaining({
+      event: 'subscription.started',
+      fields: expect.objectContaining({ startKind: 'converted' }),
+    }));
+  });
+
+  it('emits nothing for a renewal of the same active subscription', async () => {
+    givenStoredSubscription({ stripe_subscription_id: 'sub_new', stripe_status: 'active', expires_at: FUTURE });
+    givenEvent('invoice.paid', { subscription: 'sub_new' });
+
+    await run();
+
+    expect(notifySubscriptionTransition).not.toHaveBeenCalled();
+  });
+
+  it('emits subscription.cancellation_scheduled from previous_attributes confirmed by the fresh read', async () => {
+    givenStoredSubscription({ stripe_subscription_id: 'sub_new', stripe_status: 'active', expires_at: FUTURE });
+    retrieveStripeSubscription.mockResolvedValue(stripeSubscription({ cancel_at_period_end: true }));
+    givenEventWithPreviousAttributes('customer.subscription.updated', { id: 'sub_new' }, { cancel_at_period_end: false });
+
+    await run();
+
+    expect(notifySubscriptionTransition).toHaveBeenCalledWith('company-1', expect.objectContaining({
+      event: 'subscription.cancellation_scheduled',
+    }));
+  });
+
+  it('emits nothing for a skipped write and still acknowledges', async () => {
+    givenStoredSubscription({ stripe_subscription_id: 'sub_old', stripe_status: 'active', expires_at: FUTURE });
+    retrieveStripeSubscription.mockResolvedValue(stripeSubscription({ status: 'canceled', ended_at: 1 }));
+    givenEvent('customer.subscription.deleted', { id: 'sub_new' });
+
+    const res = await run();
+
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(notifySubscriptionTransition).not.toHaveBeenCalled();
+  });
+
+  it('acknowledges the webhook while the business event send hangs', async () => {
+    givenStoredSubscription({ stripe_subscription_id: null, stripe_status: null, expires_at: FUTURE });
+    notifySubscriptionTransition.mockReturnValueOnce(new Promise(() => {}));
+    givenEvent('invoice.paid', { subscription: 'sub_new' });
+
+    const res = await run();
+
+    expect(res.status).toHaveBeenCalledWith(200);
+  });
+});
+
+describe('classifySubscriptionTransition', () => {
+  const written = (overrides = {}) => ({
+    stripeSubscriptionId: 'sub_1',
+    status: 'active',
+    expiresAt: FUTURE,
+    syncedAt: new Date(),
+    ...overrides,
+  });
+
+  it('trial -> active is a converted start', () => {
+    expect(classifySubscriptionTransition(
+      { stripe_subscription_id: null, stripe_status: null, expires_at: FUTURE },
+      written(),
+      { eventType: 'checkout.session.completed', subscription: stripeSubscription({ id: 'sub_1' }) },
+    )).toEqual({
+      event: 'subscription.started',
+      fields: { startKind: 'converted', plan: null, periodEndsAt: FUTURE },
+    });
+  });
+
+  it('a company without any row starts as converted', () => {
+    expect(classifySubscriptionTransition(null, written(), {}).fields.startKind).toBe('converted');
+  });
+
+  it('ended -> active is a resubscription', () => {
+    expect(classifySubscriptionTransition(
+      { stripe_subscription_id: 'sub_old', stripe_status: 'canceled', expires_at: PAST },
+      written(),
+      {},
+    )).toEqual(expect.objectContaining({ event: 'subscription.started', fields: expect.objectContaining({ startKind: 'resubscribed' }) }));
+  });
+
+  it('active -> canceled is an end with the final status', () => {
+    expect(classifySubscriptionTransition(
+      { stripe_subscription_id: 'sub_1', stripe_status: 'active', expires_at: FUTURE },
+      written({ status: 'canceled', expiresAt: PAST }),
+      { eventType: 'customer.subscription.deleted' },
+    )).toEqual({ event: 'subscription.ended', fields: { plan: null, status: 'canceled' } });
+  });
+
+  it('a legacy row without stored status counts as granting while it has not expired', () => {
+    expect(classifySubscriptionTransition(
+      { stripe_subscription_id: 'sub_1', stripe_status: null, expires_at: FUTURE },
+      written(),
+      { eventType: 'invoice.paid' },
+    )).toBeNull();
+  });
+
+  it('cancel_at_period_end false -> true schedules a cancellation ending at the period end', () => {
+    expect(classifySubscriptionTransition(
+      { stripe_subscription_id: 'sub_1', stripe_status: 'active', expires_at: FUTURE },
+      written(),
+      {
+        eventType: 'customer.subscription.updated',
+        previousAttributes: { cancel_at_period_end: false },
+        subscription: stripeSubscription({ id: 'sub_1', cancel_at_period_end: true }),
+      },
+    )).toEqual({
+      event: 'subscription.cancellation_scheduled',
+      fields: { plan: null, accessEndsAt: FUTURE },
+    });
+  });
+
+  it('cancel_at null -> set uses cancel_at as the access end', () => {
+    const transition = classifySubscriptionTransition(
+      { stripe_subscription_id: 'sub_1', stripe_status: 'active', expires_at: FUTURE },
+      written(),
+      {
+        eventType: 'customer.subscription.updated',
+        previousAttributes: { cancel_at: null },
+        subscription: stripeSubscription({ id: 'sub_1', cancel_at: PERIOD_END }),
+      },
+    );
+
+    expect(transition.fields.accessEndsAt).toEqual(new Date(PERIOD_END * 1000));
+  });
+
+  it('a stale previous_attributes not confirmed by the fresh read emits nothing', () => {
+    expect(classifySubscriptionTransition(
+      { stripe_subscription_id: 'sub_1', stripe_status: 'active', expires_at: FUTURE },
+      written(),
+      {
+        eventType: 'customer.subscription.updated',
+        previousAttributes: { cancel_at_period_end: false },
+        subscription: stripeSubscription({ id: 'sub_1', cancel_at_period_end: false }),
+      },
+    )).toBeNull();
+  });
+
+  it('a skipped or stale write emits nothing', () => {
+    expect(classifySubscriptionTransition({ stripe_subscription_id: null }, null, {})).toBeNull();
   });
 });

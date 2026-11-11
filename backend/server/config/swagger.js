@@ -1,5 +1,7 @@
 import swaggerJsdoc from 'swagger-jsdoc';
 import { SESSION_COOKIE_NAME } from './security.js';
+import { buildAdminListFilterParameters } from '../utils/adminColumnFilters.js';
+import { buildAdminListSortParameters } from '../utils/adminColumnSorts.js';
 
 const swaggerOptions = {
   definition: {
@@ -392,3 +394,25 @@ const swaggerOptions = {
 };
 
 export const openapiSpecification = swaggerJsdoc(swaggerOptions);
+
+//* The admin list filter and sort parameters are generated from the same
+//* registry as their validators and Prisma fragments
+//* (utils/adminColumnFilters.js, utils/adminColumnSorts.js), so the docs
+//* cannot drift from what the endpoint accepts. The JSDoc blocks document
+//* only the shared search/limit/cursor parameters
+const ADMIN_LIST_OPERATIONS = [
+  ['/api/v1/admin/users', 'users'],
+  ['/api/v1/admin/companies', 'companies'],
+];
+
+ADMIN_LIST_OPERATIONS.forEach(([routePath, list]) => {
+  const operation = openapiSpecification.paths?.[routePath]?.get;
+
+  if (operation) {
+    operation.parameters = [
+      ...buildAdminListFilterParameters(list),
+      ...buildAdminListSortParameters(list),
+      ...(operation.parameters ?? []),
+    ];
+  }
+});

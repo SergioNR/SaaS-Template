@@ -3,6 +3,7 @@ import { passwordByteLengthValidator } from './passwordByteLength.js';
 
 export const recoverPasswordSchema = {
   newPassword: {
+    in: ['body'],
     isString: {
       errorMessage: 'Password must be a string',
       bail: true,
@@ -34,6 +35,7 @@ export const recoverPasswordSchema = {
     },
   },
   confirmNewPassword: {
+    in: ['body'],
     isString: {
       errorMessage: 'Password confirmation must be a string',
       bail: true,
@@ -50,6 +52,7 @@ export const recoverPasswordSchema = {
     },
   },
   passwordResetToken: {
+    in: ['body'],
     isString: {
       errorMessage: 'Password reset token must be a string',
       bail: true,

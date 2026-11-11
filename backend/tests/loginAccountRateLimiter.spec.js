@@ -17,6 +17,7 @@ jest.unstable_mockModule('express-slow-down', () => ({
 
 jest.unstable_mockModule('../server/config/loggerFunctions.js', () => ({
   logRateLimited: jest.fn(),
+  logWarn: jest.fn(),
 }));
 
 const { loginAccountLimiter, loginAccountKey } = await import('../server/middlewares/loginAccountRateLimiter.js');

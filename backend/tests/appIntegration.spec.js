@@ -37,6 +37,15 @@ const prismaMock = {
   session: {
     update: jest.fn().mockResolvedValue({}),
   },
+  userRole: {
+    findMany: jest.fn().mockResolvedValue([]),
+  },
+};
+
+const stripeCalls = {
+  checkoutSessionsCreate: jest.fn(),
+  checkoutSessionsList: jest.fn(),
+  subscriptionsList: jest.fn(),
 };
 
 const constructEvent = jest.fn(() => {
@@ -50,6 +59,8 @@ jest.unstable_mockModule('../server/config/prismaClient.js', () => ({
 jest.unstable_mockModule('../server/config/stripe.js', () => ({
   stripeInstance: {
     webhooks: { constructEvent },
+    checkout: { sessions: { create: stripeCalls.checkoutSessionsCreate, list: stripeCalls.checkoutSessionsList } },
+    subscriptions: { list: stripeCalls.subscriptionsList },
   },
 }));
 
@@ -66,10 +77,19 @@ jest.unstable_mockModule('@quixo3/prisma-session-store', () => ({
   PrismaSessionStore: class extends session.MemoryStore {},
 }));
 
-//* Silent logger - the access log middleware still runs, nothing is printed
+//* Captured logger - nothing is printed, every JSON line is kept so specs can
+//* assert on access/error lines
+const logLines = [];
 jest.unstable_mockModule('../server/config/logger.js', () => ({
-  logger: pino({ level: 'silent' }),
+  logger: pino({ level: 'info' }, { write: (line) => logLines.push(JSON.parse(line)) }),
 }));
+
+//* pino-http writes the access line on response finish - give it a tick
+const findAccessLine = async (requestId) => {
+  await new Promise((resolve) => { setImmediate(resolve); });
+
+  return logLines.find((line) => line.reqId === requestId && line.res !== undefined);
+};
 
 const { createApp } = await import('../server/createApp.js');
 const { markShuttingDown, resetProcessLifecycle } = await import('../server/utils/processLifecycle.js');
@@ -253,9 +273,6 @@ describe('session cookie', () => {
   });
 });
 
-//* Logs the seeded-shaped owner in and returns the Cookie header to replay -
-//* the cookie is Secure, so it is forwarded by hand over the test transport.
-//* Counts against authLimiter like any login
 const OWNER = {
   id: '00000000-0000-4000-8000-000000000001',
   email: 'owner@acme.test',
@@ -263,22 +280,29 @@ const OWNER = {
   company_id: '00000000-0000-4000-8000-0000000000c0',
 };
 
-const loginAsOwner = async () => {
-  const passwordHash = await bcrypt.hash('Password123!', 4);
-  prismaMock.user.findUnique.mockResolvedValueOnce({ ...OWNER, email_verified_at: new Date(), password: passwordHash });
+//* Logs the seeded-like owner in and returns its session cookie. Counts
+//* against authLimiter like any login
+//* `clientIp` (sent as X-Forwarded-For, TRUST_PROXY=1) gives a spec its own
+//* per-IP budgets - the global slow-down otherwise delays every request of
+//* this file once the shared loopback IP passed 30 requests
+const loginAsOwner = async (user = OWNER, { clientIp } = {}) => {
+  prismaMock.user.findUnique.mockResolvedValueOnce({
+    ...user,
+    email_verified_at: new Date(),
+    password: await bcrypt.hash('Password123!', 4),
+  });
 
-  authLimiterHits += 1;
-  const response = await request(app)
+  if (!clientIp) authLimiterHits += 1;
+  const login = request(app)
     .post('/api/v1/auth/login')
     .set('Origin', FRONT_ORIGIN)
-    .set('X-Forwarded-Proto', 'https')
-    .send({ username: OWNER.email, password: 'Password123!' });
+    .set('X-Forwarded-Proto', 'https');
+  if (clientIp) login.set('X-Forwarded-For', clientIp);
+  const response = await login.send({ username: user.email, password: 'Password123!' });
 
   expect(response.status).toBe(200);
 
-  const sessionCookie = (response.headers['set-cookie'] ?? []).find((cookie) => cookie.startsWith('app.sid='));
-
-  return sessionCookie.split(';')[0];
+  return response.headers['set-cookie'].find((cookie) => cookie.startsWith('app.sid=')).split(';')[0];
 };
 
 describe('auth router gating', () => {
@@ -375,6 +399,142 @@ describe('email verification routes', () => {
     }
 
     expect(statuses).toEqual([200, 200, 200, 200, 200, 429]);
+  });
+});
+
+describe('validated fields come from one location', () => {
+  it('rejects login credentials sent only in the query string with 422, before any account lookup', async () => {
+    prismaMock.user.findUnique.mockClear();
+
+    authLimiterHits += 1;
+    const response = await request(app)
+      .post('/api/v1/auth/login?username=owner%40acme.test&password=Password123!')
+      .set('Origin', FRONT_ORIGIN);
+
+    expect(response.status).toBe(422);
+    expect(prismaMock.user.findUnique).not.toHaveBeenCalled();
+    expect(response.headers['set-cookie']).toBeUndefined();
+  });
+
+  it('answers 422 (never 500) for checkout plan fields sent only in the query string', async () => {
+    const cookie = await loginAsOwner();
+
+    prismaMock.user.findUnique.mockResolvedValue(OWNER);
+    prismaMock.userRole.findMany.mockResolvedValue([{
+      Role: { name: 'company_owner', RolePermissions: [{ Permission: { name: 'billing.manage' } }] },
+    }]);
+    Object.values(stripeCalls).forEach((mock) => mock.mockClear());
+
+    try {
+      const response = await request(app)
+        .post('/api/v1/billing/checkout-session?planName=pro&planBillingCycle=monthly')
+        .set('Origin', FRONT_ORIGIN)
+        .set('X-Forwarded-Proto', 'https')
+        .set('Cookie', cookie)
+        .send({});
+
+      expect(response.status).toBe(422);
+      Object.values(stripeCalls).forEach((mock) => expect(mock).not.toHaveBeenCalled());
+    } finally {
+      prismaMock.user.findUnique.mockReset();
+      prismaMock.userRole.findMany.mockResolvedValue([]);
+    }
+  });
+});
+
+describe('access line request id', () => {
+  it('carries the response X-Request-Id as reqId', async () => {
+    const response = await request(app).get('/');
+    const accessLine = await findAccessLine(response.headers['x-request-id']);
+
+    expect(accessLine).toBeDefined();
+    expect(accessLine.reqId).toMatch(UUID_PATTERN);
+    expect(accessLine.res.statusCode).toBe(200);
+  });
+
+  it('matches the error-handler line requestId on a 500', async () => {
+    const cookie = await loginAsOwner();
+
+    //* The session's user lookup fails -> passport forwards the error -> 500
+    prismaMock.user.findUnique.mockRejectedValueOnce(new Error('database exploded'));
+
+    const response = await request(app)
+      .get('/api/v1/user')
+      .set('X-Forwarded-Proto', 'https')
+      .set('Cookie', cookie);
+
+    expect(response.status).toBe(500);
+
+    const requestId = response.headers['x-request-id'];
+    const accessLine = await findAccessLine(requestId);
+    const errorLine = logLines.find((line) => line.context?.additionalInfo?.requestId === requestId);
+
+    expect(accessLine).toBeDefined();
+    expect(accessLine.res.statusCode).toBe(500);
+    expect(errorLine).toBeDefined();
+    expect(errorLine.context.additionalInfo.requestId).toBe(accessLine.reqId);
+  });
+});
+
+describe('password change budget', () => {
+  //* The session lookup returns the user; the password lookup (select
+  //* password) returns its hash
+  const servePasswordChangeUser = async (user) => {
+    const passwordHash = await bcrypt.hash('Password123!', 4);
+
+    prismaMock.user.findUnique.mockImplementation(async (args) => (
+      args?.select?.password ? { password: passwordHash } : user
+    ));
+  };
+
+  const changePassword = (cookie, currentPassword, newPassword = 'NewPassword123', clientIp = '203.0.113.10') => request(app)
+    .patch('/api/v1/user/password')
+    .set('Origin', FRONT_ORIGIN)
+    .set('X-Forwarded-Proto', 'https')
+    .set('X-Forwarded-For', clientIp)
+    .set('Cookie', cookie)
+    .send({ currentPassword, newPassword });
+
+  afterEach(() => {
+    prismaMock.user.findUnique.mockReset();
+  });
+
+  it('answers 429 on the 6th attempt after 5 wrong current passwords, even with the right one', async () => {
+    const user = { ...OWNER, id: '00000000-0000-4000-8000-0000000000b1', email: 'guess@acme.test' };
+    const cookie = await loginAsOwner(user, { clientIp: '203.0.113.10' });
+    await servePasswordChangeUser(user);
+
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const response = await changePassword(cookie, 'WrongPassword1');
+
+      expect(response.status).toBe(400);
+      expect(response.body.code).toBe('AUTH_CURRENT_PASSWORD_INCORRECT');
+    }
+
+    const throttled = await changePassword(cookie, 'Password123!');
+
+    expect(throttled.status).toBe(429);
+    expect(throttled.body).toEqual({ message: 'Too many failed password change attempts - please try again later' });
+  });
+
+  it('does not count unchanged-password rejections nor validation errors', async () => {
+    const user = { ...OWNER, id: '00000000-0000-4000-8000-0000000000b2', email: 'careful@acme.test' };
+    const cookie = await loginAsOwner(user, { clientIp: '203.0.113.11' });
+    await servePasswordChangeUser(user);
+
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const unchanged = await changePassword(cookie, 'Password123!', 'Password123!', '203.0.113.11');
+      expect(unchanged.status).toBe(400);
+      expect(unchanged.body.code).toBe('AUTH_PASSWORD_UNCHANGED');
+
+      const invalid = await changePassword(cookie, 'Password123!', 'short', '203.0.113.11');
+      expect(invalid.status).toBe(422);
+    }
+
+    const wrong = await changePassword(cookie, 'WrongPassword1', 'NewPassword123', '203.0.113.11');
+
+    expect(wrong.status).toBe(400);
+    expect(wrong.body.code).toBe('AUTH_CURRENT_PASSWORD_INCORRECT');
   });
 });
 

@@ -9,6 +9,7 @@ import { updatePasswordSchema } from '../server/utils/validators/updatePasswordS
 import { recoverPasswordSchema } from '../server/utils/validators/recoverPasswordSchema.js';
 import { acceptTeamInviteSchema } from '../server/utils/validators/acceptTeamInviteSchema.js';
 import { teamInviteTokenQuerySchema } from '../server/utils/validators/teamInviteTokenQuerySchema.js';
+import { checkoutSessionSchema } from '../server/utils/validators/checkoutSessionSchema.js';
 import { BCRYPT_MAX_PASSWORD_BYTES } from '../server/utils/validators/passwordByteLength.js';
 import { emailVerificationSchema } from '../server/utils/validators/emailVerificationSchema.js';
 import { resendVerificationSchema } from '../server/utils/validators/resendVerificationSchema.js';
@@ -182,5 +183,46 @@ describe('email verification schemas', () => {
     expect(errors).toEqual([]);
     expect(req.body.email).toBe('user@example.com');
     expect(failedPaths(arrayCase.errors)).toContain('email');
+  });
+});
+
+describe('body schemas read only the JSON body', () => {
+  const VALID_EMAIL = 'user@example.com';
+  const BODY_SCHEMAS = [
+    ['checkout', checkoutSessionSchema, { planName: 'pro', planBillingCycle: 'monthly' }],
+    ['register', createUserValidationSchema, { username: VALID_EMAIL, companyName: 'Acme Corp', password: VALID_PASSWORD }],
+    ['login', userLoginValidationSchema, { username: VALID_EMAIL, password: VALID_PASSWORD }],
+    ['password-reset request', requestNewPasswordSchema, { email: VALID_EMAIL }],
+    ['password-reset submit', recoverPasswordSchema, {
+      newPassword: VALID_PASSWORD,
+      confirmNewPassword: VALID_PASSWORD,
+      passwordResetToken: VALID_TOKEN,
+    }],
+    ['email verification', emailVerificationSchema, { emailVerificationToken: VALID_TOKEN }],
+    ['verification resend', resendVerificationSchema, { email: VALID_EMAIL }],
+    ['password update', updatePasswordSchema, { currentPassword: 'whatever', newPassword: VALID_PASSWORD }],
+  ];
+
+  test.each(BODY_SCHEMAS)('%s: values only in the query string are missing', async (_label, schema, values) => {
+    const { errors } = await run(schema, { body: {}, query: values });
+
+    expect(failedPaths(errors)).toEqual(expect.arrayContaining(Object.keys(values)));
+  });
+
+  test.each(BODY_SCHEMAS)('%s: body values pass and a junk query copy is ignored', async (_label, schema, values) => {
+    const junk = Object.fromEntries(Object.keys(values).map((key) => [key, ['junk', 'junk']]));
+    const { req, errors } = await run(schema, { body: { ...values }, query: junk });
+
+    expect(errors).toEqual([]);
+    expect(req.query).toEqual(junk);
+  });
+
+  test('checkout with query-only plan fields fails both fields', async () => {
+    const { errors } = await run(checkoutSessionSchema, {
+      body: {},
+      query: { planName: 'pro', planBillingCycle: 'monthly' },
+    });
+
+    expect(failedPaths(errors).sort()).toEqual(['planBillingCycle', 'planName']);
   });
 });

@@ -2,6 +2,7 @@ import { SUPPORTED_PLANS, SUPPORTED_BILLING_CYCLES } from '../../config/planPric
 
 export const checkoutSessionSchema = {
   planName: {
+    in: ['body'],
     notEmpty: {
       errorMessage: 'Plan name is required',
     },
@@ -14,6 +15,7 @@ export const checkoutSessionSchema = {
     },
   },
   planBillingCycle: {
+    in: ['body'],
     notEmpty: {
       errorMessage: 'Billing cycle is required',
     },

@@ -84,6 +84,7 @@ export const deleteUser = async (req, res) => {
     //* inside the deletion transaction
     deletionResult = await deleteUserAndCleanup(req.user.id, {
       protectLastOwner: true,
+      actorKind: 'self',
     });
   } catch (error) {
     //* Only the DB transaction can throw - post-commit cleanup never does,

@@ -49,7 +49,10 @@ const PasswordUpdateForm = ({ email: emailProp }) => {
 
       const errorCode = status === 400 ? data?.code : null;
 
-      if (errorCode === 'AUTH_CURRENT_PASSWORD_INCORRECT') {
+      //* Per-account budget of wrong current passwords exhausted
+      if (status === 429) {
+        setErrorMessage(t('auth.passwordUpdate.errors.tooManyAttempts'));
+      } else if (errorCode === 'AUTH_CURRENT_PASSWORD_INCORRECT') {
         setErrorMessage(t('auth.passwordUpdate.errors.currentPassword'));
       } else if (errorCode === 'AUTH_PASSWORD_UNCHANGED') {
         setErrorMessage(t('auth.passwordUpdate.errors.samePassword'));

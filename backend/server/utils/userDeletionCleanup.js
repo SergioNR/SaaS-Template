@@ -2,6 +2,8 @@ import { deleteUserWithCompanyDataInDb } from '../models/userModel.js';
 import { deleteS3Objects } from '../integrations/s3/deleteS3Objects.js';
 import { cancelCompanyBillingInStripe } from '../integrations/stripe/subscription.js';
 import { logError } from '../config/loggerFunctions.js';
+import { trackBackground } from './processLifecycle.js';
+import { notifyUserDeleted } from './businessEvents.js';
 
 //* Third-party side effects of a committed deletion. They run strictly after
 //* the DB transaction so a rollback can never leave a cancelled Stripe
@@ -39,14 +41,20 @@ export const cleanupAfterUserDeletion = async (deletionResult) => {
 //* 2. after the commit, the company's open Stripe checkouts are expired, its
 //*    customer's access-granting subscriptions are cancelled at period end
 //*    and the company's bucket objects are deleted
+//* 3. the account-deleted (and company-deleted) business events go out
+//*    detached - `actorKind` (`self` / `team` / `admin`) says who deleted it
 //* DB errors (e.g. P2003) propagate from step 1 only - step 2 never throws,
 //* so callers can map DB errors without misreporting a committed delete.
 //* Resolves to the model's result ({ status, ... })
 export const deleteUserAndCleanup = async (userId, options = {}) => {
-  const deletionResult = await deleteUserWithCompanyDataInDb(userId, options);
+  const { actorKind = 'self', ...deletionOptions } = options;
+
+  const deletionResult = await deleteUserWithCompanyDataInDb(userId, deletionOptions);
 
   if (deletionResult.status === 'deleted') {
     await cleanupAfterUserDeletion(deletionResult);
+
+    trackBackground(notifyUserDeleted(deletionResult, actorKind)); // Fire-and-forget - only after the commit
   }
 
   return deletionResult;

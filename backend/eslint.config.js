@@ -68,6 +68,8 @@ export default [
       'server/config/planPrices.js',
       'server/utils/companyRoleHierarchy.js',
       'server/cron/deleteUnverifiedAccountsScheduler.js',
+      //* Sends an account-deleted then a company-deleted event, in order
+      'server/utils/businessEvents.js',
     ],
     rules: {
       'no-await-in-loop': 'off',

@@ -47,12 +47,17 @@ The system SHALL answer `GET /api/v1/admin/users/:userId` with 200 and `{ user }
 
 ### Requirement: Company list
 
-The system SHALL answer `GET /api/v1/admin/companies` with 200 and `{ companyCount, companies, nextCursor }`, where `search` filters on the company name and each row carries the company fields, its member count `userCount`, a `stripeLinked` boolean and its subscription (`created_at`, `updated_at`, `expires_at`, `status`, `is_paid`) or null. No Stripe customer or subscription id SHALL be exposed.
+The system SHALL answer `GET /api/v1/admin/companies` with 200 and `{ companyCount, companies, nextCursor }`, where `search` filters on the company name and each row carries the company fields, its member count `userCount`, a `stripeLinked` boolean and its subscription (`created_at`, `updated_at`, `expires_at`, `status`, `is_paid`) or null. Optional filters SHALL be `stripe_linked` (`true`/`false`) and an inclusive creation date range; `sort` SHALL accept `name` and `created_at`. No Stripe customer or subscription id SHALL be exposed.
 
 #### Scenario: Name search
 
 - **WHEN** a superadmin lists companies with `search=acme`
 - **THEN** only companies whose name contains `acme` case-insensitively are returned and `companyCount` counts only them
+
+#### Scenario: Stripe-linked filter
+
+- **WHEN** a superadmin lists companies with `stripe_linked=true`
+- **THEN** only companies with a Stripe customer are returned and `companyCount` counts only them
 
 #### Scenario: Billing identifiers hidden
 

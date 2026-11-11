@@ -6,6 +6,7 @@ jest.unstable_mockModule('../server/config/prismaClient.js', () => ({
   prisma: {
     user: {
       findUnique: jest.fn(),
+      findMany: jest.fn(),
     },
     company: {
       findMany: jest.fn(),
@@ -26,7 +27,8 @@ jest.unstable_mockModule('../server/config/loggerFunctions.js', () => ({
   logInfo: jest.fn(),
 }));
 
-const { getUserDetailInDb } = await import('../server/models/userModel.js');
+const { getUserDetailInDb, getAllUsersInDb } = await import('../server/models/userModel.js');
+const { buildAdminListSort } = await import('../server/utils/adminColumnSorts.js');
 const {
   getAllCompaniesInDb,
   getCompanyDetailInDb,
@@ -281,5 +283,108 @@ describe('getCompanyDetailInDb', () => {
     expect(JSON.stringify(result)).not.toContain('stripe_id');
     expect(JSON.stringify(result)).not.toContain('sub_secret');
     expect(JSON.stringify(result)).not.toContain('cus_secret123');
+  });
+});
+
+//* An in-memory stand-in for Prisma's findMany that understands exactly the
+//* where/orderBy shapes the sorted list walk emits (equality, gt/lt, null,
+//* AND/OR, nulls last) - enough to walk pages the way PostgreSQL would
+const matches = (row, where) => Object.entries(where).every(([key, condition]) => {
+  if (key === 'AND') return condition.every((part) => matches(row, part));
+  if (key === 'OR') return condition.some((part) => matches(row, part));
+
+  const value = row[key];
+
+  if (condition === null) return value === null;
+  if (condition instanceof Date || typeof condition !== 'object') {
+    return value !== null && String(value instanceof Date ? value.getTime() : value) === String(condition instanceof Date ? condition.getTime() : condition);
+  }
+  if (value === null) return false;
+
+  const comparable = (input) => (input instanceof Date ? input.getTime() : input);
+
+  if ('gt' in condition) return comparable(value) > comparable(condition.gt);
+  if ('lt' in condition) return comparable(value) < comparable(condition.lt);
+
+  return true;
+});
+
+const compareClause = (a, b, clause) => {
+  const [field, spec] = Object.entries(clause)[0];
+  const direction = typeof spec === 'string' ? spec : spec.sort;
+  const left = a[field] instanceof Date ? a[field].getTime() : a[field];
+  const right = b[field] instanceof Date ? b[field].getTime() : b[field];
+
+  if (left === right) return 0;
+  //* nulls last in both directions
+  if (left === null) return 1;
+  if (right === null) return -1;
+
+  const result = left < right ? -1 : 1;
+
+  return direction === 'asc' ? result : -result;
+};
+
+const compareBy = (orderBy) => (a, b) => orderBy
+  .map((clause) => compareClause(a, b, clause))
+  .find((result) => result !== 0) ?? 0;
+
+describe('getAllUsersInDb sorted cursor walk', () => {
+  const day = (n) => new Date(Date.UTC(2026, 0, n));
+  const rows = [
+    { id: 'u1', email: 'e@x.test', last_login_at: day(3) },
+    { id: 'u2', email: 'a@x.test', last_login_at: null },
+    { id: 'u3', email: 'c@x.test', last_login_at: day(5) },
+    { id: 'u4', email: 'b@x.test', last_login_at: null },
+    { id: 'u5', email: 'd@x.test', last_login_at: day(3) },
+    { id: 'u6', email: 'f@x.test', last_login_at: null },
+  ];
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    prisma.user.findUnique.mockImplementation(async ({ where }) => rows.find((row) => row.id === where.id) ?? null);
+    prisma.user.findMany.mockImplementation(async ({ where, orderBy, take }) => rows
+      .filter((row) => matches(row, where))
+      .sort(compareBy(orderBy))
+      .slice(0, take));
+  });
+
+  const walk = async (sort, limit) => {
+    const seen = [];
+    let cursor;
+
+    for (let page = 0; page < 10; page++) {
+      const result = await getAllUsersInDb({}, { limit, cursor }, sort);
+      seen.push(...result.map((row) => row.id));
+
+      if (result.length < limit) break;
+      cursor = result.at(-1).id;
+    }
+
+    return seen;
+  };
+
+  it.each([
+    ['last_login_at', 'desc', ['u3', 'u5', 'u1', 'u6', 'u4', 'u2']],
+    ['last_login_at', 'asc', ['u1', 'u5', 'u3', 'u2', 'u4', 'u6']],
+    ['email', 'desc', ['u6', 'u1', 'u5', 'u3', 'u4', 'u2']],
+  ])('walks every user once sorted by %s %s, never-logged-in users last', async (key, order, expected) => {
+    const sort = buildAdminListSort('users', key, order);
+
+    for (const limit of [1, 2, 4]) {
+      expect(await walk(sort, limit)).toEqual(expected);
+    }
+  });
+
+  it('never sends Prisma a cursor for a sorted list (the keyset replaces it)', async () => {
+    await getAllUsersInDb({}, { limit: 2, cursor: 'u5' }, buildAdminListSort('users', 'last_login_at', 'desc'));
+
+    expect(prisma.user.findMany.mock.calls[0][0].cursor).toBeUndefined();
+    expect(prisma.user.findMany.mock.calls[0][0].omit).toEqual({ password: true });
+  });
+
+  it('answers an empty page when the cursor row was deleted', async () => {
+    await expect(getAllUsersInDb({}, { limit: 2, cursor: 'gone' }, buildAdminListSort('users', 'email'))).resolves.toEqual([]);
+    expect(prisma.user.findMany).not.toHaveBeenCalled();
   });
 });

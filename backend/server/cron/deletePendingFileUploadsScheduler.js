@@ -3,36 +3,37 @@ import { logError, logInfo, logWarn } from '../config/loggerFunctions.js';
 import { PENDING_FILE_MAX_AGE_MS } from '../config/pendingFileUploads.js';
 import {
   deletePendingFilesByKeysInDb,
-  getStalePendingFileKeysInDb,
+  getStalePendingFilesInDb,
+  markPendingFileCleanupFailedInDb,
 } from '../models/pendingFileUploadsModel.js';
 import { deleteS3Objects } from '../integrations/s3/deleteS3Objects.js';
 import { ADVISORY_LOCK_KEYS } from '../config/advisoryLockKeys.js';
 import { runExclusiveCronTick } from './exclusiveCronTick.js';
 
-//* Keys whose bucket delete failed on the previous tick. A key that keeps
-//* failing is retried every tick, so it alerts (logError, Telegram) only the
-//* first time and is merely logged (logWarn) while it stays stuck
-let previouslyFailedKeys = new Set();
-
-const reportFailedKeys = (failedKeys, staleKeyCount) => {
-  const failedKeySet = new Set(failedKeys);
-  const hasNewFailures = failedKeys.some((key) => !previouslyFailedKeys.has(key));
-
-  previouslyFailedKeys = failedKeySet;
-
+//* A key that keeps failing is retried every tick, so it alerts (logError,
+//* Telegram) only the first time and is merely logged (logWarn) while it
+//* stays stuck. The "already failed" memory is the row's cleanup_failed_at
+//* marker - shared by every replica (whichever wins the lock runs the sweep)
+//* and kept across restarts, unlike module state
+const reportFailedKeys = async (failedKeys, staleFiles) => {
   if (failedKeys.length === 0) {
-    return failedKeySet;
+    return;
   }
 
-  const message = `Could not delete ${failedKeys.length} of ${staleKeyCount} stale pending upload object(s) from the bucket - their rows are kept for the next run`;
+  const failedKeySet = new Set(failedKeys);
+  const hasNewFailures = staleFiles.some((file) => failedKeySet.has(file.key) && file.cleanupFailedAt === null);
+
+  const message = `Could not delete ${failedKeys.length} of ${staleFiles.length} stale pending upload object(s) from the bucket - their rows are kept for the next run`;
 
   if (hasNewFailures) {
     logError(message, new Error('S3 batch delete reported failed keys'), { failedKeys });
   } else {
-    logWarn(`${message} (same keys as the previous run)`, new Error('S3 batch delete reported failed keys'), { failedKeys });
+    logWarn(`${message} (all of them already failed on an earlier run)`, new Error('S3 batch delete reported failed keys'), { failedKeys });
   }
 
-  return failedKeySet;
+  //* Marked after the log line: if the marker write fails the tick errors
+  //* and the next run alerts again - erring towards one alert too many
+  await markPendingFileCleanupFailedInDb(failedKeys);
 };
 
 //* Bucket first, catalog second: a row is only dropped once its object is
@@ -43,18 +44,19 @@ const reportFailedKeys = (failedKeys, staleKeyCount) => {
 //* job touches can be flipped to `ready` between the bucket delete and the
 //* row delete - which is additionally filtered on `pending`
 export const deletePendingFileUploads = async () => {
-  const staleKeys = await getStalePendingFileKeysInDb(new Date(Date.now() - PENDING_FILE_MAX_AGE_MS));
+  const staleFiles = await getStalePendingFilesInDb(new Date(Date.now() - PENDING_FILE_MAX_AGE_MS));
 
-  if (staleKeys.length === 0) {
-    reportFailedKeys([], 0);
-
+  if (staleFiles.length === 0) {
     return;
   }
 
+  const staleKeys = staleFiles.map((file) => file.key);
+
   const { failedKeys } = await deleteS3Objects(staleKeys);
 
-  const failedKeySet = reportFailedKeys(failedKeys, staleKeys.length);
+  await reportFailedKeys(failedKeys, staleFiles);
 
+  const failedKeySet = new Set(failedKeys);
   const deletedKeys = staleKeys.filter((key) => !failedKeySet.has(key));
 
   const deletedRowCount = await deletePendingFilesByKeysInDb(deletedKeys);

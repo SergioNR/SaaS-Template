@@ -31,9 +31,11 @@ const isStaleSubscriptionWrite = (storedSubscription, subscriptionWrite) => Bool
 //* `syncedAt` - when its Stripe read started - and is dropped when the
 //* stored state of the same subscription came from a later read, so the
 //* freshest read always wins regardless of commit order.
-//* Resolves to true when a write happened
+//* Resolves to `{ previous, written }` (the stored row before the write and
+//* the write applied) so the caller can classify the transition after the
+//* commit, or null when the write was skipped or stale
 export const syncSubscriptionWithCompanyLockInDb = async (companyId, resolveSubscriptionWrite) => {
-  const written = await prisma.$transaction(async (tx) => {
+  const syncResult = await prisma.$transaction(async (tx) => {
     await lockCompanyForUpdateInDb(tx, companyId);
 
     const storedSubscription = await tx.subscription.findUnique({
@@ -46,7 +48,7 @@ export const syncSubscriptionWithCompanyLockInDb = async (companyId, resolveSubs
     const subscriptionWrite = resolveSubscriptionWrite(storedSubscription);
 
     if (!subscriptionWrite || isStaleSubscriptionWrite(storedSubscription, subscriptionWrite)) {
-      return false;
+      return null;
     }
 
     const subscriptionData = {
@@ -71,12 +73,15 @@ export const syncSubscriptionWithCompanyLockInDb = async (companyId, resolveSubs
       },
     });
 
-    return true;
+    return {
+      previous: storedSubscription,
+      written: subscriptionWrite,
+    };
   }, {
     timeout: SUBSCRIPTION_SYNC_TIMEOUT_MS,
   });
 
-  return written;
+  return syncResult;
 };
 
 export const getCompanyStripeIdInDb = async (companyId) => {

@@ -1,6 +1,6 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useOutletContext } from 'react-router';
+import { Link, useOutletContext, useSearchParams } from 'react-router';
 import {
   ActionIcon,
   Alert,
@@ -9,7 +9,6 @@ import {
   Button,
   Group,
   Modal,
-  Select,
   Skeleton,
   Stack,
   Table,
@@ -24,15 +23,35 @@ import { formatDateTime } from '../../utils/formatDate.js';
 import { useCursorList } from '../../hooks/useCursorList.js';
 import DebouncedSearchInput from '../../components/DebouncedSearchInput.jsx';
 import LockedTooltip from '../../components/LockedTooltip.jsx';
+import AdminFilterPanel from '../../components/AdminFilterPanel.jsx';
+import SortableTh from '../../components/SortableTh.jsx';
+import {
+  ADMIN_LIST_FILTER_FIELDS,
+  filterValuesFromSearchParams,
+  listRequestParams,
+  mergeListSearchParams,
+  nextSort,
+  sortFromSearchParams,
+} from '../../components/adminFilterValues.js';
 
 const PAGE_SIZE = 25;
+const FILTER_FIELDS = ADMIN_LIST_FILTER_FIELDS.users;
 
 const AdminUsersList = () => {
   const { t } = useTranslation();
   //* Provided by AdminDashboardWrapper's <Outlet context>
   const { sessionUser } = useOutletContext();
   const [search, setSearch] = useState('');
-  const [role, setRole] = useState(null);
+  //* Applied filters and sort live in the URL so a filtered view can be
+  //* shared or bookmarked; changing them rebuilds fetchUsers, which makes
+  //* useCursorList restart from the first page
+  const [searchParams, setSearchParams] = useSearchParams();
+  const filterKey = searchParams.toString();
+  const appliedFilters = useMemo(
+    () => filterValuesFromSearchParams(FILTER_FIELDS, new URLSearchParams(filterKey)),
+    [filterKey],
+  );
+  const sort = useMemo(() => sortFromSearchParams('users', new URLSearchParams(filterKey)), [filterKey]);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -42,7 +61,7 @@ const AdminUsersList = () => {
         params: {
           limit: PAGE_SIZE,
           ...(search ? { search } : {}),
-          ...(role ? { role } : {}),
+          ...listRequestParams({ filters: appliedFilters, sort }),
           ...(cursor ? { cursor } : {}),
         },
         signal,
@@ -50,8 +69,12 @@ const AdminUsersList = () => {
 
       return response.data;
     },
-    [search, role],
+    [search, appliedFilters, sort],
   );
+
+  const applyFilters = (filters) => setSearchParams(mergeListSearchParams(searchParams, FILTER_FIELDS, { filters }));
+  const applySort = (key) =>
+    setSearchParams(mergeListSearchParams(searchParams, FILTER_FIELDS, { sort: nextSort(sort, key) }));
 
   const onLoadMoreError = useCallback(() => notifyError(t('admin.users.loadMoreError')), [t]);
 
@@ -63,6 +86,7 @@ const AdminUsersList = () => {
     loading,
     loadingMore,
     error,
+    errorStatus,
     reload,
     loadMore,
   } = useCursorList({ fetchPage: fetchUsers, rowsKey: 'users', countKey: 'userCount', onLoadMoreError });
@@ -99,11 +123,6 @@ const AdminUsersList = () => {
       setDeleting(false);
     }
   };
-
-  const roleOptions = [
-    { value: 'user', label: t('admin.roles.user') },
-    { value: 'superadmin', label: t('admin.roles.superadmin') },
-  ];
 
   const rows = users.map((user) => {
     //* Admins delete their own account from /admin/account, not from this list
@@ -163,24 +182,17 @@ const AdminUsersList = () => {
             placeholder={t('admin.users.searchPlaceholder')}
             w={260}
           />
-          <Select
-            value={role}
-            onChange={setRole}
-            data={roleOptions}
-            aria-label={t('admin.users.roleFilterLabel')}
-            placeholder={t('admin.users.roleFilterPlaceholder')}
-            clearable
-            w={180}
-          />
         </Group>
         <Text c="dimmed" size="sm">
           {t('admin.users.count', { count: userCount })}
         </Text>
       </Group>
 
+      <AdminFilterPanel fields={FILTER_FIELDS} applied={appliedFilters} onApply={applyFilters} />
+
       {error ? (
         <Alert color="red" variant="light">
-          {t('admin.loadError')}
+          {errorStatus === 422 ? t('admin.filters.invalid') : t('admin.loadError')}
         </Alert>
       ) : (
         <>
@@ -188,11 +200,17 @@ const AdminUsersList = () => {
             <Table verticalSpacing="sm">
               <Table.Thead>
                 <Table.Tr>
-                  <Table.Th>{t('admin.users.columns.email')}</Table.Th>
+                  <SortableTh sortKey="email" current={sort} onSort={applySort}>
+                    {t('admin.users.columns.email')}
+                  </SortableTh>
                   <Table.Th>{t('admin.users.columns.role')}</Table.Th>
                   <Table.Th>{t('admin.users.columns.company')}</Table.Th>
-                  <Table.Th>{t('admin.users.columns.lastLogin')}</Table.Th>
-                  <Table.Th>{t('admin.users.columns.createdAt')}</Table.Th>
+                  <SortableTh sortKey="last_login_at" current={sort} onSort={applySort}>
+                    {t('admin.users.columns.lastLogin')}
+                  </SortableTh>
+                  <SortableTh sortKey="created_at" current={sort} onSort={applySort}>
+                    {t('admin.users.columns.createdAt')}
+                  </SortableTh>
                   <Table.Th />
                 </Table.Tr>
               </Table.Thead>

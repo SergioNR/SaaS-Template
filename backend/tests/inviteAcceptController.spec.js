@@ -59,11 +59,21 @@ jest.unstable_mockModule('../server/utils/userDeletionCleanup.js', () => ({
   cleanupAfterUserDeletion: jest.fn().mockResolvedValue(undefined),
 }));
 
+//* Business events are covered by their own specs - stubbed here so the
+//* real models behind them never load
+jest.unstable_mockModule('../server/utils/businessEvents.js', () => ({
+  notifyCompanyRegistered: jest.fn().mockResolvedValue(undefined),
+  notifyInviteAccepted: jest.fn().mockResolvedValue(undefined),
+  notifySubscriptionTransition: jest.fn().mockResolvedValue(undefined),
+  notifyUserDeleted: jest.fn().mockResolvedValue(undefined),
+}));
+
 const { checkTeamInviteValidity, acceptTeamInvite } = await import('../server/controllers/authController.js');
 const { getUserByEmail, canCompanyMemberGrantRoleInDb, createUserInDb } = await import('../server/models/userModel.js');
 const { getTeamInviteByTokenInDb, deleteTeamInviteByIdSafe } = await import('../server/models/teamInvitesModel.js');
 const { logAudit } = await import('../server/config/loggerFunctions.js');
 const { cleanupAfterUserDeletion } = await import('../server/utils/userDeletionCleanup.js');
+const { notifyInviteAccepted } = await import('../server/utils/businessEvents.js');
 
 const mockRes = () => {
   const res = {
@@ -315,5 +325,46 @@ describe('acceptTeamInvite', () => {
     expect(res.status).toHaveBeenCalledWith(409);
     //* Deleting it would leak the registration to the inviting company
     expect(deleteTeamInviteByIdSafe).not.toHaveBeenCalled();
+    expect(notifyInviteAccepted).not.toHaveBeenCalled();
+  });
+
+  it('emits the invite-accepted business event (company, role - no email) after the user was created', async () => {
+    getTeamInviteByTokenInDb.mockResolvedValue(validInvite);
+    getUserByEmail.mockResolvedValue(null);
+    createUserInDb.mockResolvedValue({ status: 'created', user: { id: 'new-user' } });
+
+    await acceptTeamInvite({ body: { inviteToken: 'invite-token', password: 'Password123' } }, mockRes());
+
+    expect(notifyInviteAccepted).toHaveBeenCalledWith({
+      companyId: 'company-1',
+      companyName: 'Acme Corp',
+      roleName: 'company_member',
+    });
+    expect(JSON.stringify(notifyInviteAccepted.mock.calls)).not.toContain('new@acme.test');
+  });
+
+  it('answers 201 even while the business event send hangs', async () => {
+    getTeamInviteByTokenInDb.mockResolvedValue(validInvite);
+    getUserByEmail.mockResolvedValue(null);
+    createUserInDb.mockResolvedValue({ status: 'created', user: { id: 'new-user' } });
+    notifyInviteAccepted.mockReturnValueOnce(new Promise(() => {}));
+    const res = mockRes();
+
+    await acceptTeamInvite({ body: { inviteToken: 'invite-token', password: 'Password123' } }, res);
+
+    expect(res.status).toHaveBeenCalledWith(201);
+  });
+
+  it.each([
+    ['invite_invalid'],
+    ['inviter_invalid'],
+  ])('emits nothing when the transaction answers %s', async (status) => {
+    getTeamInviteByTokenInDb.mockResolvedValue(validInvite);
+    getUserByEmail.mockResolvedValue(null);
+    createUserInDb.mockResolvedValue({ status });
+
+    await acceptTeamInvite({ body: { inviteToken: 'invite-token', password: 'Password123' } }, mockRes());
+
+    expect(notifyInviteAccepted).not.toHaveBeenCalled();
   });
 });

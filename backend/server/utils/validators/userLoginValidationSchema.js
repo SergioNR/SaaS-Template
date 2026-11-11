@@ -1,5 +1,6 @@
 export const userLoginValidationSchema = {
   username: {
+    in: ['body'],
     //* First and bailing: an array would otherwise be validated (and
     //* normalized) per element and reach the strategy as a non-string
     isString: {
@@ -27,6 +28,7 @@ export const userLoginValidationSchema = {
     },
   },
   password: {
+    in: ['body'],
     //* Bound the input so bcrypt never hashes attacker-sized payloads
     //* (bcrypt only uses the first 72 bytes anyway)
     isString: {

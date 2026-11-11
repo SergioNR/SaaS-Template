@@ -61,6 +61,7 @@ describe('PasswordUpdateForm', () => {
     [400, undefined, 'Los datos introducidos no son válidos. Por favor, inténtalo de nuevo.'],
     [422, undefined, 'Los datos introducidos no son válidos. Por favor, inténtalo de nuevo.'],
     [500, undefined, 'Ha ocurrido un error inesperado. Por favor, inténtalo de nuevo.'],
+    [429, undefined, 'Demasiados intentos fallidos. Espera unos minutos antes de volver a intentarlo.'],
   ])('maps %i %s to its message', async (status, code, message) => {
     apiClient.patch.mockRejectedValue(httpError(status, code));
 

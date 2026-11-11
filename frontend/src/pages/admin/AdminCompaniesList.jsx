@@ -1,6 +1,6 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import {
   Alert,
   Anchor,
@@ -19,12 +19,32 @@ import { notifyError } from '../../utils/notifications.js';
 import { formatDateTime } from '../../utils/formatDate.js';
 import { useCursorList } from '../../hooks/useCursorList.js';
 import DebouncedSearchInput from '../../components/DebouncedSearchInput.jsx';
+import AdminFilterPanel from '../../components/AdminFilterPanel.jsx';
+import SortableTh from '../../components/SortableTh.jsx';
+import {
+  ADMIN_LIST_FILTER_FIELDS,
+  filterValuesFromSearchParams,
+  listRequestParams,
+  mergeListSearchParams,
+  nextSort,
+  sortFromSearchParams,
+} from '../../components/adminFilterValues.js';
 
 const PAGE_SIZE = 25;
+const FILTER_FIELDS = ADMIN_LIST_FILTER_FIELDS.companies;
 
 const AdminCompaniesList = () => {
   const { t } = useTranslation();
   const [search, setSearch] = useState('');
+  //* Applied filters and sort live in the URL (shareable views); changing
+  //* them rebuilds fetchCompanies, which restarts the list from page one
+  const [searchParams, setSearchParams] = useSearchParams();
+  const filterKey = searchParams.toString();
+  const appliedFilters = useMemo(
+    () => filterValuesFromSearchParams(FILTER_FIELDS, new URLSearchParams(filterKey)),
+    [filterKey],
+  );
+  const sort = useMemo(() => sortFromSearchParams('companies', new URLSearchParams(filterKey)), [filterKey]);
 
   const fetchCompanies = useCallback(
     async ({ cursor, signal } = {}) => {
@@ -32,6 +52,7 @@ const AdminCompaniesList = () => {
         params: {
           limit: PAGE_SIZE,
           ...(search ? { search } : {}),
+          ...listRequestParams({ filters: appliedFilters, sort }),
           ...(cursor ? { cursor } : {}),
         },
         signal,
@@ -39,8 +60,12 @@ const AdminCompaniesList = () => {
 
       return response.data;
     },
-    [search],
+    [search, appliedFilters, sort],
   );
+
+  const applyFilters = (filters) => setSearchParams(mergeListSearchParams(searchParams, FILTER_FIELDS, { filters }));
+  const applySort = (key) =>
+    setSearchParams(mergeListSearchParams(searchParams, FILTER_FIELDS, { sort: nextSort(sort, key) }));
 
   const onLoadMoreError = useCallback(() => notifyError(t('admin.companies.loadMoreError')), [t]);
 
@@ -52,6 +77,7 @@ const AdminCompaniesList = () => {
     loading,
     loadingMore,
     error,
+    errorStatus,
     loadMore,
   } = useCursorList({ fetchPage: fetchCompanies, rowsKey: 'companies', countKey: 'companyCount', onLoadMoreError });
 
@@ -92,9 +118,11 @@ const AdminCompaniesList = () => {
         </Text>
       </Group>
 
+      <AdminFilterPanel fields={FILTER_FIELDS} applied={appliedFilters} onApply={applyFilters} />
+
       {error ? (
         <Alert color="red" variant="light">
-          {t('admin.loadError')}
+          {errorStatus === 422 ? t('admin.filters.invalid') : t('admin.loadError')}
         </Alert>
       ) : (
         <>
@@ -102,10 +130,14 @@ const AdminCompaniesList = () => {
             <Table verticalSpacing="sm">
               <Table.Thead>
                 <Table.Tr>
-                  <Table.Th>{t('admin.companies.columns.name')}</Table.Th>
+                  <SortableTh sortKey="name" current={sort} onSort={applySort}>
+                    {t('admin.companies.columns.name')}
+                  </SortableTh>
                   <Table.Th>{t('admin.companies.columns.users')}</Table.Th>
                   <Table.Th>{t('admin.companies.columns.subscription')}</Table.Th>
-                  <Table.Th>{t('admin.companies.columns.createdAt')}</Table.Th>
+                  <SortableTh sortKey="created_at" current={sort} onSort={applySort}>
+                    {t('admin.companies.columns.createdAt')}
+                  </SortableTh>
                 </Table.Tr>
               </Table.Thead>
               <Table.Tbody>

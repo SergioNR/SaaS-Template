@@ -241,7 +241,7 @@ describe('deleteUserWithCompanyDataInDb', () => {
       tx.user.delete.mockResolvedValue({ id: 'target', role: 'user' });
       tx.user.count.mockResolvedValue(0);
       tx.subscription.findUnique.mockResolvedValue({ stripe_subscription_id: 'sub_1', expires_at: null });
-      tx.company.findUnique.mockResolvedValue({ stripe_id: 'cus_1' });
+      tx.company.findUnique.mockResolvedValue({ stripe_id: 'cus_1', name: 'Acme Corp' });
       tx.file.findMany.mockResolvedValue([{ s3_key: 'company-1/f/a.pdf' }]);
 
       const result = await deleteUserWithCompanyDataInDb('target');
@@ -251,6 +251,7 @@ describe('deleteUserWithCompanyDataInDb', () => {
         deletedUser: { id: 'target', role: 'user' },
         companyDeleted: true,
         companyId: 'company-1',
+        companyName: 'Acme Corp',
         stripeCustomerId: 'cus_1',
         subscription: { stripe_subscription_id: 'sub_1', expires_at: null },
         fileKeys: ['company-1/f/a.pdf'],

@@ -2,6 +2,7 @@ import { jest } from '@jest/globals';
 import {
   WRITE_ERROR_RESPONSES,
   isPrismaErrorCode,
+  isTransientDatabaseError,
   sendMappedWriteError,
 } from '../server/utils/prismaErrors.js';
 
@@ -61,5 +62,24 @@ describe('isPrismaErrorCode', () => {
     expect(isPrismaErrorCode(prismaError('P2002'), 'P2002')).toBe(true);
     expect(isPrismaErrorCode(prismaError('P2003'), 'P2002')).toBe(false);
     expect(isPrismaErrorCode(null, 'P2002')).toBe(false);
+  });
+});
+
+describe('isTransientDatabaseError', () => {
+  it.each(['P1001', 'P1017', 'ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT'])('%s on the error is transient', (code) => {
+    expect(isTransientDatabaseError(prismaError(code))).toBe(true);
+  });
+
+  it.each(['P1001', 'ECONNREFUSED'])('%s on the error cause is transient', (code) => {
+    expect(isTransientDatabaseError(Object.assign(new Error('wrapped'), { cause: { code } }))).toBe(true);
+  });
+
+  it.each([
+    ['a unique-constraint error', prismaError('P2002')],
+    ['an error without code', new Error('boom')],
+    ['null', null],
+    ['undefined', undefined],
+  ])('%s is not transient', (_label, error) => {
+    expect(isTransientDatabaseError(error)).toBe(false);
   });
 });

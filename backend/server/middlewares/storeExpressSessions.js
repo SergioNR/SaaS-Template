@@ -10,8 +10,11 @@ const sessionSecret = requireEnv('SESSION_SECRET', 'refusing to start with unsig
   ? process.env.SESSION_SECRET
   : 'localhost-only-insecure-session-secret';
 
+//* No `checkPeriod`: the store's own prune interval would run on every
+//* replica, outside the advisory locks, and read the whole table. Expired
+//* rows are deleted by cron/deleteExpiredSessionsScheduler.js instead (one
+//* replica per tick); the store still refuses an expired session on read
 const prismaSessionStore = new PrismaSessionStore(prisma, {
-  checkPeriod: 2 * 60 * 1000, // ms
   dbRecordIdIsSessionId: true,
   dbRecordIdFunction: undefined,
   //* Explicit instead of derived from the cookie, so the row expiry cannot

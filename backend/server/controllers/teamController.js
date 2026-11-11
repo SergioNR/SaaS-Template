@@ -335,6 +335,7 @@ export const removeTeamMember = async (req, res) => {
     companyId,
     protectLastOwner: true,
     callerId,
+    actorKind: 'team',
   });
 
   if (deletionResult.status === 'not_found') {
