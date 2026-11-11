@@ -7,6 +7,8 @@ requireEnv('BREVO_API_KEY', 'refusing to start without transactional email deliv
 requireEnv('BREVO_SENDER_EMAIL', 'refusing to start without a transactional email sender');
 requireEnv('BREVO_RESET_PASSWORD_TEMPLATE_ID', 'refusing to start without the password reset email template');
 requireEnv('BREVO_TEAM_INVITE_TEMPLATE_ID', 'refusing to start without the team invite email template');
+//* Self-registered accounts cannot log in until they verify their address
+requireEnv('BREVO_VERIFY_EMAIL_TEMPLATE_ID', 'refusing to start without the email verification template');
 
 export const brevoClient = new BrevoClient({
   apiKey: process.env.BREVO_API_KEY,
@@ -23,6 +25,7 @@ export const companyEmails = {
 export const templateIds = {
   resetPassword: Number(process.env.BREVO_RESET_PASSWORD_TEMPLATE_ID),
   teamInvite: Number(process.env.BREVO_TEAM_INVITE_TEMPLATE_ID),
+  verifyEmail: Number(process.env.BREVO_VERIFY_EMAIL_TEMPLATE_ID),
 };
 
 //* Shared template params - every template can build absolute links from
@@ -30,6 +33,20 @@ export const templateIds = {
 export const commonTemplateParams = () => ({
   appOrigin: process.env.FRONT_WEB_APP_ORIGIN_URL,
 });
+
+//* Pure: builds an absolute SPA link from the ORIGIN (scheme, host, port) of
+//* the configured front-end URL - a trailing slash or a path in
+//* FRONT_WEB_APP_ORIGIN_URL can never produce `//auth/...` or a wrong page.
+//* Search params are URL-encoded by URLSearchParams
+export const frontendUrl = (path, searchParams = {}, originUrl = process.env.FRONT_WEB_APP_ORIGIN_URL) => {
+  const url = new URL(path, new URL(originUrl).origin);
+
+  Object.entries(searchParams).forEach(([key, value]) => {
+    url.searchParams.set(key, value);
+  });
+
+  return url.toString();
+};
 
 //* sendTransacEmail available properties -- eg: brevoClient.transactionalEmails.sendTransacEmail({ sender: {}, ... })
 // 'sender';

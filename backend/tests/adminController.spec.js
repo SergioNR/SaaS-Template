@@ -15,6 +15,7 @@ jest.unstable_mockModule('../server/models/companyModel.js', () => ({
 
 jest.unstable_mockModule('../server/models/subscriptionModel.js', () => ({
   countActiveSubscriptionsInDb: jest.fn(),
+  countActiveTrialsInDb: jest.fn(),
   countTotalSubscriptionsInDb: jest.fn(),
 }));
 
@@ -57,6 +58,7 @@ const {
 } = await import('../server/models/companyModel.js');
 const {
   countActiveSubscriptionsInDb,
+  countActiveTrialsInDb,
   countTotalSubscriptionsInDb,
 } = await import('../server/models/subscriptionModel.js');
 const {
@@ -361,6 +363,7 @@ describe('getAdminStats', () => {
     countCompaniesInDb.mockResolvedValue(4);
     countTotalSubscriptionsInDb.mockResolvedValue(5);
     countActiveSubscriptionsInDb.mockResolvedValue(3);
+    countActiveTrialsInDb.mockResolvedValue(6);
     countActiveSessionsInDb.mockResolvedValue(7);
     const res = mockRes();
 
@@ -377,6 +380,7 @@ describe('getAdminStats', () => {
         totalCompanies: 4,
         totalSubscriptions: 5,
         activeSubscriptions: 3,
+        activeTrials: 6,
         activeSessions: 7,
       },
     });

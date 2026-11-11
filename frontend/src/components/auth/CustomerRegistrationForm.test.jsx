@@ -38,7 +38,7 @@ describe('CustomerRegistrationForm', () => {
       companyName: 'Acme',
       password: 'Str0ngPassword',
     });
-    expect(await screen.findByText(/Usuario creado correctamente/)).toBeInTheDocument();
+    expect(await screen.findByText(/Te hemos enviado un correo para confirmar tu dirección/)).toBeInTheDocument();
   });
 
   it.each([

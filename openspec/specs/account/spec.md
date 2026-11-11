@@ -1,7 +1,7 @@
 # account Specification
 
 ## Purpose
-Owns what an authenticated user can do with their own account under `/api/v1/user`: reading their profile, changing their password (including the deprecated `PATCH /api/v1/auth/update-user-password` alias), and deleting their account with its company-level consequences (last-owner and last-superadmin guards, company teardown when the last member leaves). It also owns the SPA profile page that drives these actions. Login, logout, password reset and session mechanics belong to `auth`; Stripe teardown details belong to `billing`; removal of other members belongs to `team-management`.
+Owns what an authenticated user can do with their own account under `/api/v1/user`: reading their profile, changing their password (`PATCH /api/v1/user/password`), and deleting their account with its company-level consequences (last-owner and last-superadmin guards, company teardown when the last member leaves). It also owns the SPA profile page that drives these actions. Login, logout, password reset and session mechanics belong to `auth`; Stripe teardown details belong to `billing`; removal of other members belongs to `team-management`.
 
 ## Requirements
 
@@ -74,15 +74,6 @@ The system SHALL, in the same transaction as the password write, delete every ou
 - **WHEN** a user with an unused password-reset link changes their password
 - **THEN** that reset link no longer validates
 
-### Requirement: Deprecated password-change alias
-
-The system SHALL keep serving `PATCH /api/v1/auth/update-user-password` as a deprecated alias with the same inputs, validation, outcomes and side effects as `PATCH /api/v1/user/password`. Because the alias lives under `/api/v1/auth`, its 401 is not handled by the SPA's global session-expiry redirect.
-
-#### Scenario: Alias behaves like the canonical route
-
-- **WHEN** a client calls the alias with a wrong current password
-- **THEN** the API responds 400 with `code: "AUTH_CURRENT_PASSWORD_INCORRECT"`, exactly as the canonical route does
-
 ### Requirement: Delete own account
 
 The system SHALL expose `DELETE /api/v1/user`. On success it SHALL delete the user (with their company role and reset-token rows), revoke all of their sessions, delete every team invite they issued, destroy the current session, clear the `app.sid` cookie and respond 200 with `{}`. Deletion and its guards SHALL run in one transaction serialized with the company's other membership changes.
@@ -150,7 +141,7 @@ The system SHALL respond 404 with `{}` when the account no longer exists at dele
 
 ### Requirement: Profile page password form
 
-The SPA's profile page SHALL offer a password-change form (with a hidden username field set to the user's email for password managers) that resets the form and shows a success notice on 200; shows specific messages for `AUTH_CURRENT_PASSWORD_INCORRECT` and `AUTH_PASSWORD_UNCHANGED`, an invalid-input message for other 400/422 responses and a generic message otherwise; and on 401 resets session caches and navigates to login with a safe `next`.
+The SPA's profile page SHALL offer a password-change form (with a hidden username field set to the user's email for password managers) that resets the form and shows a success notice on 200; shows specific messages for `AUTH_CURRENT_PASSWORD_INCORRECT` and `AUTH_PASSWORD_UNCHANGED`, an invalid-input message for other 400/422 responses and a generic message otherwise; and on 401 shows no error, leaving the SPA-wide 401 handling to reset session caches and navigate to login with a safe `next`.
 
 #### Scenario: Wrong current password in the UI
 

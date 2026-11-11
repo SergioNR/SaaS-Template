@@ -13,11 +13,12 @@ import {
   Title,
   Alert,
 } from '@mantine/core';
-import { IconAlertCircle } from '@tabler/icons-react';
+import { IconAlertCircle, IconMailExclamation } from '@tabler/icons-react';
 import classes from './AuthenticationTitle.module.css';
 import apiClient from '../../config/API/axiosConfig.js';
 import { Link } from 'react-router';
 import Seo from '../Seo.jsx';
+import ResendVerificationForm from './ResendVerificationForm.jsx';
 import { NEXT_PARAM, safeNextPath } from '../../utils/safeNext.js';
 import { invalidateSessionCaches } from '../../utils/sessionCaches.js';
 
@@ -26,6 +27,9 @@ export function LoginForm() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [loginError, setLoginError] = useState(null);
+  //* Set when the credentials were right but the email is unverified - the
+  //* page then offers to resend the verification email to that address
+  const [unverifiedEmail, setUnverifiedEmail] = useState(null);
   //* State drives the button spinner; the ref blocks a second submit that
   //* lands before the re-render (double Enter / double click)
   const [submitting, setSubmitting] = useState(false);
@@ -41,6 +45,7 @@ export function LoginForm() {
     submittingRef.current = true;
     setSubmitting(true);
     setLoginError(null);
+    setUnverifiedEmail(null);
 
     //* `elements.<name>` rather than the form's named properties - jsdom
     //* (the test runner) does not implement HTMLFormElement named access
@@ -70,7 +75,9 @@ export function LoginForm() {
 
       //* 422 = malformed email - from the user's point of view the same as
       //* wrong credentials; 429 = login rate limit
-      if (status === 401 || status === 422) {
+      if (status === 403 && error.response?.data?.code === 'EMAIL_NOT_VERIFIED') {
+        setUnverifiedEmail(data.username);
+      } else if (status === 401 || status === 422) {
         setLoginError(t('auth.login.errors.invalidCredentials'));
       } else if (status === 429) {
         setLoginError(t('auth.errors.tooManyAttempts'));
@@ -97,6 +104,15 @@ export function LoginForm() {
         <Alert icon={<IconAlertCircle size={16} />} color="red" mt={20}>
           {loginError}
         </Alert>
+      )}
+
+      {unverifiedEmail && (
+        <Paper withBorder p={20} mt={20} radius="md">
+          <Alert icon={<IconMailExclamation size={16} />} color="yellow" mb="md">
+            {t('auth.login.errors.emailNotVerified')}
+          </Alert>
+          <ResendVerificationForm key={unverifiedEmail} defaultEmail={unverifiedEmail} />
+        </Paper>
       )}
 
       <Paper withBorder shadow="md" p={30} mt={30} radius="md">

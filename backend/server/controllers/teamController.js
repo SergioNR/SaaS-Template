@@ -20,7 +20,7 @@ import {
 } from '../models/roleModel.js';
 import { getCompanyByIdInDb } from '../models/companyModel.js';
 import { deleteUserAndCleanup } from '../utils/userDeletionCleanup.js';
-import { canGrantRole, outranksAllRoles, rolesGrantableBy } from '../utils/companyRoleHierarchy.js';
+import { canGrantRole, canManageMember, rolesGrantableBy } from '../utils/companyRoleHierarchy.js';
 import { logAudit, logError } from '../config/loggerFunctions.js';
 import { sendTeamInviteToUser } from '../integrations/brevo/transactionalEmails/sendTeamInviteToUser.js';
 import { trackBackground } from '../utils/processLifecycle.js';
@@ -63,14 +63,15 @@ export const getTeamData = async (req, res) => {
   const assignableRoles = rolesGrantableBy(callerRoleNames);
 
   //* `manageable` mirrors the server-side rules so the SPA only offers the
-  //* actions that can succeed: members follow the strict "outrank every
-  //* role, never yourself" rule, invites the "at or below own rank" rule.
+  //* actions that can succeed: members follow canManageMember ("outrank every
+  //* role, or owner on owner - never yourself"), invites the "at or below own
+  //* rank" rule.
   //* The write endpoints re-check both - these flags are hints, not guards
   return res.status(200).json({
     callerId: userId,
     members: companyMembers.map((member) => ({
       ...toMemberShape(member),
-      manageable: outranksAllRoles(callerRoleNames, targetRoleNames(member)) && member.id !== userId,
+      manageable: canManageMember(callerRoleNames, targetRoleNames(member)) && member.id !== userId,
     })),
     invites: companyInvites.map((invite) => ({
       ...toInviteShape(invite, invite.Role.name),
@@ -91,7 +92,9 @@ const deliverInviteInBackground = async (invite, inviteToken, companyId, inviter
   try {
     const existingUser = await getUserByEmail(invite.email);
 
-    if (existingUser) {
+    //* Only a VERIFIED account keeps the address - an unverified holder
+    //* (possibly a squatter) is replaced when the mailbox owner accepts
+    if (existingUser?.email_verified_at) {
       return;
     }
 
@@ -119,11 +122,20 @@ export const createTeamInvite = async (req, res) => {
   } = req.user;
 
   //* Every check that can change the response is company-scoped or about the
-  //* caller - nothing here depends on the invited account existing
-  const existingInvite = await getPendingTeamInviteByCompanyAndEmailInDb(companyId, email);
+  //* caller - nothing here depends on the invited account existing. Order:
+  //* authority (403) first - it needs only the caller's own roles and role
+  //* NAMES - then the role row (404), then the pending duplicate (409), so a
+  //* caller without authority over the role never learns whether such an
+  //* invite exists
 
-  if (existingInvite) {
-    return res.status(409).json(PENDING_INVITE_CONFLICT);
+  //* Callers can only grant roles they hold themselves (directly or through
+  //* the role hierarchy)
+  const callerRoleNames = await getUserCompanyRoleNames(inviterId);
+
+  if (!canGrantRole(callerRoleNames, roleName)) {
+    return res.status(403).json({
+      message: 'You can only invite users to roles you hold yourself',
+    });
   }
 
   const role = await getRoleByName(roleName);
@@ -134,14 +146,10 @@ export const createTeamInvite = async (req, res) => {
     });
   }
 
-  //* Callers can only grant roles they hold themselves (directly or through
-  //* the role hierarchy)
-  const callerRoleNames = await getUserCompanyRoleNames(inviterId);
+  const existingInvite = await getPendingTeamInviteByCompanyAndEmailInDb(companyId, email);
 
-  if (!canGrantRole(callerRoleNames, roleName)) {
-    return res.status(403).json({
-      message: 'You can only invite users to roles you hold yourself',
-    });
+  if (existingInvite) {
+    return res.status(409).json(PENDING_INVITE_CONFLICT);
   }
 
   //* The row is written synchronously for every address - registered or
@@ -284,9 +292,11 @@ export const revokeTeamInvite = async (req, res) => {
   return res.status(200).json({});
 };
 
-//* Callers may only manage members they outrank - every role the target
-//* holds must rank strictly below the caller's own, so an admin can never
-//* demote or remove an owner nor another admin. The controller checks only
+//* Callers may only manage members they may manage (canManageMember): every
+//* role the target holds ranks strictly below the caller's own, or both are
+//* owners - so an admin can never demote or remove an owner nor another
+//* admin, while owners can manage co-owners (the last-owner guard keeps at
+//* least one). The controller checks only
 //* answer early; the model repeats them under the company lock with fresh
 //* role rows
 export const removeTeamMember = async (req, res) => {
@@ -313,9 +323,9 @@ export const removeTeamMember = async (req, res) => {
 
   const callerRoleNames = await getUserCompanyRoleNames(callerId);
 
-  if (!outranksAllRoles(callerRoleNames, targetRoleNames(targetMember))) {
+  if (!canManageMember(callerRoleNames, targetRoleNames(targetMember))) {
     return res.status(403).json({
-      message: 'You can only remove members whose every role ranks below your own',
+      message: 'You can only remove members you outrank (owners may also remove other owners)',
     });
   }
 
@@ -335,7 +345,7 @@ export const removeTeamMember = async (req, res) => {
 
   if (deletionResult.status === 'forbidden') {
     return res.status(403).json({
-      message: 'You can only remove members whose every role ranks below your own',
+      message: 'You can only remove members you outrank (owners may also remove other owners)',
     });
   }
 
@@ -393,9 +403,9 @@ export const updateTeamMemberRole = async (req, res) => {
     });
   }
 
-  if (!outranksAllRoles(callerRoleNames, targetRoleNames(targetMember))) {
+  if (!canManageMember(callerRoleNames, targetRoleNames(targetMember))) {
     return res.status(403).json({
-      message: 'You can only change the role of members whose every role ranks below your own',
+      message: 'You can only change the role of members you outrank (owners may also change other owners)',
     });
   }
 
@@ -413,7 +423,7 @@ export const updateTeamMemberRole = async (req, res) => {
 
   if (updateResult.status === 'forbidden') {
     return res.status(403).json({
-      message: 'You can only change the role of members whose every role ranks below your own',
+      message: 'You can only change the role of members you outrank (owners may also change other owners)',
     });
   }
 

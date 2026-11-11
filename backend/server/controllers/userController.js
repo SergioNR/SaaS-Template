@@ -23,8 +23,7 @@ export const getUserProfile = async (req, res) => {
   });
 };
 
-//* PATCH /api/v1/user/password - also served by the deprecated alias
-//* PATCH /api/v1/auth/update-user-password
+//* PATCH /api/v1/user/password
 export const updateUserPassword = async (req, res) => {
   const {
     currentPassword,

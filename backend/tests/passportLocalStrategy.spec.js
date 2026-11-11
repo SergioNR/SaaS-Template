@@ -11,7 +11,7 @@ const { getUserForLogin } = await import('../server/models/userModel.js');
 const storedHash = await bcrypt.hash('Password123', 4);
 
 const verify = (email, password) => new Promise((resolve) => {
-  verifyLocalCredentials(email, password, (err, user) => resolve({ err, user }));
+  verifyLocalCredentials(email, password, (err, user, info) => resolve({ err, user, info }));
 });
 
 describe('verifyLocalCredentials', () => {
@@ -25,6 +25,7 @@ describe('verifyLocalCredentials', () => {
       email: 'a@b.co',
       role: 'user',
       company_id: 'company-1',
+      email_verified_at: new Date(),
       password: storedHash,
     });
 
@@ -38,6 +39,25 @@ describe('verifyLocalCredentials', () => {
       company_id: 'company-1',
     });
     expect(user).not.toHaveProperty('password');
+  });
+
+  it('refuses an unverified account with the right password, flagging EMAIL_NOT_VERIFIED', async () => {
+    getUserForLogin.mockResolvedValue({ id: 'user-1', email_verified_at: null, password: storedHash });
+
+    const { err, user, info } = await verify('a@b.co', 'Password123');
+
+    expect(err).toBeNull();
+    expect(user).toBe(false);
+    expect(info).toEqual({ code: 'EMAIL_NOT_VERIFIED' });
+  });
+
+  it('answers a plain failure (no verification hint) for a wrong password on an unverified account', async () => {
+    getUserForLogin.mockResolvedValue({ id: 'user-1', email_verified_at: null, password: storedHash });
+
+    const { user, info } = await verify('a@b.co', 'WrongPassword1');
+
+    expect(user).toBe(false);
+    expect(info).toBeUndefined();
   });
 
   it('rejects a wrong password', async () => {

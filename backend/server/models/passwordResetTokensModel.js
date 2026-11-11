@@ -2,6 +2,7 @@ import { prisma } from '../config/prismaClient.js';
 import { logInfo } from '../config/loggerFunctions.js';
 import { generateSecureToken, hashSecureToken } from '../utils/secureToken.js';
 import { deleteUserSessionsInTx } from './sessionModel.js';
+import { deleteUserEmailVerificationTokensInTx } from './emailVerificationTokensModel.js';
 
 const PASSWORD_RESET_TOKEN_TTL_MS = 3600000; // 1 hour
 
@@ -107,6 +108,21 @@ export const resetUserPasswordWithTokenInDb = async (token, hashedPassword) => {
         password: hashedPassword,
       },
     });
+
+    //* Completing a reset proves mailbox control - it verifies (claims) an
+    //* unverified account in the same commit as the new password. Conditional
+    //* so the original verification time of a verified account is kept
+    await tx.user.updateMany({
+      where: {
+        id: userId,
+        email_verified_at: null,
+      },
+      data: {
+        email_verified_at: new Date(),
+      },
+    });
+
+    await deleteUserEmailVerificationTokensInTx(tx, userId);
 
     await deleteUserPasswordResetTokensInTx(tx, userId);
 

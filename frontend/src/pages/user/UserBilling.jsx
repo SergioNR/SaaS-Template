@@ -41,6 +41,7 @@ const UserBilling = () => {
     subscription,
     loading,
     error,
+    errorKind,
     hasPaidSubscription,
     isTrial,
     hasBillingId,
@@ -181,7 +182,17 @@ const UserBilling = () => {
     return (
       <Container size="sm">
         <Seo title={t('seo.pages.billing')} />
-        <Alert color="red" title={t('common.error')}>{error}</Alert>
+        <Alert color="red" title={t('common.error')}>
+          <Stack gap="sm" align="flex-start">
+            <Text size="sm">{error}</Text>
+            {/* A membership error cannot be fixed by retrying */}
+            {errorKind === 'load' && (
+              <Button size="xs" variant="light" color="red" onClick={() => refresh()}>
+                {t('common.retry')}
+              </Button>
+            )}
+          </Stack>
+        </Alert>
       </Container>
     );
   }

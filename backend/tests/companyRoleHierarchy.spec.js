@@ -2,6 +2,7 @@ import {
   canGrantRole,
   highestRankOf,
   outranksAllRoles,
+  canManageMember,
   rolesGrantableBy,
 } from '../server/utils/companyRoleHierarchy.js';
 
@@ -45,5 +46,28 @@ describe('outranksAllRoles (strictly below own rank)', () => {
   it('never lets a role-less caller manage anyone, not even a role-less target', () => {
     expect(outranksAllRoles([], [])).toBe(false);
     expect(outranksAllRoles(['company_member'], [])).toBe(true);
+  });
+});
+
+describe('canManageMember (strict outrank, or owner on owner)', () => {
+  it('lets an owner manage another owner', () => {
+    expect(canManageMember(['company_owner'], ['company_owner'])).toBe(true);
+    expect(canManageMember(['company_owner'], ['company_owner', 'company_admin'])).toBe(true);
+  });
+
+  it('keeps admins from managing peers or owners', () => {
+    expect(canManageMember(['company_admin'], ['company_admin'])).toBe(false);
+    expect(canManageMember(['company_admin'], ['company_owner'])).toBe(false);
+    expect(canManageMember(['company_admin'], ['company_member'])).toBe(true);
+  });
+
+  it('lets members manage nobody', () => {
+    expect(canManageMember(['company_member'], ['company_member'])).toBe(false);
+    expect(canManageMember(['company_member'], ['company_owner'])).toBe(false);
+  });
+
+  it('refuses unknown or missing caller roles', () => {
+    expect(canManageMember([], ['company_member'])).toBe(false);
+    expect(canManageMember(['made_up'], ['company_owner'])).toBe(false);
   });
 });

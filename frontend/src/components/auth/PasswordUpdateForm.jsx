@@ -1,17 +1,14 @@
 import PropTypes from 'prop-types';
 import { useTranslation } from 'react-i18next';
 import { useState } from 'react';
-import { useNavigate, useOutletContext } from 'react-router';
+import { useOutletContext } from 'react-router';
 import apiClient from '../../config/API/axiosConfig.js';
 import { Card, Button, PasswordInput, Text, Alert, Box } from '@mantine/core';
 import { IconAlertCircle } from '@tabler/icons-react';
 import { notifySuccess } from '../../utils/notifications.js';
-import { currentPath, loginRedirectPath } from '../../utils/safeNext.js';
-import { invalidateSessionCaches } from '../../utils/sessionCaches.js';
 
 const PasswordUpdateForm = ({ email: emailProp }) => {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   //* The email fills the hidden username field so password managers update
   //* the right saved credential: UserWrapper's outlet context in the user
   //* area, an explicit prop where the context has no profile (admin account)
@@ -38,17 +35,15 @@ const PasswordUpdateForm = ({ email: emailProp }) => {
     };
 
     try {
-      await apiClient.patch('/api/v1/auth/update-user-password', passwordUpdateData);
+      await apiClient.patch('/api/v1/user/password', passwordUpdateData);
       form.reset();
       notifySuccess(t('auth.passwordUpdate.success'));
     } catch (error) {
       const { status, data } = error.response ?? {};
 
-      //* This endpoint sits under /api/v1/auth/, which the global 401
-      //* interceptor skips - an expired session is handled here
+      //* An expired session is handled by the global 401 interceptor (caches
+      //* reset, redirect to login with `next`) - nothing to show here
       if (status === 401) {
-        invalidateSessionCaches();
-        navigate(loginRedirectPath(currentPath()), { replace: true });
         return;
       }
 

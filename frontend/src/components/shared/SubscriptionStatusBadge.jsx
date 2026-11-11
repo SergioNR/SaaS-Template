@@ -4,7 +4,7 @@ import PropTypes from 'prop-types';
 import { subscriptionStatus } from '../../utils/subscriptionStatus.js';
 
 const BADGES = {
-  paid: { color: 'teal', key: 'billing.statusActive' },
+  paid: { color: 'teal', key: 'billing.statusPaid' },
   active: { color: 'teal', key: 'billing.statusActive' },
   trial: { color: 'yellow', key: 'billing.statusTrial' },
   inactive: { color: 'red', key: 'billing.statusInactive' },
@@ -26,6 +26,7 @@ export const SubscriptionStatusBadge = ({ subscription }) => {
 SubscriptionStatusBadge.propTypes = {
   subscription: PropTypes.shape({
     expires_at: PropTypes.string,
+    status: PropTypes.oneOf(['paid', 'trial', 'inactive']),
     is_paid: PropTypes.bool,
   }),
 };

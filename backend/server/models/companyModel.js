@@ -1,11 +1,15 @@
 import { prisma } from '../config/prismaClient.js';
 import { listPaginationArgs } from '../utils/cursorPagination.js';
+import { toPublicSubscription } from '../config/stripeSubscriptionStatuses.js';
 
-//* No `id` - for paid rows it is the Stripe subscription id, which is never exposed
+//* Selected internally only: `stripe_subscription_id` decides `status` /
+//* `is_paid` and is dropped by toPublicSubscription; the internal row id is
+//* never selected
 const subscriptionPublicFields = {
   created_at: true,
   updated_at: true,
   expires_at: true,
+  stripe_subscription_id: true,
 };
 
 export const getCompanyByIdInDb = async (companyId) => {
@@ -59,7 +63,7 @@ export const getAllCompaniesInDb = async (filters = {}, pagination = {}) => {
     ...company,
     stripeLinked: Boolean(stripeCustomerId),
     userCount: _count.User,
-    subscription: Subscription[0] ?? null,
+    subscription: toPublicSubscription(Subscription[0] ?? null),
   }));
 };
 
@@ -109,7 +113,7 @@ export const getCompanyDetailInDb = async (companyId) => {
   return {
     ...company,
     stripeLinked: Boolean(stripeCustomerId),
-    subscription: Subscription[0] ?? null,
+    subscription: toPublicSubscription(Subscription[0] ?? null),
     users: User,
   };
 };
