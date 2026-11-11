@@ -30,6 +30,15 @@ describe('401 interceptor', () => {
     expect(hardRedirect).toHaveBeenCalledWith(`/auth/login?next=${encodeURIComponent('/user/team?tab=invites')}`);
   });
 
+  it('covers the password change route - a 401 resets caches and returns to the profile after login', async () => {
+    window.history.replaceState(null, '', '/user/profile');
+
+    await expect(handleUnauthorized(axiosError(401, '/api/v1/user/password'))).rejects.toBeDefined();
+
+    expect(invalidateSessionCaches).toHaveBeenCalledTimes(1);
+    expect(hardRedirect).toHaveBeenCalledWith('/auth/login?next=%2Fuser%2Fprofile');
+  });
+
   it('redirects only once when several requests fail together', async () => {
     await expect(handleUnauthorized(axiosError(401, '/api/v1/team'))).rejects.toBeDefined();
     await expect(handleUnauthorized(axiosError(401, '/api/v1/billing'))).rejects.toBeDefined();

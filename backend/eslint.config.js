@@ -67,6 +67,7 @@ export default [
       'server/integrations/telegram/sendLogsToTelegram.js',
       'server/config/planPrices.js',
       'server/utils/companyRoleHierarchy.js',
+      'server/cron/deleteUnverifiedAccountsScheduler.js',
     ],
     rules: {
       'no-await-in-loop': 'off',

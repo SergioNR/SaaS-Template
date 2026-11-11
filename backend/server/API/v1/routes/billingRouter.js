@@ -35,25 +35,14 @@ const requireBillingManage = checkCompanyPermission('billing.manage');
  *               type: object
  *               properties:
  *                 subscriptionData:
- *                   type: object
  *                   description: Subscription fields only - internal Stripe ids are never exposed
- *                   properties:
- *                     is_paid:
- *                       type: boolean
- *                       description: Whether the row is a real Stripe subscription - the free trial row is not. The subscription id itself is never exposed
- *                     expires_at:
- *                       type: string
- *                       format: date-time
- *                       nullable: true
- *                     created_at:
- *                       type: string
- *                       format: date-time
- *                     updated_at:
- *                       type: string
- *                       format: date-time
- *                     has_billing_id:
- *                       type: boolean
- *                       description: Whether the company has a Stripe customer id - false until the first checkout session is started
+ *                   allOf:
+ *                     - $ref: '#/components/schemas/PublicSubscription'
+ *                     - type: object
+ *                       properties:
+ *                         has_billing_id:
+ *                           type: boolean
+ *                           description: Whether the company has a Stripe customer id - false until the first checkout session is started (stays true after a paid subscription ended)
  *       401:
  *         $ref: '#/components/responses/Unauthorized'
  *       404:

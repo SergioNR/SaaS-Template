@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { callerCapabilities, inviteButtonState, inviteLocks, memberLocks } from './teamLocks.js';
+import { callerCapabilities, holdsOwnerRole, inviteButtonState, inviteLocks, memberLocks } from './teamLocks.js';
 
 const ALL = ['team.invite', 'team.remove', 'team.manage_roles'];
 const ASSIGNABLE = ['company_admin', 'company_member'];
@@ -129,5 +129,24 @@ describe('inviteButtonState', () => {
       disabled: false,
       showLockTooltip: false,
     });
+  });
+});
+
+describe('owner rows', () => {
+  it('unlocks a co-owner the API marks manageable for an owner caller', () => {
+    const locks = memberLocks({
+      member: member({ companyRoles: ['company_owner'], manageable: true }),
+      callerId: 'caller',
+      assignableRoles: ['company_admin', 'company_member', 'company_owner'],
+      capabilities: callerCapabilities(ALL),
+    });
+
+    expect(locks).toMatchObject({ roleLocked: false, removeLocked: false, currentRole: 'company_owner' });
+  });
+
+  it('detects owner rows for the stronger confirmation copy', () => {
+    expect(holdsOwnerRole(member({ companyRoles: ['company_owner'] }))).toBe(true);
+    expect(holdsOwnerRole(member({ companyRoles: ['company_admin'] }))).toBe(false);
+    expect(holdsOwnerRole(null)).toBe(false);
   });
 });

@@ -10,30 +10,36 @@ import {
   logoutUser,
   checkTeamInviteValidity,
   acceptTeamInvite,
+  verifyEmail,
+  resendEmailVerification,
 } from '../../../controllers/authController.js';
-import { updateUserPassword } from '../../../controllers/userController.js';
 import { sanitizerResult } from '../../../middlewares/sanitizerResult.js';
 import { authLimiter } from '../../../middlewares/authRateLimiter.js';
 import { passwordResetLimiter } from '../../../middlewares/passwordResetRateLimiter.js';
 import { loginAccountLimiter } from '../../../middlewares/loginAccountRateLimiter.js';
+import { verificationEmailLimiter } from '../../../middlewares/verificationEmailRateLimiter.js';
 import { createUserValidationSchema } from '../../../utils/validators/createUserSchema.js';
 import { userLoginValidationSchema } from '../../../utils/validators/userLoginValidationSchema.js';
 
-import { updatePasswordSchema } from '../../../utils/validators/updatePasswordSchema.js';
 import { recoverPasswordSchema } from '../../../utils/validators/recoverPasswordSchema.js';
 import { checkAuthentication } from '../../../middlewares/authenticationChecker.js';
 import { requestNewPasswordSchema } from '../../../utils/validators/requestNewPasswordSchema.js';
 import { passwordResetTokenQuerySchema } from '../../../utils/validators/passwordResetTokenQuerySchema.js';
 import { teamInviteTokenQuerySchema } from '../../../utils/validators/teamInviteTokenQuerySchema.js';
 import { acceptTeamInviteSchema } from '../../../utils/validators/acceptTeamInviteSchema.js';
+import { emailVerificationSchema } from '../../../utils/validators/emailVerificationSchema.js';
+import { resendVerificationSchema } from '../../../utils/validators/resendVerificationSchema.js';
 
 //* Public (unauthenticated) routes - session establishment, credential
-//* recovery and invite consumption. The gate is scoped by composition at the
-//* bottom of the file, not by file position
+//* recovery and invite consumption
 const authPublicRouter = Router();
 
-//* Gated routes - mounted behind checkAuthentication() below
+//* Gated routes - every route carries `requireSession` in its own chain, so
+//* what a route requires is visible at its definition and paths that match
+//* no route still reach the 404 fallback without a session (a router-level
+//* gate would answer 401 to every typo under /api/v1/auth)
 const authPrivateRouter = Router();
+const requireSession = checkAuthentication();
 
 export const authRouter = Router();
 
@@ -73,6 +79,18 @@ export const authRouter = Router();
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/ErrorMessage'
+ *       403:
+ *         description: Correct credentials, but the account has not verified its email yet (code `EMAIL_NOT_VERIFIED`) - no session is created
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/ErrorMessage'
+ *                 - type: object
+ *                   properties:
+ *                     code:
+ *                       type: string
+ *                       enum: [EMAIL_NOT_VERIFIED]
  *       422:
  *         $ref: '#/components/responses/ValidationError'
  *       429:
@@ -93,9 +111,11 @@ authPublicRouter.post('/login', authLimiter, checkSchema(userLoginValidationSche
  *     summary: Register a new user and their company (onboarding)
  *     description: |
  *       Self-service onboarding. In one transaction it creates:
- *       - a new company named `companyName` (unnamed when omitted), with a 7-day free trial subscription
+ *       - a new company named `companyName` (required, 2-100 characters after trimming), with a 7-day free trial subscription
  *       - the user, with the global `user` role, as that company's first member
  *       - a `company_owner` role assignment for the user, which grants every company permission, billing included
+ *
+ *       The account starts unverified: a verification link is emailed and the account cannot log in until it is opened (`POST /api/v1/auth/email-verification`).
  *
  *       Additional members join an existing company only through team invites (`POST /api/v1/auth/invite-accept`) and never become owners automatically.
  *
@@ -316,7 +336,7 @@ authPublicRouter.get('/invite', authLimiter, checkSchema(teamInviteTokenQuerySch
  *             schema:
  *               $ref: '#/components/schemas/ErrorMessage'
  *       409:
- *         description: The invited email became registered in the meantime - the invite was revoked
+ *         description: The invited email belongs to a verified account (registered and verified in the meantime) - the invite is kept until it expires. An unverified account holding the address is deleted with its company and the invitee is created instead
  *         content:
  *           application/json:
  *             schema:
@@ -327,6 +347,76 @@ authPublicRouter.get('/invite', authLimiter, checkSchema(teamInviteTokenQuerySch
  *         $ref: '#/components/responses/TooManyRequests'
  */
 authPublicRouter.post('/invite-accept', authLimiter, checkSchema(acceptTeamInviteSchema), sanitizerResult, acceptTeamInvite);
+
+/**
+ * @openapi
+ * /api/v1/auth/email-verification:
+ *   post:
+ *     tags: [Auth]
+ *     summary: Verify the email address of a registered account
+ *     description: Consumes the single-use token from the verification email (24-hour lifetime, only the newest one is valid) and marks the account verified. Does not log the user in.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/EmailVerificationRequest'
+ *     responses:
+ *       200:
+ *         description: Email verified - the account can now log in
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessMessage'
+ *       400:
+ *         description: Token is unknown, expired or already used (code `EMAIL_VERIFICATION_INVALID`)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/ErrorMessage'
+ *                 - type: object
+ *                   properties:
+ *                     code:
+ *                       type: string
+ *                       enum: [EMAIL_VERIFICATION_INVALID]
+ *       422:
+ *         $ref: '#/components/responses/ValidationError'
+ *       429:
+ *         $ref: '#/components/responses/TooManyRequests'
+ */
+authPublicRouter.post('/email-verification', authLimiter, checkSchema(emailVerificationSchema), sanitizerResult, verifyEmail);
+
+/**
+ * @openapi
+ * /api/v1/auth/email-verification/resend:
+ *   post:
+ *     tags: [Auth]
+ *     summary: Request a new verification email
+ *     description: Sends a new verification link (invalidating the previous one) when the email belongs to an unverified account. The response is identical - and sent before any lookup - whether or not such an account exists, to prevent user enumeration.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/ResendVerificationRequest'
+ *     responses:
+ *       200:
+ *         description: A new link will be sent if the email belongs to an unverified account
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessMessage'
+ *       422:
+ *         $ref: '#/components/responses/ValidationError'
+ *       429:
+ *         description: Too many verification email requests (5 per hour per IP)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorMessage'
+ */
+authPublicRouter.post('/email-verification/resend', verificationEmailLimiter, checkSchema(resendVerificationSchema), sanitizerResult, resendEmailVerification);
 
 /**
  * @openapi
@@ -351,59 +441,7 @@ authPublicRouter.post('/invite-accept', authLimiter, checkSchema(acceptTeamInvit
  *             schema:
  *               $ref: '#/components/schemas/ErrorMessage'
  */
-authPrivateRouter.post('/logout', logoutUser);
-
-/**
- * @openapi
- * /api/v1/auth/update-user-password:
- *   patch:
- *     tags: [Auth]
- *     deprecated: true
- *     summary: Update the password of the logged-in user (deprecated alias)
- *     description: Deprecated alias of `PATCH /api/v1/user/password` - same handler, request and responses. Kept so existing clients keep working; new clients must call `PATCH /api/v1/user/password`.
- *     security:
- *       - sessionCookie: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/UpdatePasswordRequest'
- *     responses:
- *       200:
- *         description: Password updated successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: 'object'
- *               properties:
- *                 userId:
- *                   type: string
- *                   format: uuid
- *       400:
- *         description: Current password is incorrect, or the new password is the same as the current one - disambiguated by `code`
- *         content:
- *           application/json:
- *             schema:
- *               allOf:
- *                 - $ref: '#/components/schemas/ErrorMessage'
- *                 - type: object
- *                   properties:
- *                     message:
- *                       type: string
- *                       enum: [Current password is incorrect, New password must be different from the current password]
- *                     code:
- *                       type: string
- *                       enum: [AUTH_CURRENT_PASSWORD_INCORRECT, AUTH_PASSWORD_UNCHANGED]
- *                       description: Machine-readable reason distinguishing the two 400 cases
- *       404:
- *         $ref: '#/components/responses/NotFound'
- *       422:
- *         $ref: '#/components/responses/ValidationError'
- */
-//* Deprecated alias of PATCH /api/v1/user/password (same handler) - remove once
-//* every client calls the user route
-authPrivateRouter.patch('/update-user-password', checkSchema(updatePasswordSchema), sanitizerResult, updateUserPassword);
+authPrivateRouter.post('/logout', requireSession, logoutUser);
 
 /**
  * @openapi
@@ -438,17 +476,15 @@ authPrivateRouter.patch('/update-user-password', checkSchema(updatePasswordSchem
  *             schema:
  *               $ref: '#/components/schemas/ErrorMessage'
  */
-authPrivateRouter.get('/session', checkSession);
+authPrivateRouter.get('/session', requireSession, checkSession);
 
-//* Composition: the authentication gate is attached to the private router
-//* itself, so what a route requires is visible at its definition - not at its
-//* file position. Public routes first so unauthenticated traffic never hits
-//* the gate
+//* Composition: public routes first, then the private ones (each gated at its
+//* own definition), then the fallback - reachable with or without a session
 authRouter.use(authPublicRouter);
-authRouter.use(checkAuthentication(), authPrivateRouter);
+authRouter.use(authPrivateRouter);
 
 authRouter.use('/*fallback', (req, res) => {
   res.status(404).json({
     message: 'The requested route is not available or does not exist',
-  }); //* Will catch failed requests even though they are authenticated & have the appropiate role
+  }); //* Catches every unmatched auth path, authenticated or not
 });

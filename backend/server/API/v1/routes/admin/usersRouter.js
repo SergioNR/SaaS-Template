@@ -110,6 +110,18 @@ usersRouter.get('/', userListQueryValidation, getAllUsers);
  *                     company:
  *                       type: object
  *                       nullable: true
+ *                       properties:
+ *                         id:
+ *                           type: string
+ *                         name:
+ *                           type: string
+ *                           nullable: true
+ *                         stripeLinked:
+ *                           type: boolean
+ *                         subscription:
+ *                           allOf:
+ *                             - $ref: '#/components/schemas/PublicSubscription'
+ *                           nullable: true
  *                     activeSessionCount:
  *                       type: integer
  *       404:

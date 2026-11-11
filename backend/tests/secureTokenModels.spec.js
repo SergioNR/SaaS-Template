@@ -15,6 +15,11 @@ const prismaMock = {
     create: jest.fn(),
     findUnique: jest.fn(),
   },
+  emailVerificationTokens: {
+    deleteMany: jest.fn(),
+    create: jest.fn(),
+    findUnique: jest.fn(),
+  },
   user: {
     update: jest.fn(),
   },
@@ -42,6 +47,7 @@ const {
   createTeamInviteInDb,
   getCompanyPendingInvitesInDb,
   getPendingTeamInviteByCompanyAndEmailInDb,
+  getTeamInviteByIdInDb,
   getTeamInviteByTokenInDb,
   rotateTeamInviteTokenInDb,
 } = await import('../server/models/teamInvitesModel.js');
@@ -50,6 +56,12 @@ const {
   getPasswordResetTokenData,
   resetUserPasswordWithTokenInDb,
 } = await import('../server/models/passwordResetTokensModel.js');
+const {
+  EMAIL_VERIFICATION_TOKEN_TTL_MS,
+  consumeEmailVerificationTokenInDb,
+  createEmailVerificationTokenInDb,
+  deleteExpiredEmailVerificationTokensInDb,
+} = await import('../server/models/emailVerificationTokensModel.js');
 
 const sha256 = (value) => createHash('sha256').update(value).digest('hex');
 
@@ -146,9 +158,20 @@ describe('teamInvitesModel tokens', () => {
     const { invite, inviteToken } = await rotateTeamInviteTokenInDb('invite-1', 'company-1', 'owner-1');
 
     const [{ where, data }] = prismaMock.teamInvites.update.mock.calls[0];
-    expect(where).toEqual({ id: 'invite-1', company_id: 'company-1' });
+    //* Pending only - an expired row is never revived
+    expect(where).toEqual({ id: 'invite-1', company_id: 'company-1', token_expires: { gt: expect.any(Date) } });
     expect(data.token_hash).toBe(sha256(inviteToken));
     expect(invite.id).toBe('invite-1');
+  });
+
+  it('looks invites up for resend/revoke by id, company AND pending expiry', async () => {
+    prismaMock.teamInvites.findFirst.mockResolvedValue(null);
+
+    await expect(getTeamInviteByIdInDb('invite-1', 'company-1')).resolves.toBeNull();
+
+    expect(prismaMock.teamInvites.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'invite-1', company_id: 'company-1', token_expires: { gt: expect.any(Date) } },
+    }));
   });
 
   it('returns null when the invite to rotate no longer exists', async () => {
@@ -191,7 +214,8 @@ describe('passwordResetTokensModel tokens', () => {
         findUnique: jest.fn(),
         deleteMany: jest.fn(),
       },
-      user: { update: jest.fn() },
+      emailVerificationTokens: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
+      user: { update: jest.fn(), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       session: { deleteMany: jest.fn().mockResolvedValue({ count: 1 }) },
     };
 
@@ -214,6 +238,19 @@ describe('passwordResetTokensModel tokens', () => {
       expect(tx.session.deleteMany).toHaveBeenCalledWith({ where: { user_id: 'user-1' } });
     });
 
+    it('verifies an unverified account in the same transaction (mailbox proof) and drops its verification links', async () => {
+      tx.passwordResetTokens.findUnique.mockResolvedValue({ user_id: 'user-1' });
+      tx.passwordResetTokens.deleteMany.mockResolvedValue({ count: 1 });
+
+      await resetUserPasswordWithTokenInDb('raw', 'hashed-password');
+
+      expect(tx.user.updateMany).toHaveBeenCalledWith({
+        where: { id: 'user-1', email_verified_at: null },
+        data: { email_verified_at: expect.any(Date) },
+      });
+      expect(tx.emailVerificationTokens.deleteMany).toHaveBeenCalledWith({ where: { user_id: 'user-1' } });
+    });
+
     it('returns null without touching the password when the token is expired or already consumed', async () => {
       tx.passwordResetTokens.findUnique.mockResolvedValue({ user_id: 'user-1' });
       tx.passwordResetTokens.deleteMany.mockResolvedValue({ count: 0 });
@@ -228,6 +265,92 @@ describe('passwordResetTokensModel tokens', () => {
 
       await expect(resetUserPasswordWithTokenInDb('raw', 'hashed-password')).resolves.toBeNull();
       expect(tx.passwordResetTokens.deleteMany).not.toHaveBeenCalled();
+    });
+  });
+});
+
+describe('emailVerificationTokensModel', () => {
+  const tx = {
+    emailVerificationTokens: {
+      findUnique: jest.fn(),
+      deleteMany: jest.fn(),
+    },
+    user: { updateMany: jest.fn() },
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('stores only the digest, expires in 24 hours and replaces earlier tokens in one transaction', async () => {
+    prismaMock.$transaction.mockResolvedValue([]);
+    prismaMock.emailVerificationTokens.deleteMany.mockReturnValue('delete-op');
+    prismaMock.emailVerificationTokens.create.mockReturnValue('create-op');
+
+    const before = Date.now();
+    const token = await createEmailVerificationTokenInDb('user-1');
+
+    expect(token).toMatch(SECURE_TOKEN_PATTERN);
+    expect(prismaMock.emailVerificationTokens.deleteMany).toHaveBeenCalledWith({ where: { user_id: 'user-1' } });
+    const [{ data }] = prismaMock.emailVerificationTokens.create.mock.calls[0];
+    expect(data.token_hash).toBe(sha256(token));
+    expect(JSON.stringify(data)).not.toContain(token);
+    expect(data.token_expires.getTime()).toBeGreaterThanOrEqual(before + EMAIL_VERIFICATION_TOKEN_TTL_MS);
+    expect(EMAIL_VERIFICATION_TOKEN_TTL_MS).toBe(24 * 60 * 60 * 1000);
+    expect(prismaMock.$transaction).toHaveBeenCalledWith(['delete-op', 'create-op']);
+  });
+
+  describe('consumeEmailVerificationTokenInDb', () => {
+    beforeEach(() => {
+      prismaMock.$transaction.mockImplementation(async (callback) => callback(tx));
+    });
+
+    it('consumes an unexpired token conditionally and verifies the account in the same transaction', async () => {
+      tx.emailVerificationTokens.findUnique.mockResolvedValue({ user_id: 'user-1' });
+      tx.emailVerificationTokens.deleteMany.mockResolvedValue({ count: 1 });
+      tx.user.updateMany.mockResolvedValue({ count: 1 });
+
+      await expect(consumeEmailVerificationTokenInDb('raw')).resolves.toEqual({ userId: 'user-1' });
+      expect(tx.emailVerificationTokens.deleteMany).toHaveBeenNthCalledWith(1, {
+        where: { token_hash: sha256('raw'), token_expires: { gt: expect.any(Date) } },
+      });
+      expect(tx.user.updateMany).toHaveBeenCalledWith({
+        where: { id: 'user-1', email_verified_at: null },
+        data: { email_verified_at: expect.any(Date) },
+      });
+      expect(tx.emailVerificationTokens.deleteMany).toHaveBeenNthCalledWith(2, { where: { user_id: 'user-1' } });
+    });
+
+    it('rejects an unknown token', async () => {
+      tx.emailVerificationTokens.findUnique.mockResolvedValue(null);
+
+      await expect(consumeEmailVerificationTokenInDb('raw')).resolves.toBeNull();
+      expect(tx.user.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('rejects an expired or already consumed token without verifying', async () => {
+      tx.emailVerificationTokens.findUnique.mockResolvedValue({ user_id: 'user-1' });
+      tx.emailVerificationTokens.deleteMany.mockResolvedValue({ count: 0 });
+
+      await expect(consumeEmailVerificationTokenInDb('raw')).resolves.toBeNull();
+      expect(tx.user.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('rejects when the account was already verified or deleted meanwhile', async () => {
+      tx.emailVerificationTokens.findUnique.mockResolvedValue({ user_id: 'user-1' });
+      tx.emailVerificationTokens.deleteMany.mockResolvedValue({ count: 1 });
+      tx.user.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(consumeEmailVerificationTokenInDb('raw')).resolves.toBeNull();
+    });
+  });
+
+  it('purges only expired tokens', async () => {
+    prismaMock.emailVerificationTokens.deleteMany.mockResolvedValue({ count: 3 });
+
+    await expect(deleteExpiredEmailVerificationTokensInDb()).resolves.toBe(3);
+    expect(prismaMock.emailVerificationTokens.deleteMany).toHaveBeenCalledWith({
+      where: { token_expires: { lt: expect.any(Date) } },
     });
   });
 });

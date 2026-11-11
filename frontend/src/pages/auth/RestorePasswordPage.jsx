@@ -8,6 +8,7 @@ import classes from '../../components/auth/ForgotPassword.module.css';
 import PageLoader from '../../components/PageLoader.jsx';
 import Seo from '../../components/Seo.jsx';
 import { scrubQueryFromAddressBar } from '../../utils/scrubUrlToken.js';
+import { restoreSubmitErrorKey } from './restorePasswordErrors.js';
 
 //* Token check outcome: 'checking' | 'valid' | 'invalid' (unknown, expired or
 //* used - request a new link) | 'error' (network/server - retry the check)
@@ -91,17 +92,7 @@ const RestorePasswordPage = () => {
 
       setPasswordUpdated(true);
     } catch (err) {
-      const status = err?.response?.status;
-
-      if (status === 400) {
-        setSubmitError(t('auth.restore.errors.expired'));
-      } else if (status === 404) {
-        setSubmitError(t('auth.restore.errors.invalidLink'));
-      } else if (status === 422) {
-        setSubmitError(t('auth.restore.errors.invalid'));
-      } else {
-        setSubmitError(t('auth.restore.errors.generic'));
-      }
+      setSubmitError(t(restoreSubmitErrorKey(err)));
     } finally {
       submittingRef.current = false;
       setSubmitting(false);

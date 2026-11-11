@@ -2,6 +2,7 @@ import LocalStrategy from 'passport-local';
 import bcrypt from 'bcrypt';
 import { getUserForLogin } from '../../models/userModel.js';
 import { BCRYPT_SALT_ROUNDS } from '../../config/security.js';
+import { EMAIL_NOT_VERIFIED } from '../loginFailureCodes.js';
 
 //* Constant invalid hash used to equalize response times for nonexistent users,
 //* preventing user enumeration through login response timing
@@ -16,12 +17,18 @@ export const verifyLocalCredentials = async (userEmail, password, done) => {
       return done(null, false);
     }
 
-    const { password: passwordHash, ...userWithoutPassword } = user;
+    const { password: passwordHash, email_verified_at: emailVerifiedAt, ...userWithoutPassword } = user;
 
     const passwordMatches = await bcrypt.compare(password, passwordHash);
 
     if (!passwordMatches) {
       return done(null, false);
+    }
+
+    //* Checked only after the password matched, so the distinct answer
+    //* reveals nothing to someone without the credentials
+    if (!emailVerifiedAt) {
+      return done(null, false, { code: EMAIL_NOT_VERIFIED });
     }
 
     //* The hash never travels past the strategy

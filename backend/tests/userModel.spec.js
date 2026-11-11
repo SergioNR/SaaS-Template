@@ -8,10 +8,23 @@ const tx = {
     create: jest.fn(),
     update: jest.fn(),
     findFirst: jest.fn(),
+    findUnique: jest.fn(),
+    delete: jest.fn(),
     count: jest.fn(),
   },
   teamInvites: {
     deleteMany: jest.fn(),
+  },
+  subscription: {
+    findUnique: jest.fn(),
+    deleteMany: jest.fn(),
+  },
+  company: {
+    findUnique: jest.fn(),
+    delete: jest.fn(),
+  },
+  file: {
+    findMany: jest.fn(),
   },
   session: {
     deleteMany: jest.fn(),
@@ -70,6 +83,7 @@ describe('createUserInDb - invite acceptance', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     tx.user.findFirst.mockResolvedValue(inviterRow(['company_admin']));
+    tx.user.findUnique.mockResolvedValue(null);
   });
 
   it('locks the company, re-checks the inviter, then consumes the invite conditionally before creating the user', async () => {
@@ -93,10 +107,12 @@ describe('createUserInDb - invite acceptance', () => {
     });
     expect(tx.teamInvites.deleteMany.mock.invocationCallOrder[0]).toBeLessThan(tx.user.create.mock.invocationCallOrder[0]);
     expect(tx.user.create).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ email: 'new@acme.test', company_id: 'company-1', role: 'user' }),
+      data: expect.objectContaining({
+        email: 'new@acme.test', company_id: 'company-1', role: 'user', email_verified_at: expect.any(Date),
+      }),
       omit: { password: true },
     }));
-    expect(acceptResult).toEqual({ status: 'created', user: { id: 'new-user', role: 'user' } });
+    expect(acceptResult).toEqual({ status: 'created', user: { id: 'new-user', role: 'user' }, claimedDeletion: null });
     expect(posthogUserSignedUp).toHaveBeenCalled();
   });
 
@@ -119,6 +135,68 @@ describe('createUserInDb - invite acceptance', () => {
 
     expect(acceptResult).toEqual({ status: 'inviter_invalid' });
     expect(tx.user.create).not.toHaveBeenCalled();
+  });
+
+  it('keeps the invite and resolves to already_registered when a verified account holds the address', async () => {
+    tx.user.findUnique.mockResolvedValue({ id: 'existing', email_verified_at: new Date() });
+
+    const acceptResult = await createUserInDb(inviteAcceptance);
+
+    expect(acceptResult).toEqual({ status: 'already_registered' });
+    expect(tx.teamInvites.deleteMany).not.toHaveBeenCalled();
+    expect(tx.user.create).not.toHaveBeenCalled();
+  });
+
+  describe('claiming an address held by an unverified account', () => {
+    const squatterRow = { id: 'squatter', role: 'user', company_id: 'squatter-co' };
+
+    beforeEach(() => {
+      tx.user.findUnique.mockResolvedValue({ id: 'squatter', email_verified_at: null });
+      tx.user.findFirst.mockImplementation(async ({ where, select }) => {
+        if (where.id === 'inviter-1') return inviterRow(['company_admin']);
+        if (select?.UserRoles) return inviterRow(['company_owner']);
+        return squatterRow;
+      });
+      tx.teamInvites.deleteMany.mockResolvedValue({ count: 1 });
+      tx.user.delete.mockResolvedValue({ id: 'squatter' });
+      tx.user.count.mockResolvedValue(0);
+      tx.subscription.findUnique.mockResolvedValue({ stripe_subscription_id: null, expires_at: new Date() });
+      tx.company.findUnique.mockResolvedValue({ stripe_id: null });
+      tx.file.findMany.mockResolvedValue([]);
+      tx.user.create.mockResolvedValue({ id: 'new-user', role: 'user' });
+    });
+
+    afterEach(() => {
+      tx.user.findFirst.mockReset();
+      tx.$queryRaw.mockReset();
+    });
+
+    it('deletes the unverified account with its company in the acceptance transaction, then creates the member', async () => {
+      //* Inviting company lock, squatter company lock, squatter row lock
+      tx.$queryRaw.mockResolvedValue([{ email_verified_at: null }]);
+
+      const acceptResult = await createUserInDb(inviteAcceptance);
+
+      expect(acceptResult.status).toBe('created');
+      expect(acceptResult.claimedDeletion).toEqual(expect.objectContaining({
+        status: 'deleted', companyDeleted: true, companyId: 'squatter-co',
+      }));
+      expect(tx.user.delete).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'squatter' } }));
+      expect(tx.company.delete).toHaveBeenCalledWith({ where: { id: 'squatter-co' } });
+      expect(tx.user.delete.mock.invocationCallOrder[0]).toBeLessThan(tx.user.create.mock.invocationCallOrder[0]);
+    });
+
+    it('rolls the acceptance back and resolves to already_registered when the account was verified concurrently', async () => {
+      tx.$queryRaw.mockImplementation(async (strings) => (
+        strings.join('').includes('email_verified_at') ? [{ email_verified_at: new Date() }] : []
+      ));
+
+      const acceptResult = await createUserInDb(inviteAcceptance);
+
+      expect(acceptResult).toEqual({ status: 'already_registered' });
+      expect(tx.user.delete).not.toHaveBeenCalled();
+      expect(tx.user.create).not.toHaveBeenCalled();
+    });
   });
 
   it('creates nothing and resolves to invite_invalid when the invite was already consumed, revoked or expired', async () => {
@@ -245,6 +323,45 @@ describe('updateCompanyMemberRoleInDb', () => {
     const result = await updateCompanyMemberRoleInDb('target', 'company-1', { id: 'role-owner', name: 'company_owner' }, { callerId: 'caller' });
 
     expect(result).toEqual({ status: 'forbidden' });
+  });
+
+  it('lets an owner demote a co-owner when another owner remains, voiding the demoted owner\'s owner invites', async () => {
+    tx.user.findFirst
+      .mockResolvedValueOnce(memberWithRoles(['company_owner'])) //* target
+      .mockResolvedValueOnce(memberWithRoles(['company_owner'])); //* caller
+    tx.user.count.mockResolvedValue(2); //* owners
+    tx.user.update.mockResolvedValue({ id: 'target', UserRoles: [{ Role: { name: 'company_admin' } }] });
+
+    const result = await updateCompanyMemberRoleInDb('target', 'company-1', { id: 'role-admin', name: 'company_admin' }, { callerId: 'caller' });
+
+    expect(result.status).toBe('updated');
+    expect(tx.teamInvites.deleteMany).toHaveBeenCalledWith({
+      where: {
+        invited_by: 'target',
+        Role: { name: { notIn: ['company_admin', 'company_member'] } },
+      },
+    });
+  });
+
+  it('answers forbidden when the calling owner was demoted concurrently (mutual demotion race)', async () => {
+    tx.user.findFirst
+      .mockResolvedValueOnce(memberWithRoles(['company_owner'])) //* target
+      .mockResolvedValueOnce(memberWithRoles(['company_admin'])); //* caller, demoted by the target first
+
+    const result = await updateCompanyMemberRoleInDb('target', 'company-1', { id: 'role-admin', name: 'company_admin' }, { callerId: 'caller' });
+
+    expect(result).toEqual({ status: 'forbidden' });
+    expect(tx.user.update).not.toHaveBeenCalled();
+  });
+
+  it('keeps the last-owner guard reachable when the caller check is bypassed', async () => {
+    tx.user.findFirst.mockResolvedValueOnce(memberWithRoles(['company_owner']));
+    tx.user.count.mockResolvedValue(1);
+
+    const result = await updateCompanyMemberRoleInDb('target', 'company-1', { id: 'role-admin', name: 'company_admin' });
+
+    expect(result).toEqual({ status: 'last_owner' });
+    expect(tx.user.update).not.toHaveBeenCalled();
   });
 
   it('updates the role and voids the invites the demoted member can no longer vouch for', async () => {

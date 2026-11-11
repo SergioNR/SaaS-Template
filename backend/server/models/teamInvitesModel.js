@@ -75,7 +75,10 @@ export const createTeamInviteInDb = async (inviteData) => {
 //* invite id (the public handle for resend/revoke) never changes. The old
 //* link stops working the moment the new digest is written. The original
 //* inviter stays on the row - a resend never re-attributes the invite.
-//* Returns null when the invite was revoked or accepted concurrently
+//* Only a still-pending invite rotates (`token_expires > now` in the WHERE):
+//* an expired row is never revived with a fresh window and its original
+//* inviter. Returns null when the invite was revoked, accepted or expired
+//* concurrently
 export const rotateTeamInviteTokenInDb = async (inviteId, companyId) => {
   const inviteToken = generateSecureToken();
 
@@ -84,6 +87,7 @@ export const rotateTeamInviteTokenInDb = async (inviteId, companyId) => {
       where: {
         id: inviteId,
         company_id: companyId,
+        ...pendingInviteWhere(),
       },
       data: {
         token_hash: hashSecureToken(inviteToken),
@@ -117,12 +121,15 @@ export const getTeamInviteByTokenInDb = async (inviteToken) => {
   return getTeamInviteQuery;
 };
 
+//* Resend/revoke lookup. Scoped by company so one company can never act on
+//* another's invites, and pending-only: an expired-but-unpurged row does not
+//* exist for the inviting side (404), exactly like a purged one
 export const getTeamInviteByIdInDb = async (inviteId, companyId) => {
-  //* Scoped by company so one company can never act on another's invites
   const getTeamInviteQuery = await prisma.teamInvites.findFirst({
     where: {
       id: inviteId,
       company_id: companyId,
+      ...pendingInviteWhere(),
     },
     include: {
       Role: {

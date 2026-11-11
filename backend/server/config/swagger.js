@@ -178,9 +178,27 @@ const swaggerOptions = {
             },
           },
         },
+        PublicSubscription: {
+          type: 'object',
+          description: 'Subscription dates plus the server-computed state. Never carries the row id or any Stripe id',
+          properties: {
+            created_at: { type: 'string', format: 'date-time' },
+            updated_at: { type: 'string', format: 'date-time' },
+            expires_at: { type: 'string', format: 'date-time', nullable: true },
+            status: {
+              type: 'string',
+              enum: ['paid', 'trial', 'inactive'],
+              description: '`paid`: backed by a Stripe subscription and `expires_at` in the future; `trial`: not Stripe-backed and `expires_at` in the future; `inactive`: expired or no expiry',
+            },
+            is_paid: {
+              type: 'boolean',
+              description: 'Exactly `status === "paid"` - an ended paid subscription reads false',
+            },
+          },
+        },
         RegisterRequest: {
           type: 'object',
-          required: ['username', 'password'],
+          required: ['username', 'password', 'companyName'],
           properties: {
             username: {
               type: 'string',
@@ -191,7 +209,7 @@ const swaggerOptions = {
               type: 'string',
               minLength: 2,
               maxLength: 100,
-              description: 'Name of the company created for the registrant (trimmed). The registrant becomes its company owner. Optional for backwards compatibility - when omitted (or null) the company is created unnamed',
+              description: 'Name of the company created for the registrant (trimmed). The registrant becomes its company owner. Required - a missing, empty or non-string name answers 422',
               example: 'Acme Corp',
             },
             password: {
@@ -199,6 +217,27 @@ const swaggerOptions = {
               minLength: 8,
               maxLength: 64,
               description: 'At least one lowercase letter, one uppercase letter and one number',
+            },
+          },
+        },
+        EmailVerificationRequest: {
+          type: 'object',
+          required: ['emailVerificationToken'],
+          properties: {
+            emailVerificationToken: {
+              type: 'string',
+              pattern: '^[A-Za-z0-9_-]{43}$',
+              description: 'Opaque base64url token from the verification email link (only its SHA-256 hash is stored)',
+            },
+          },
+        },
+        ResendVerificationRequest: {
+          type: 'object',
+          required: ['email'],
+          properties: {
+            email: {
+              type: 'string',
+              format: 'email',
             },
           },
         },

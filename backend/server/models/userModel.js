@@ -11,7 +11,8 @@ import { ADVISORY_LOCK_KEYS } from '../config/advisoryLockKeys.js';
 import { deleteUserSessionsInTx } from './sessionModel.js';
 import { deleteUserPasswordResetTokensInTx } from './passwordResetTokensModel.js';
 import { hashSecureToken } from '../utils/secureToken.js';
-import { canGrantRole, outranksAllRoles, rolesGrantableBy } from '../utils/companyRoleHierarchy.js';
+import { toPublicSubscription } from '../config/stripeSubscriptionStatuses.js';
+import { canGrantRole, canManageMember, rolesGrantableBy } from '../utils/companyRoleHierarchy.js';
 
 const COMPANY_OWNER_ROLE = 'company_owner';
 
@@ -43,6 +44,15 @@ const getMemberRoleNamesInTx = async (tx, userId, companyId) => {
   return member.UserRoles.map((userRole) => userRole.Role.name);
 };
 
+//* Row-locks the user (FOR UPDATE) and resolves to true while it exists and
+//* is still unverified - serializes a purge or invite claim with a
+//* concurrent verification of the same account
+const isUserUnverifiedForUpdateInTx = async (tx, userId) => {
+  const rows = await tx.$queryRaw`SELECT "email_verified_at" FROM "User" WHERE "id" = ${userId} FOR UPDATE`;
+
+  return rows.length === 1 && rows[0].email_verified_at === null;
+};
+
 const countCompanyOwnersInTx = (tx, companyId) => tx.user.count({
   where: {
     company_id: companyId,
@@ -68,11 +78,286 @@ export const canCompanyMemberGrantRoleInDb = async (memberId, companyId, roleNam
   return Boolean(memberRoleNames) && canGrantRole(memberRoleNames, roleName);
 };
 
+//* Every DB step of a user deletion in one transaction: the user row (its
+//* UserRole and reset-token rows cascade), its sessions and - when it was the
+//* last member - the company's subscription, invites and company row (File
+//* rows cascade). Third-party cleanup (Stripe, S3) needs data that is gone
+//* after the commit, so the subscription and file keys are returned for the
+//* caller to act on AFTER the transaction succeeded.
+//*
+//* The company row lock serializes concurrent deletions/role changes of the
+//* same company, so the last-owner and last-member checks cannot race.
+//*
+//* Options:
+//* - companyId: only delete when the user belongs to this company
+//* - protectLastOwner: refuse to delete the last company owner while other
+//*   members remain (they would be left without anyone able to manage them)
+//* - callerId: refuse unless the caller - a member of the same company whose
+//*   role rows are re-read under the lock - may manage the user
+//*   (canManageMember: outranks every role it holds, or both are owners - a
+//*   stale pre-check outside the lock can never be trusted)
+//* - onlyIfUnverified: only delete while the account is still unverified,
+//*   re-read under a user row lock (purge job, invite claim) - otherwise
+//*   resolves to { status: 'verified' }
+//*
+//* Resolves to { status: 'not_found' | 'last_owner' | 'last_superadmin' |
+//* 'forbidden' | 'verified' } or
+//* { status: 'deleted', deletedUser, companyDeleted, subscription, fileKeys }
+//* (plus companyId and stripeCustomerId when the company was deleted)
+//* Transaction-scoped body of the deletion - also run inside the invite
+//* acceptance transaction to claim an unverified account's address
+const deleteUserWithCompanyDataInTx = async (tx, userId, options = {}) => {
+  const {
+    companyId,
+    protectLastOwner = false,
+    callerId,
+    onlyIfUnverified = false,
+  } = options;
+
+  const user = await tx.user.findFirst({
+    where: {
+      id: userId,
+      ...(companyId ? { company_id: companyId } : {}),
+    },
+    select: {
+      id: true,
+      role: true,
+      company_id: true,
+    },
+  });
+
+  if (!user) {
+    return { status: 'not_found' };
+  }
+
+  const { company_id: userCompanyId } = user;
+
+  //* Unverified accounts always found their own company - a company-less
+  //* account (superadmin) is never purged or claimed
+  if (onlyIfUnverified && !userCompanyId) {
+    return { status: 'not_found' };
+  }
+
+  //* Superadmins belong to no company: no company lock, no owner checks and
+  //* no company cleanup (`company_id: null` would match every superadmin).
+  //* The platform must keep at least one superadmin - checked under a
+  //* transaction-scoped advisory lock (superadmins have no company row to
+  //* lock) so concurrent deletions of the last two cannot both pass it
+  if (!userCompanyId) {
+    if (user.role === 'superadmin') {
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(${ADVISORY_LOCK_KEYS.superadminDeletion}::bigint)`;
+
+      //* A concurrent deletion of the same account may have committed
+      //* while this one waited for the lock
+      const stillExists = await tx.user.count({
+        where: {
+          id: userId,
+        },
+      });
+
+      if (stillExists === 0) {
+        return { status: 'not_found' };
+      }
+
+      const superadminCount = await tx.user.count({
+        where: {
+          role: 'superadmin',
+        },
+      });
+
+      if (superadminCount <= 1) {
+        return { status: 'last_superadmin' };
+      }
+    }
+
+    const deletedUser = await tx.user.delete({
+      where: {
+        id: userId,
+      },
+      omit: {
+        password: true,
+      },
+    });
+
+    await tx.session.deleteMany({
+      where: {
+        user_id: userId,
+      },
+    });
+
+    return {
+      status: 'deleted',
+      deletedUser,
+      companyDeleted: false,
+      subscription: null,
+      fileKeys: [],
+    };
+  }
+
+  await lockCompanyForUpdateInDb(tx, userCompanyId);
+
+  //* Membership and role rows are re-read after the lock so they reflect
+  //* committed changes - a concurrent removal of the same member resolves
+  //* to not_found instead of a P2025 on the delete below
+  const userRoleNames = await getMemberRoleNamesInTx(tx, userId, userCompanyId);
+
+  if (!userRoleNames) {
+    return { status: 'not_found' };
+  }
+
+  //* Purge / claim of an unverified account: the user row is locked and its
+  //* verification state re-read, so a verification committing concurrently
+  //* either lands first (the account is kept) or waits and then finds no row
+  if (onlyIfUnverified && !(await isUserUnverifiedForUpdateInTx(tx, userId))) {
+    return { status: 'verified' };
+  }
+
+  if (callerId) {
+    const callerRoleNames = await getMemberRoleNamesInTx(tx, callerId, userCompanyId);
+
+    if (!callerRoleNames || !canManageMember(callerRoleNames, userRoleNames)) {
+      return { status: 'forbidden' };
+    }
+  }
+
+  if (protectLastOwner && userRoleNames.includes(COMPANY_OWNER_ROLE)) {
+    const ownerCount = await countCompanyOwnersInTx(tx, userCompanyId);
+    const memberCount = await tx.user.count({
+      where: {
+        company_id: userCompanyId,
+      },
+    });
+
+    if (ownerCount <= 1 && memberCount > 1) {
+      return { status: 'last_owner' };
+    }
+  }
+
+  const deletedUser = await tx.user.delete({
+    where: {
+      id: userId,
+    },
+    omit: {
+      password: true,
+    },
+  });
+
+  await tx.session.deleteMany({
+    where: {
+      user_id: userId,
+    },
+  });
+
+  //* Invites only stay valid while their inviter can still vouch for them
+  await tx.teamInvites.deleteMany({
+    where: {
+      invited_by: userId,
+    },
+  });
+
+  const remainingUsers = await tx.user.count({
+    where: {
+      company_id: userCompanyId,
+    },
+  });
+
+  if (remainingUsers > 0) {
+    return {
+      status: 'deleted',
+      deletedUser,
+      companyDeleted: false,
+      subscription: null,
+      fileKeys: [],
+    };
+  }
+
+  const subscription = await tx.subscription.findUnique({
+    where: {
+      company_id: userCompanyId,
+    },
+    select: {
+      stripe_subscription_id: true,
+      expires_at: true,
+    },
+  });
+
+  //* The Stripe customer is needed after the commit to clean up every
+  //* subscription and open checkout it holds, not only the stored one
+  const company = await tx.company.findUnique({
+    where: {
+      id: userCompanyId,
+    },
+    select: {
+      stripe_id: true,
+    },
+  });
+
+  const companyFiles = await tx.file.findMany({
+    where: {
+      company_id: userCompanyId,
+    },
+    select: {
+      s3_key: true,
+    },
+  });
+
+  await tx.subscription.deleteMany({
+    where: {
+      company_id: userCompanyId,
+    },
+  });
+
+  //* Invites cascade with the company too - deleted explicitly so the
+  //* company delete never depends on the FK action
+  await tx.teamInvites.deleteMany({
+    where: {
+      company_id: userCompanyId,
+    },
+  });
+
+  await tx.company.delete({
+    where: {
+      id: userCompanyId,
+    },
+  });
+
+  return {
+    status: 'deleted',
+    deletedUser,
+    companyDeleted: true,
+    companyId: userCompanyId,
+    stripeCustomerId: company?.stripe_id ?? null,
+    subscription,
+    fileKeys: companyFiles.map((file) => file.s3_key),
+  };
+};
+
+export const deleteUserWithCompanyDataInDb = async (userId, options = {}) => {
+  const deletionResult = await prisma.$transaction(
+    (tx) => deleteUserWithCompanyDataInTx(tx, userId, options),
+  );
+
+  if (deletionResult.status === 'deleted') {
+    logInfo(`User ${userId} succesfully deleted`);
+
+    posthogUserDeleteAccount(userId); // Fire-and-forget
+  }
+
+  return deletionResult;
+};
+
+//* Thrown inside the acceptance transaction to roll back the consumed invite
+//* when the address turned out to belong to a verified account
+class AddressAlreadyVerifiedError extends Error {}
+
 //* Self-registration resolves to the created user. Invite acceptance resolves
-//* to { status: 'created', user }, { status: 'inviter_invalid' } (the inviter
-//* left or can no longer grant the role - the invite is voided) or
-//* { status: 'invite_invalid' } (unknown, expired, already accepted or
-//* revoked meanwhile)
+//* to { status: 'created', user, claimedDeletion } (claimedDeletion is the
+//* deletion result of the unverified account that held the address, or
+//* null - the caller runs its post-commit cleanup), { status:
+//* 'inviter_invalid' } (the inviter left or can no longer grant the role -
+//* the invite is voided), { status: 'invite_invalid' } (unknown, expired,
+//* already accepted or revoked meanwhile) or { status: 'already_registered' }
+//* (a verified account holds the address - the invite is kept)
 export const createUserInDb = async (userData) => {
   const {
     username,
@@ -97,56 +382,104 @@ export const createUserInDb = async (userData) => {
   //* a link can never create an account twice nor stay usable after an
   //* acceptance
   if (companyId && roleId) {
-    const acceptResult = await prisma.$transaction(async (tx) => {
-      await lockCompanyForUpdateInDb(tx, companyId);
+    let acceptResult;
 
-      const inviterRoleNames = await getMemberRoleNamesInTx(tx, invitedBy, companyId);
+    try {
+      acceptResult = await prisma.$transaction(async (tx) => {
+        await lockCompanyForUpdateInDb(tx, companyId);
 
-      if (!inviterRoleNames || !canGrantRole(inviterRoleNames, roleName)) {
+        const inviterRoleNames = await getMemberRoleNamesInTx(tx, invitedBy, companyId);
+
+        if (!inviterRoleNames || !canGrantRole(inviterRoleNames, roleName)) {
         //* Voided in the same commit - a dead inviter cannot be revived by a
         //* later resend either
-        await tx.teamInvites.deleteMany({
+          await tx.teamInvites.deleteMany({
+            where: {
+              id: inviteId,
+            },
+          });
+
+          return { status: 'inviter_invalid' };
+        }
+
+        //* A verified holder of the address keeps it (409, invite kept) -
+        //* checked before the invite is consumed so nothing is written
+        const addressHolder = await tx.user.findUnique({
           where: {
-            id: inviteId,
+            email: username,
+          },
+          select: {
+            id: true,
+            email_verified_at: true,
           },
         });
 
-        return { status: 'inviter_invalid' };
-      }
+        if (addressHolder?.email_verified_at) {
+          return { status: 'already_registered' };
+        }
 
-      const consumeResult = await tx.teamInvites.deleteMany({
-        where: {
-          id: inviteId,
-          token_hash: hashSecureToken(inviteToken),
-          token_expires: {
-            gt: new Date(),
-          },
-        },
-      });
-
-      if (consumeResult.count !== 1) {
-        return { status: 'invite_invalid' };
-      }
-
-      const user = await tx.user.create({
-        data: {
-          email: username,
-          password,
-          role: 'user',
-          company_id: companyId,
-          UserRoles: {
-            create: {
-              role_id: roleId,
+        const consumeResult = await tx.teamInvites.deleteMany({
+          where: {
+            id: inviteId,
+            token_hash: hashSecureToken(inviteToken),
+            token_expires: {
+              gt: new Date(),
             },
           },
-        },
-        omit: {
-          password: true,
-        },
-      });
+        });
 
-      return { status: 'created', user };
-    });
+        if (consumeResult.count !== 1) {
+          return { status: 'invite_invalid' };
+        }
+
+        //* An unverified holder never proved the mailbox - accepting the
+        //* emailed invite does, so the squatting account (always alone in its
+        //* own company: it could never log in to invite anyone) is deleted with
+        //* its company in this same commit
+        let claimedDeletion = null;
+
+        if (addressHolder) {
+          claimedDeletion = await deleteUserWithCompanyDataInTx(tx, addressHolder.id, { onlyIfUnverified: true });
+
+          if (claimedDeletion.status === 'verified') {
+          //* Verified concurrently - roll back the consumed invite too
+            throw new AddressAlreadyVerifiedError();
+          }
+
+          if (claimedDeletion.status !== 'deleted') {
+            claimedDeletion = null;
+          }
+        }
+
+        const user = await tx.user.create({
+          data: {
+            email: username,
+            password,
+            role: 'user',
+            company_id: companyId,
+            //* The invite link was emailed to this address - accepting it
+            //* proves mailbox control
+            email_verified_at: new Date(),
+            UserRoles: {
+              create: {
+                role_id: roleId,
+              },
+            },
+          },
+          omit: {
+            password: true,
+          },
+        });
+
+        return { status: 'created', user, claimedDeletion };
+      });
+    } catch (error) {
+      if (error instanceof AddressAlreadyVerifiedError) {
+        return { status: 'already_registered' };
+      }
+
+      throw error;
+    }
 
     if (acceptResult.status !== 'created') {
       return acceptResult;
@@ -237,11 +570,35 @@ export const getUserForLogin = async (userEmail) => {
       email: true,
       role: true,
       company_id: true,
+      email_verified_at: true,
       password: true,
     },
   });
 
   return getUserForLoginQuery;
+};
+
+//* Purge job input: self-registered accounts still unverified after the
+//* cutoff. Ids only - each one is deleted in its own locked transaction that
+//* re-checks the verification state
+export const getUnverifiedUserIdsRegisteredBeforeInDb = async (cutoff) => {
+  const users = await prisma.user.findMany({
+    where: {
+      email_verified_at: null,
+      role: 'user',
+      created_at: {
+        lt: cutoff,
+      },
+    },
+    select: {
+      id: true,
+    },
+    orderBy: {
+      created_at: 'asc',
+    },
+  });
+
+  return users.map((user) => user.id);
 };
 
 export const updateUserLastLoginDate = async (userId) => {
@@ -311,11 +668,13 @@ export const getUserDetailInDb = async (userId) => {
           name: true,
           stripe_id: true,
           Subscription: {
+            //* No row id; the Stripe subscription id is read only to derive
+            //* status / is_paid and dropped by toPublicSubscription
             select: {
-              id: true,
               created_at: true,
               updated_at: true,
               expires_at: true,
+              stripe_subscription_id: true,
             },
           },
         },
@@ -338,7 +697,7 @@ export const getUserDetailInDb = async (userId) => {
         stripeLinked: Boolean(Company.stripe_id),
         //* The schema models Company -> Subscription as a list with a unique
         //* FK, so the include always returns an array of 0 or 1 rows
-        subscription: Company.Subscription[0] ?? null,
+        subscription: toPublicSubscription(Company.Subscription[0] ?? null),
       }
       : null,
   };
@@ -403,250 +762,6 @@ export const countUsersInDb = async (filters = {}) => {
   return userCount;
 };
 
-//* Every DB step of a user deletion in one transaction: the user row (its
-//* UserRole and reset-token rows cascade), its sessions and - when it was the
-//* last member - the company's subscription, invites and company row (File
-//* rows cascade). Third-party cleanup (Stripe, S3) needs data that is gone
-//* after the commit, so the subscription and file keys are returned for the
-//* caller to act on AFTER the transaction succeeded.
-//*
-//* The company row lock serializes concurrent deletions/role changes of the
-//* same company, so the last-owner and last-member checks cannot race.
-//*
-//* Options:
-//* - companyId: only delete when the user belongs to this company
-//* - protectLastOwner: refuse to delete the last company owner while other
-//*   members remain (they would be left without anyone able to manage them)
-//* - callerId: refuse unless the caller - a member of the same company whose
-//*   role rows are re-read under the lock - outranks every role the user
-//*   holds (a stale pre-check outside the lock can never be trusted)
-//*
-//* Resolves to { status: 'not_found' | 'last_owner' | 'last_superadmin' |
-//* 'forbidden' } or
-//* { status: 'deleted', deletedUser, companyDeleted, subscription, fileKeys }
-//* (plus companyId and stripeCustomerId when the company was deleted)
-export const deleteUserWithCompanyDataInDb = async (userId, options = {}) => {
-  const {
-    companyId,
-    protectLastOwner = false,
-    callerId,
-  } = options;
-
-  const deletionResult = await prisma.$transaction(async (tx) => {
-    const user = await tx.user.findFirst({
-      where: {
-        id: userId,
-        ...(companyId ? { company_id: companyId } : {}),
-      },
-      select: {
-        id: true,
-        role: true,
-        company_id: true,
-      },
-    });
-
-    if (!user) {
-      return { status: 'not_found' };
-    }
-
-    const { company_id: userCompanyId } = user;
-
-    //* Superadmins belong to no company: no company lock, no owner checks and
-    //* no company cleanup (`company_id: null` would match every superadmin).
-    //* The platform must keep at least one superadmin - checked under a
-    //* transaction-scoped advisory lock (superadmins have no company row to
-    //* lock) so concurrent deletions of the last two cannot both pass it
-    if (!userCompanyId) {
-      if (user.role === 'superadmin') {
-        await tx.$queryRaw`SELECT pg_advisory_xact_lock(${ADVISORY_LOCK_KEYS.superadminDeletion}::bigint)`;
-
-        //* A concurrent deletion of the same account may have committed
-        //* while this one waited for the lock
-        const stillExists = await tx.user.count({
-          where: {
-            id: userId,
-          },
-        });
-
-        if (stillExists === 0) {
-          return { status: 'not_found' };
-        }
-
-        const superadminCount = await tx.user.count({
-          where: {
-            role: 'superadmin',
-          },
-        });
-
-        if (superadminCount <= 1) {
-          return { status: 'last_superadmin' };
-        }
-      }
-
-      const deletedUser = await tx.user.delete({
-        where: {
-          id: userId,
-        },
-        omit: {
-          password: true,
-        },
-      });
-
-      await tx.session.deleteMany({
-        where: {
-          user_id: userId,
-        },
-      });
-
-      return {
-        status: 'deleted',
-        deletedUser,
-        companyDeleted: false,
-        subscription: null,
-        fileKeys: [],
-      };
-    }
-
-    await lockCompanyForUpdateInDb(tx, userCompanyId);
-
-    //* Membership and role rows are re-read after the lock so they reflect
-    //* committed changes - a concurrent removal of the same member resolves
-    //* to not_found instead of a P2025 on the delete below
-    const userRoleNames = await getMemberRoleNamesInTx(tx, userId, userCompanyId);
-
-    if (!userRoleNames) {
-      return { status: 'not_found' };
-    }
-
-    if (callerId) {
-      const callerRoleNames = await getMemberRoleNamesInTx(tx, callerId, userCompanyId);
-
-      if (!callerRoleNames || !outranksAllRoles(callerRoleNames, userRoleNames)) {
-        return { status: 'forbidden' };
-      }
-    }
-
-    if (protectLastOwner && userRoleNames.includes(COMPANY_OWNER_ROLE)) {
-      const ownerCount = await countCompanyOwnersInTx(tx, userCompanyId);
-      const memberCount = await tx.user.count({
-        where: {
-          company_id: userCompanyId,
-        },
-      });
-
-      if (ownerCount <= 1 && memberCount > 1) {
-        return { status: 'last_owner' };
-      }
-    }
-
-    const deletedUser = await tx.user.delete({
-      where: {
-        id: userId,
-      },
-      omit: {
-        password: true,
-      },
-    });
-
-    await tx.session.deleteMany({
-      where: {
-        user_id: userId,
-      },
-    });
-
-    //* Invites only stay valid while their inviter can still vouch for them
-    await tx.teamInvites.deleteMany({
-      where: {
-        invited_by: userId,
-      },
-    });
-
-    const remainingUsers = await tx.user.count({
-      where: {
-        company_id: userCompanyId,
-      },
-    });
-
-    if (remainingUsers > 0) {
-      return {
-        status: 'deleted',
-        deletedUser,
-        companyDeleted: false,
-        subscription: null,
-        fileKeys: [],
-      };
-    }
-
-    const subscription = await tx.subscription.findUnique({
-      where: {
-        company_id: userCompanyId,
-      },
-      select: {
-        stripe_subscription_id: true,
-        expires_at: true,
-      },
-    });
-
-    //* The Stripe customer is needed after the commit to clean up every
-    //* subscription and open checkout it holds, not only the stored one
-    const company = await tx.company.findUnique({
-      where: {
-        id: userCompanyId,
-      },
-      select: {
-        stripe_id: true,
-      },
-    });
-
-    const companyFiles = await tx.file.findMany({
-      where: {
-        company_id: userCompanyId,
-      },
-      select: {
-        s3_key: true,
-      },
-    });
-
-    await tx.subscription.deleteMany({
-      where: {
-        company_id: userCompanyId,
-      },
-    });
-
-    //* Invites cascade with the company too - deleted explicitly so the
-    //* company delete never depends on the FK action
-    await tx.teamInvites.deleteMany({
-      where: {
-        company_id: userCompanyId,
-      },
-    });
-
-    await tx.company.delete({
-      where: {
-        id: userCompanyId,
-      },
-    });
-
-    return {
-      status: 'deleted',
-      deletedUser,
-      companyDeleted: true,
-      companyId: userCompanyId,
-      stripeCustomerId: company?.stripe_id ?? null,
-      subscription,
-      fileKeys: companyFiles.map((file) => file.s3_key),
-    };
-  });
-
-  if (deletionResult.status === 'deleted') {
-    logInfo(`User ${userId} succesfully deleted`);
-
-    posthogUserDeleteAccount(userId); // Fire-and-forget
-  }
-
-  return deletionResult;
-};
-
 const companyMemberInclude = {
   UserRoles: {
     include: {
@@ -699,8 +814,8 @@ export const getOneCompanyMemberInDb = async (userId, companyId) => {
 //*
 //* Options:
 //* - callerId: refuse unless the caller - a member of the same company whose
-//*   role rows are re-read under the lock - outranks every role the member
-//*   currently holds AND may grant the new role
+//*   role rows are re-read under the lock - may manage the member
+//*   (canManageMember) AND may grant the new role
 //*
 //* Resolves to { status: 'not_found' | 'last_owner' | 'forbidden' } or
 //* { status: 'updated', member }
@@ -720,7 +835,7 @@ export const updateCompanyMemberRoleInDb = async (userId, companyId, role, optio
       const callerRoleNames = await getMemberRoleNamesInTx(tx, callerId, companyId);
 
       if (!callerRoleNames
-        || !outranksAllRoles(callerRoleNames, targetRoleNames)
+        || !canManageMember(callerRoleNames, targetRoleNames)
         || !canGrantRole(callerRoleNames, role.name)) {
         return { status: 'forbidden' };
       }

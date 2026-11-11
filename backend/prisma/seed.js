@@ -149,9 +149,10 @@ async function main() {
     const { password, companyRole: companyRoleName, ...rest } = user;
     const createdUser = await prisma.user.upsert({
       where: { email: user.email },
-      //* Re-seeding also repairs the role layers of rows from older seeds
-      update: { role: rest.role, company_id: rest.company_id },
-      create: { ...rest, password: await bcrypt.hash(password, BCRYPT_SALT_ROUNDS) },
+      //* Re-seeding also repairs the role layers of rows from older seeds.
+      //* Seeded accounts are always verified so they can log in right away
+      update: { role: rest.role, company_id: rest.company_id, email_verified_at: new Date() },
+      create: { ...rest, email_verified_at: new Date(), password: await bcrypt.hash(password, BCRYPT_SALT_ROUNDS) },
     });
 
     //* Replace (not upsert) the user's company roles: v1 keeps at most one

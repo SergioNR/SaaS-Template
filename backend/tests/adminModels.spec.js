@@ -61,10 +61,10 @@ describe('getUserDetailInDb', () => {
         //* so the include returns an array of 0 or 1 rows
         Subscription: [
           {
-            id: 'sub-1',
             created_at: '2026-01-01T00:00:00.000Z',
             updated_at: '2026-01-01T00:00:00.000Z',
-            expires_at: '2027-01-01T00:00:00.000Z',
+            expires_at: '2999-01-01T00:00:00.000Z',
+            stripe_subscription_id: null,
           },
         ],
       },
@@ -83,16 +83,43 @@ describe('getUserDetailInDb', () => {
         name: 'Acme',
         stripeLinked: true,
         subscription: {
-          id: 'sub-1',
           created_at: '2026-01-01T00:00:00.000Z',
           updated_at: '2026-01-01T00:00:00.000Z',
-          expires_at: '2027-01-01T00:00:00.000Z',
+          expires_at: '2999-01-01T00:00:00.000Z',
+          status: 'trial',
+          is_paid: false,
         },
       },
     });
     expect(JSON.stringify(result)).not.toContain('stripe_id');
+    expect(JSON.stringify(result)).not.toContain('stripe_subscription_id');
     expect(JSON.stringify(result)).not.toContain('cus_secret123');
     expect(result.Company).toBeUndefined();
+    //* The internal row id is never even selected
+    const [{ include }] = prisma.user.findUnique.mock.calls[0];
+    expect(include.Company.select.Subscription.select).not.toHaveProperty('id');
+  });
+
+  it('reports an active Stripe-backed subscription as paid without exposing its id', async () => {
+    prisma.user.findUnique.mockResolvedValue({
+      id: 'user-1',
+      Company: {
+        id: 'company-1',
+        name: 'Acme',
+        stripe_id: 'cus_1',
+        Subscription: [{
+          created_at: '2026-01-01T00:00:00.000Z',
+          updated_at: '2026-01-01T00:00:00.000Z',
+          expires_at: '2999-01-01T00:00:00.000Z',
+          stripe_subscription_id: 'sub_secret',
+        }],
+      },
+    });
+
+    const result = await getUserDetailInDb('user-1');
+
+    expect(result.company.subscription).toEqual(expect.objectContaining({ status: 'paid', is_paid: true }));
+    expect(JSON.stringify(result)).not.toContain('sub_secret');
   });
 
   it('handles a company without a Stripe customer id or subscription', async () => {
@@ -133,7 +160,18 @@ describe('getAllCompaniesInDb', () => {
         updated_at: '2026-01-01T00:00:00.000Z',
         _count: { User: 2 },
         Subscription: [
-          { id: 'sub-1', expires_at: null },
+          { expires_at: '2999-01-01T00:00:00.000Z', stripe_subscription_id: 'sub_secret' },
+        ],
+      },
+      {
+        id: 'company-3',
+        name: 'Trial Co',
+        stripe_id: null,
+        created_at: '2026-01-15T00:00:00.000Z',
+        updated_at: '2026-01-15T00:00:00.000Z',
+        _count: { User: 1 },
+        Subscription: [
+          { expires_at: '2999-01-01T00:00:00.000Z', stripe_subscription_id: null },
         ],
       },
       {
@@ -155,9 +193,18 @@ describe('getAllCompaniesInDb', () => {
         name: 'Acme',
         created_at: '2026-01-01T00:00:00.000Z',
         updated_at: '2026-01-01T00:00:00.000Z',
-        subscription: { id: 'sub-1', expires_at: null },
+        subscription: { expires_at: '2999-01-01T00:00:00.000Z', status: 'paid', is_paid: true },
         stripeLinked: true,
         userCount: 2,
+      },
+      {
+        id: 'company-3',
+        name: 'Trial Co',
+        created_at: '2026-01-15T00:00:00.000Z',
+        updated_at: '2026-01-15T00:00:00.000Z',
+        subscription: { expires_at: '2999-01-01T00:00:00.000Z', status: 'trial', is_paid: false },
+        stripeLinked: false,
+        userCount: 1,
       },
       {
         id: 'company-2',
@@ -170,6 +217,7 @@ describe('getAllCompaniesInDb', () => {
       },
     ]);
     expect(JSON.stringify(results)).not.toContain('stripe_id');
+    expect(JSON.stringify(results)).not.toContain('sub_secret');
     expect(JSON.stringify(results)).not.toContain('_count');
   });
 
@@ -205,7 +253,7 @@ describe('getCompanyDetailInDb', () => {
       created_at: '2026-01-01T00:00:00.000Z',
       updated_at: '2026-01-01T00:00:00.000Z',
       Subscription: [
-        { id: 'sub-1', expires_at: '2027-01-01T00:00:00.000Z' },
+        { expires_at: '2020-01-01T00:00:00.000Z', stripe_subscription_id: 'sub_secret' },
       ],
       User: [
         {
@@ -222,7 +270,8 @@ describe('getCompanyDetailInDb', () => {
       created_at: '2026-01-01T00:00:00.000Z',
       updated_at: '2026-01-01T00:00:00.000Z',
       stripeLinked: true,
-      subscription: { id: 'sub-1', expires_at: '2027-01-01T00:00:00.000Z' },
+      //* An ended paid subscription is inactive and no longer is_paid
+      subscription: { expires_at: '2020-01-01T00:00:00.000Z', status: 'inactive', is_paid: false },
       users: [
         {
           id: 'user-1', email: 'user@test.com', role: 'user', created_at: '2026-01-01T00:00:00.000Z', last_login_at: null,
@@ -230,6 +279,7 @@ describe('getCompanyDetailInDb', () => {
       ],
     });
     expect(JSON.stringify(result)).not.toContain('stripe_id');
+    expect(JSON.stringify(result)).not.toContain('sub_secret');
     expect(JSON.stringify(result)).not.toContain('cus_secret123');
   });
 });

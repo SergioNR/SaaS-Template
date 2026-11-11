@@ -9,6 +9,7 @@ const sensitiveFields = [
   'newPassword',
   'currentPassword',
   'inviteToken',
+  'emailVerificationToken',
 ];
 
 const sanitizeValidationError = (error) => {

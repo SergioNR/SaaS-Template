@@ -12,6 +12,7 @@ export const redactOptions = {
     'context.confirmNewPassword',
     'context.inviteToken',
     'context.passwordResetToken',
+    'context.emailVerificationToken',
     'context.userData.inviteToken',
     //* logError/logWarn extra details land under additionalInfo
     'context.additionalInfo.email',
@@ -22,6 +23,7 @@ export const redactOptions = {
     'context.additionalInfo.confirmNewPassword',
     'context.additionalInfo.inviteToken',
     'context.additionalInfo.passwordResetToken',
+    'context.additionalInfo.emailVerificationToken',
     //* Credentials carried by request objects (HTTP access logs, errors that
     //* attach the request)
     'req.headers.cookie',

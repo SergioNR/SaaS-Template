@@ -95,7 +95,8 @@ companiesRouter.get('/', companyListQueryValidation, getAllCompanies);
  *                     stripeLinked:
  *                       type: boolean
  *                     subscription:
- *                       type: object
+ *                       allOf:
+ *                         - $ref: '#/components/schemas/PublicSubscription'
  *                       nullable: true
  *                     users:
  *                       type: array

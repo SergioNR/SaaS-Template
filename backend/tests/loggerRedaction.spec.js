@@ -29,6 +29,7 @@ describe('logger redaction', () => {
     'confirmNewPassword',
     'inviteToken',
     'passwordResetToken',
+    'emailVerificationToken',
   ])('redacts context.%s and context.additionalInfo.%s', (field) => {
     const logged = captureLog({
       message: 'x',

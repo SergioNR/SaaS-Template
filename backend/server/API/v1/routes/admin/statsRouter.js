@@ -10,7 +10,7 @@ export const statsRouter = Router();
  *   get:
  *     tags: [Admin]
  *     summary: Platform counters for the admin overview (superadmin only)
- *     description: Returns aggregated counts - users (total, superadmins, new in the last 7 days), companies, subscriptions (total and active) and active sessions. A subscription is active when its `expires_at` is in the future.
+ *     description: Returns aggregated counts - users (total, superadmins, new in the last 7 days), companies, subscriptions (total, active paid and active trials) and active sessions. `activeSubscriptions` counts Stripe-backed subscriptions whose `expires_at` is in the future; `activeTrials` counts trials (no Stripe subscription) whose `expires_at` is in the future.
  *     security:
  *       - sessionCookie: []
  *     responses:
@@ -36,6 +36,10 @@ export const statsRouter = Router();
  *                       type: integer
  *                     activeSubscriptions:
  *                       type: integer
+ *                       description: Paid (Stripe-backed) subscriptions whose `expires_at` is in the future
+ *                     activeTrials:
+ *                       type: integer
+ *                       description: Trials whose `expires_at` is in the future
  *                     activeSessions:
  *                       type: integer
  *       401:

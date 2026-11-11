@@ -25,7 +25,9 @@ export const memberLocks = ({ member, callerId, assignableRoles, capabilities })
   const currentRole = member.companyRoles.length === 1 ? member.companyRoles[0] : null;
   const roleNotAssignable = !currentRole || !assignableRoles.includes(currentRole);
   //* The API marks a member manageable only when the caller strictly
-  //* outranks every role they hold; the caller's own row is never manageable
+  //* outranks every role they hold, or when both are owners (owners manage
+  //* co-owners; the API keeps at least one owner); the caller's own row is
+  //* never manageable
   const isSelf = callerId !== null && callerId !== undefined && member.id === callerId;
   const outranked = !member.manageable;
   const rankLockLabel = isSelf ? 'team.locked.self' : 'team.locked.notOutranked';
@@ -69,3 +71,7 @@ export const inviteButtonState = ({ permissionsKnown, capabilities }) => ({
   disabled: !permissionsKnown || !capabilities.canInvite,
   showLockTooltip: permissionsKnown && !capabilities.canInvite,
 });
+
+//* Owners are the accountable tier - demoting or removing one gets its own,
+//* stronger confirmation copy
+export const holdsOwnerRole = (member) => Boolean(member?.companyRoles?.includes('company_owner'));

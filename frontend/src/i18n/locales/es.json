@@ -64,8 +64,10 @@
       "submit": "Iniciar sesión",
       "errors": {
         "invalidCredentials": "La combinación de email y contraseña es incorrecta",
-        "internal": "Error interno, por favor inténtalo de nuevo más tarde"
-      }
+        "internal": "Error interno, por favor inténtalo de nuevo más tarde",
+        "emailNotVerified": "Tienes que confirmar tu correo electrónico antes de iniciar sesión. Revisa tu bandeja de entrada (y la carpeta de spam)."
+      },
+      "resendVerification": "Reenviar correo de confirmación"
     },
     "register": {
       "title": "¡Estamos encantados de verte por aqui!",
@@ -73,7 +75,7 @@
       "loginLink": "Iniciar sesión",
       "submit": "Crear cuenta",
       "companyNameHint": "Crearemos tu empresa y serás su propietario. Podrás invitar a tu equipo después.",
-      "success": "Usuario creado correctamente - Redirigiendo al inicio de sesión",
+      "success": "Cuenta creada. Te hemos enviado un correo para confirmar tu dirección: abre el enlace antes de iniciar sesión. Redirigiendo al inicio de sesión…",
       "terms": "Al registrarte, aceptas estar de acuerdo con los <1>términos y condiciones</1>",
       "errors": {
         "invalid": "Por favor, proporcione un correo electrónico, nombre de empresa y contraseña válidos",
@@ -102,7 +104,6 @@
       "requestNewLink": "Solicitar nuevo enlace",
       "errors": {
         "expired": "El enlace ha caducado o ya se ha usado. Solicita un nuevo enlace para restablecer tu contraseña.",
-        "invalidLink": "El enlace no es válido. Solicita un nuevo enlace para restablecer tu contraseña.",
         "invalid": "La contraseña no cumple los requisitos o las contraseñas no coinciden. Revisa los datos e inténtalo de nuevo.",
         "generic": "No se pudo actualizar la contraseña. Por favor, inténtalo de nuevo más tarde."
       },
@@ -153,6 +154,25 @@
         "registered": "Ese email ya tiene una cuenta. Inicia sesión.",
         "invalidPassword": "La contraseña no cumple los requisitos: mínimo 8 caracteres, con al menos una mayúscula, una minúscula y un número.",
         "generic": "No se pudo aceptar la invitación. Inténtalo de nuevo."
+      }
+    },
+    "verifyEmail": {
+      "title": "Confirmar correo electrónico",
+      "successTitle": "¡Correo confirmado!",
+      "successBody": "Tu dirección de correo está confirmada. Ya puedes iniciar sesión.",
+      "goToLogin": "Ir al inicio de sesión",
+      "invalidTitle": "Enlace inválido",
+      "invalidBody": "El enlace de confirmación no es válido, ha caducado o ya se ha usado. Solicita un nuevo correo de confirmación.",
+      "errorTitle": "No se pudo confirmar el correo",
+      "errorBody": "No hemos podido comprobar el enlace. Revisa tu conexión e inténtalo de nuevo."
+    },
+    "resendVerification": {
+      "label": "Reenviar el correo de confirmación",
+      "submit": "Enviar nuevo enlace",
+      "success": "Si la dirección pertenece a una cuenta pendiente de confirmar, recibirás un nuevo enlace en unos minutos.",
+      "errors": {
+        "invalid": "Introduce un correo electrónico válido.",
+        "generic": "No se pudo enviar el correo. Por favor, inténtalo de nuevo más tarde."
       }
     }
   },
@@ -336,7 +356,9 @@
         "untilDate": "hasta el {{date}}",
         "noActiveSubscription": "Sin suscripción activa",
         "lastLogin": "Último acceso",
-        "memberSince": "Miembro desde"
+        "memberSince": "Miembro desde",
+        "unknown": "Desconocido",
+        "unknownDetail": "No hemos podido cargar el estado de la suscripción."
       },
       "plan": {
         "title": "Estado de tu plan",
@@ -346,7 +368,8 @@
         "periodStart": "Inicio del periodo",
         "periodEnd": "Renovación / fin del periodo",
         "noSubscription": "No tienes ninguna suscripción activa en este momento.",
-        "viewPlans": "Ver planes disponibles"
+        "viewPlans": "Ver planes disponibles",
+        "unknownDescription": "No hemos podido comprobar tu plan en este momento. Vuelve a intentarlo en unos segundos."
       },
       "quick": {
         "title": "Accesos rápidos",
@@ -439,7 +462,8 @@
     },
     "locked": {
       "manage": "Solo el propietario de la empresa puede gestionar la facturación"
-    }
+    },
+    "statusPaid": "De pago"
   },
   "admin": {
     "areaTitle": "Panel de administración",
@@ -479,8 +503,8 @@
         "users": "Usuarios",
         "usersDetail": "{{newUsers}} nuevos en 7 días · {{superadmins}} superadministradores",
         "companies": "Empresas",
-        "activeSubscriptions": "Suscripciones activas",
-        "subscriptionsDetail": "de {{total}} en total",
+        "activeSubscriptions": "Suscripciones de pago activas",
+        "subscriptionsDetail": "{{trials}} pruebas activas · {{total}} en total",
         "activeSessions": "Sesiones activas"
       },
       "recentUsers": {
@@ -589,7 +613,8 @@
       "adminUserDetail": "Detalle de usuario · Administración",
       "adminCompanies": "Empresas · Administración",
       "adminCompanyDetail": "Detalle de empresa · Administración",
-      "adminAccount": "Mi cuenta · Administración"
+      "adminAccount": "Mi cuenta · Administración",
+      "verifyEmail": "Confirmar correo electrónico"
     }
   },
   "notFound": {
@@ -628,7 +653,14 @@
         "title": "Eliminar miembro",
         "description": "Se eliminará la cuenta de {{email}} y se cerrarán todas sus sesiones. Esta acción no se puede deshacer.",
         "cancel": "Cancelar",
-        "confirm": "Eliminar miembro"
+        "confirm": "Eliminar miembro",
+        "ownerDescription": "{{email}} es propietario de la empresa. Se eliminará su cuenta, perderá el control de la empresa y se cerrarán todas sus sesiones. Esta acción no se puede deshacer."
+      },
+      "demoteOwnerModal": {
+        "title": "Quitar rol de propietario",
+        "description": "{{email}} es propietario de la empresa. Pasará a ser {{role}} y perderá el control total de la empresa, incluida la facturación.",
+        "cancel": "Cancelar",
+        "confirm": "Cambiar rol"
       }
     },
     "invites": {
@@ -661,7 +693,7 @@
       "manageRoles": "No tienes permiso para cambiar los roles de los miembros",
       "roleNotAssignable": "No puedes cambiar el rol de este miembro",
       "self": "No puedes modificar tu propia cuenta",
-      "notOutranked": "Solo puedes gestionar a miembros con un rol inferior al tuyo",
+      "notOutranked": "Solo puedes gestionar a miembros con un rol inferior al tuyo (los propietarios también pueden gestionar a otros propietarios)",
       "inviteRole": "No puedes gestionar invitaciones para este rol"
     },
     "errors": {
@@ -673,7 +705,8 @@
       "roleConflict": "No se puede cambiar el rol de este miembro.",
       "forbidden": "No tienes permisos para realizar esta acción.",
       "generic": "Ha ocurrido un error. Inténtalo de nuevo.",
-      "retry": "No se pudo completar la acción por un conflicto. Inténtalo de nuevo."
+      "retry": "No se pudo completar la acción por un conflicto. Inténtalo de nuevo.",
+      "inviteGone": "Esta invitación ya no está pendiente (ha caducado o se ha eliminado). Envía una nueva invitación si la necesitas."
     }
   },
   "consent": {

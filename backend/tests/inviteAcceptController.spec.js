@@ -46,10 +46,24 @@ jest.unstable_mockModule('../server/integrations/brevo/transactionalEmails/sendE
   sendExistingAccountNoticeToUser: jest.fn(),
 }));
 
+jest.unstable_mockModule('../server/integrations/brevo/transactionalEmails/sendEmailVerificationToUser.js', () => ({
+  sendEmailVerificationToUser: jest.fn(),
+}));
+
+jest.unstable_mockModule('../server/models/emailVerificationTokensModel.js', () => ({
+  createEmailVerificationTokenInDb: jest.fn(),
+  consumeEmailVerificationTokenInDb: jest.fn(),
+}));
+
+jest.unstable_mockModule('../server/utils/userDeletionCleanup.js', () => ({
+  cleanupAfterUserDeletion: jest.fn().mockResolvedValue(undefined),
+}));
+
 const { checkTeamInviteValidity, acceptTeamInvite } = await import('../server/controllers/authController.js');
 const { getUserByEmail, canCompanyMemberGrantRoleInDb, createUserInDb } = await import('../server/models/userModel.js');
 const { getTeamInviteByTokenInDb, deleteTeamInviteByIdSafe } = await import('../server/models/teamInvitesModel.js');
 const { logAudit } = await import('../server/config/loggerFunctions.js');
+const { cleanupAfterUserDeletion } = await import('../server/utils/userDeletionCleanup.js');
 
 const mockRes = () => {
   const res = {
@@ -226,9 +240,9 @@ describe('acceptTeamInvite', () => {
     expect(deleteTeamInviteByIdSafe).not.toHaveBeenCalled();
   });
 
-  it('returns 409 and keeps the invite row when the email registered on its own', async () => {
+  it('returns 409 and keeps the invite row when the email registered (and verified) on its own', async () => {
     getTeamInviteByTokenInDb.mockResolvedValue(validInvite);
-    getUserByEmail.mockResolvedValue({ id: 'existing-user' });
+    getUserByEmail.mockResolvedValue({ id: 'existing-user', email_verified_at: new Date() });
     const res = mockRes();
 
     await acceptTeamInvite({ body: { inviteToken: 'invite-token', password: 'Password123' } }, res);
@@ -261,6 +275,33 @@ describe('acceptTeamInvite', () => {
     expect(res.status).toHaveBeenCalledWith(201);
     expect(res.json).toHaveBeenCalledWith({});
     expect(logAudit).toHaveBeenCalledWith(expect.anything(), 'auth.invite.accepted', { entity: 'user', entityId: 'new-user' });
+  });
+
+  it('claims an address held by an unverified account and cleans its company up after the commit', async () => {
+    getTeamInviteByTokenInDb.mockResolvedValue(validInvite);
+    getUserByEmail.mockResolvedValue({ id: 'squatter', email_verified_at: null });
+    const claimedDeletion = { status: 'deleted', companyDeleted: true, companyId: 'squatter-co' };
+    createUserInDb.mockResolvedValue({ status: 'created', user: { id: 'new-user' }, claimedDeletion });
+    const res = mockRes();
+
+    await acceptTeamInvite({ body: { inviteToken: 'invite-token', password: 'Password123' } }, res);
+
+    expect(createUserInDb).toHaveBeenCalled();
+    expect(cleanupAfterUserDeletion).toHaveBeenCalledWith(claimedDeletion);
+    expect(res.status).toHaveBeenCalledWith(201);
+  });
+
+  it('returns 409 and keeps the invite when the holder verified concurrently (in-transaction re-check)', async () => {
+    getTeamInviteByTokenInDb.mockResolvedValue(validInvite);
+    getUserByEmail.mockResolvedValue({ id: 'squatter', email_verified_at: null });
+    createUserInDb.mockResolvedValue({ status: 'already_registered' });
+    const res = mockRes();
+
+    await acceptTeamInvite({ body: { inviteToken: 'invite-token', password: 'Password123' } }, res);
+
+    expect(res.status).toHaveBeenCalledWith(409);
+    expect(deleteTeamInviteByIdSafe).not.toHaveBeenCalled();
+    expect(cleanupAfterUserDeletion).not.toHaveBeenCalled();
   });
 
   it('maps a concurrent-registration P2002 to 409 and keeps the invite row', async () => {

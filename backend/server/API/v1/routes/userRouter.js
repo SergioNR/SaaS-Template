@@ -60,7 +60,7 @@ userRouter.get('/', getUserProfile);
  *   patch:
  *     tags: [User]
  *     summary: Update the password of the logged-in user
- *     description: Validates the current password before setting the new one. In one transaction the hash is replaced, every outstanding password reset token is deleted and every other session of the user is revoked - the current session stays logged in. Replaces the deprecated `PATCH /api/v1/auth/update-user-password`.
+ *     description: Validates the current password before setting the new one. In one transaction the hash is replaced, every outstanding password reset token is deleted and every other session of the user is revoked - the current session stays logged in.
  *     security:
  *       - sessionCookie: []
  *     requestBody:

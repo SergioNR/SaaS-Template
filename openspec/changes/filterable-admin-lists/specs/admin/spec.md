@@ -111,7 +111,7 @@ The system SHALL answer `GET /api/v1/admin/users` with 200 and `{ userCount, use
 
 ### Requirement: Company list
 
-The system SHALL answer `GET /api/v1/admin/companies` with 200 and `{ companyCount, companies, nextCursor }`, where `search` matches the company name and each row carries the company fields, member count `userCount`, a `stripeLinked` boolean and its subscription dates (`created_at`, `updated_at`, `expires_at`) or null. Optional filters SHALL be `stripe_linked` (`true`/`false`) and an inclusive creation date range; `sort` SHALL accept `name` and `created_at`. No Stripe id SHALL be exposed.
+The system SHALL answer `GET /api/v1/admin/companies` with 200 and `{ companyCount, companies, nextCursor }`, where `search` matches the company name and each row carries the company fields, member count `userCount`, a `stripeLinked` boolean and its subscription (`created_at`, `updated_at`, `expires_at`, `status`, `is_paid`) or null. Optional filters SHALL be `stripe_linked` (`true`/`false`) and an inclusive creation date range; `sort` SHALL accept `name` and `created_at`. No Stripe customer or subscription id SHALL be exposed.
 
 #### Scenario: Name search
 
@@ -127,3 +127,8 @@ The system SHALL answer `GET /api/v1/admin/companies` with 200 and `{ companyCou
 
 - **WHEN** a listed company has a Stripe customer
 - **THEN** its row shows `stripeLinked: true` and no Stripe id
+
+#### Scenario: Paid and trial rows distinguishable
+
+- **WHEN** the list holds a paying company and a trial company
+- **THEN** their subscriptions read `status: paid` and `status: trial` respectively

@@ -63,6 +63,7 @@ describe('sanitizerResult', () => {
     'newPassword',
     'currentPassword',
     'inviteToken',
+    'emailVerificationToken',
   ])('redacts the value of the sensitive field %s', (path) => {
     validationResultMock.mockReturnValue({
       isEmpty: () => false,
