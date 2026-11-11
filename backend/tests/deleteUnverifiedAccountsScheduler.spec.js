@@ -44,10 +44,10 @@ describe('deleteUnverifiedAccountsScheduler', () => {
     jest.clearAllMocks();
   });
 
-  it('runs daily at 03:30, never overlaps itself and uses its own advisory lock key', async () => {
+  it('runs daily at 03:45, never overlaps itself and uses its own advisory lock key', async () => {
     const { config } = deleteUnverifiedAccountsScheduler;
 
-    expect(config.cronTime).toBe('30 3 * * *');
+    expect(config.cronTime).toBe('45 3 * * *');
     expect(config.waitForCompletion).toBe(true);
 
     await config.onTick();
