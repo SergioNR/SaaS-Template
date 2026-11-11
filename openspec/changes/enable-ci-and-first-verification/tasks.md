@@ -23,10 +23,14 @@
 
 ## 4. Migrations against real data
 
+The history was squashed into `0_init` (`squash-migrations`, archived). Existing databases still reach the new image through the legacy migrations - run by the last pre-squash image - so 4.1-4.4 use that image (any commit before the squash); 4.5-4.6 use the current one.
+
 - [ ] 4.1 Restore a copy of the production (or most realistic) database into a throwaway Postgres; confirm the role can `CREATE EXTENSION citext` (or pre-create it)
-- [ ] 4.2 Run the duplicate pre-checks of `20261110100000_indexes_fks_citext_emails` manually; resolve case-duplicate emails/invites if any
-- [ ] 4.3 `npx prisma migrate deploy` on the copy; compare row counts before/after for `User`, `Company`, `Subscription`, `TeamInvites`, `PasswordResetTokens`; confirm `sub_…` ids landed in the new Stripe column and orphan deletes removed only true orphans
-- [ ] 4.4 `npx prisma migrate status` reports up to date; `npx prisma migrate diff --from-migrations prisma/migrations --to-schema-datamodel prisma/schema.prisma` is empty
+- [ ] 4.2 With the pre-squash image: run the duplicate pre-checks of the legacy `20261110100000_indexes_fks_citext_emails` migration manually; resolve case-duplicate emails/invites if any
+- [ ] 4.3 With the pre-squash image: `npx prisma migrate deploy` on the copy; compare row counts before/after for `User`, `Company`, `Subscription`, `TeamInvites`, `PasswordResetTokens`; confirm `sub_…` ids landed in the new Stripe column, orphan deletes removed only true orphans, and existing users got `email_verified_at`
+- [ ] 4.4 `npx prisma migrate status` reports up to date on the copy
+- [ ] 4.5 Current image on a fresh Postgres (the `compose.yaml` image): `migrate deploy` applies `0_init`; `npx prisma db seed` succeeds; `pg_dump --schema-only` equals that of a database built with the pre-squash image (confirms the in-process equivalence proof of `squash-migrations`)
+- [ ] 4.6 Current image against the copy from 4.3: the bridge logs `[baseline] complete pre-squash history` and the app boots; against a copy with one `_prisma_migrations` legacy row deleted it refuses to start; repeat on staging
 
 ## 5. Stripe in test mode
 

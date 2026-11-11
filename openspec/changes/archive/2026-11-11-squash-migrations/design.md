@@ -28,7 +28,14 @@ Port Wesel's three outcomes unchanged: no history → nothing (deploy applies `0
 - A fork that edited a legacy migration locally gets "full history" but a different schema → the bridge cannot detect it; documented in the README note.
 - The equivalence diff depends on the Postgres major version; run both sides on the same image as `compose.yaml`.
 
-## Open questions
+## Decisions taken on apply
 
-- Which image tag is "the last pre-squash image" to name in the refusal message (the merge commit of the squash PR's predecessor)?
-- Keep the old migrations in git history only, or also in an `archive/` folder outside `prisma/migrations`? Default: git history only.
+- **Equivalence proof without Docker.** Docker is not available where the squash was authored, so both sides ran in PGlite (Postgres compiled to WASM, in-process, with the `citext` contrib extension) and were compared through a normalized catalog dump instead of `pg_dump --schema-only`: extensions, enums, columns, `pg_get_constraintdef` for every constraint, `pg_indexes` and the reference rows. The dump was proven sensitive with a negative run (a dropped CHECK constraint and grant both show up). The scratch script is not committed; the real-Postgres confirmation is a task of `enable-ci-and-first-verification`.
+- **Squashed before the staging deploy.** The legacy list covers every migration on the branch at squash time, so no environment can hold a migration missing from it; an environment behind that point is refused by the bridge and must deploy the last pre-squash image first. Real-database checks of the bridge moved to `enable-ci-and-first-verification`.
+- **Refusal message** names "the `<branch>-<sha>` tag of the commit before the migration squash" rather than a fixed tag, because no image of this branch exists yet (CI is disabled).
+- **Old migrations** live in git history only.
+
+## Resolved questions
+
+- Last pre-squash image: named generically in the refusal (see above).
+- Old migrations: git history only.

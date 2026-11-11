@@ -38,5 +38,5 @@ No behaviour of the template changes here — this is repository configuration p
 
 ## Out of scope
 
-- Squashing migrations (`squash-migrations`, which depends on this change's migration verification).
+- Squashing migrations (`squash-migrations`, already applied: the history is the `0_init` baseline plus a start-up bridge; the real-database checks it could not run live in task group 4 here).
 - New CI jobs (e2e, image scanning).

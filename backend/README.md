@@ -181,6 +181,8 @@ The included GitHub Actions workflow (`.github/workflows/`) runs the test suite,
 
 The image runs `tini` as PID 1 and `node` directly (so `SIGTERM` triggers the graceful shutdown in `app.js`), applies pending migrations on boot (`start.sh`) and declares a `HEALTHCHECK` against `GET /health`. Build it locally with `docker build -t expressjs-template ./backend`.
 
+**Migration baseline (2026-11-11).** The migration history was squashed into a single `0_init` baseline. On boot, `start.sh` first runs `prisma/baselineSquashedMigrations.js`: a database that ran the complete old history gets `0_init` marked as applied (identical schema), a fresh one simply applies it, and one that stopped part-way through the old history refuses to start - deploy the last image built before the squash first so the old history completes, then this one. A fork that hand-edited a legacy migration is not detected by the bridge; compare its schema before upgrading.
+
 ### Billing safeguards
 
 A checkout is refused with `409 SUBSCRIPTION_ACTIVE` when the stored row tracks an unexpired Stripe subscription (`Subscription.stripe_subscription_id`; trial rows have none) **or** Stripe reports an active, trialing or past-due subscription for the customer. An open Checkout Session for the same plan, billing cycle and price is reused (its URL is returned again); every other open session is expired before a new one is created, so at most one checkout can complete. A concurrent request Stripe is still processing answers `409 CHECKOUT_IN_PROGRESS`.
