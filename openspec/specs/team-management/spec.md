@@ -33,25 +33,6 @@ The system SHALL grant company permissions solely through the caller's company r
 - **WHEN** a `company_member` calls `POST /api/v1/team/invites`
 - **THEN** the API responds 403 with a `message`
 
-### Requirement: Granting and managing rules
-
-The system SHALL let a caller grant a role (invite to it, assign it, resend or revoke an invite for it) only when the role ranks at or below the caller's own. It SHALL let a caller manage an existing member (change their role, remove them) only when the caller strictly outranks every role the member holds and the member is not the caller. Consequently no one can demote or remove a `company_owner` through the team API, and peers cannot manage each other.
-
-#### Scenario: Admin invites an admin
-
-- **WHEN** a `company_admin` invites someone as `company_admin`
-- **THEN** the invite is created
-
-#### Scenario: Admin cannot touch another admin
-
-- **WHEN** a `company_admin` tries to remove or re-role another `company_admin`
-- **THEN** the API responds 403 with a `message`
-
-#### Scenario: Owner cannot demote another owner
-
-- **WHEN** an owner tries to change another owner's role
-- **THEN** the API responds 403 with a `message`
-
 ### Requirement: Team route gates
 
 Every `/api/v1/team` route SHALL require an authenticated session (401 `{}`), a platform role of `user` or `superadmin` (403 `{}` otherwise), company membership (403 with `code: "COMPANY_MEMBERSHIP_REQUIRED"` for users without a company) and the route's company permission (403 with a `message`). Malformed `inviteId`/`userId` path parameters (not UUIDs) SHALL respond 422; unknown paths SHALL respond 404 with a `message`.
@@ -86,17 +67,17 @@ The system SHALL list only invites whose expiry is in the future; expired invite
 
 ### Requirement: Manageable hints and assignable roles
 
-The listing SHALL mark a member `manageable: true` only when the caller strictly outranks every role the member holds and the member is not the caller, mark an invite `manageable: true` when the caller can grant its role, and return as `assignableRoles` the sorted roles at or below the caller's rank. These are hints only; every write endpoint SHALL re-check the rules.
+The listing SHALL mark a member `manageable: true` only when the caller may manage them under the managing rule, mark an invite `manageable: true` when the caller can grant its role, and return as `assignableRoles` the sorted roles at or below the caller's rank. These are hints only; every write endpoint SHALL re-check the rules.
 
 #### Scenario: Owner's view
 
 - **WHEN** an owner lists a team with an admin, a member and another owner
-- **THEN** the admin and member are `manageable: true`, the other owner and the caller are `manageable: false`, and `assignableRoles` is all three roles
+- **THEN** the admin, the member and the other owner are `manageable: true`, the caller is `manageable: false`, and `assignableRoles` is all three roles
 
 #### Scenario: Admin's view
 
 - **WHEN** an admin lists the team
-- **THEN** `assignableRoles` is `["company_admin", "company_member"]`
+- **THEN** `assignableRoles` is `["company_admin", "company_member"]` and owners and other admins are `manageable: false`
 
 ### Requirement: Change a member's role
 
@@ -114,7 +95,7 @@ The system SHALL expose `PATCH /api/v1/team/members/:userId` (requires `team.man
 
 ### Requirement: Role change rejections
 
-The system SHALL reject a role change with: 422 when `roleName` is not one of the three company roles; 409 with a `message` when the target is the caller; 404 with a `message` when the target is not in the caller's company or the role row is missing; 403 with a `message` when the caller cannot grant the new role or does not outrank the target; 409 with a `message` when it would leave the company without an owner.
+The system SHALL reject a role change with: 422 when `roleName` is not one of the three company roles; 409 with a `message` when the target is the caller; 404 with a `message` when the target is not in the caller's company or the role row is missing; 403 with a `message` when the caller cannot grant the new role or may not manage the target; 409 with a `message` when it would leave the company without an owner.
 
 #### Scenario: Bogus role
 
@@ -130,6 +111,11 @@ The system SHALL reject a role change with: 422 when `roleName` is not one of th
 
 - **WHEN** the `userId` belongs to a different company
 - **THEN** the API responds 404
+
+#### Scenario: Owners demote each other concurrently
+
+- **WHEN** the only two owners each demote the other at the same time
+- **THEN** exactly one change succeeds and the other responds 403, leaving one owner
 
 ### Requirement: Role checks are race-safe
 
@@ -160,7 +146,7 @@ The system SHALL expose `DELETE /api/v1/team/members/:userId` (requires `team.re
 
 ### Requirement: Member removal rejections and races
 
-The system SHALL reject a removal with 409 and a `message` when the target is the caller, 404 when the target is not in the caller's company, 403 when the caller does not strictly outrank the target, and 409 when it would remove the last owner. The checks SHALL be repeated under the company lock together with the delete, so a concurrent removal of the same member resolves to 404 rather than an error.
+The system SHALL reject a removal with 409 and a `message` when the target is the caller, 404 when the target is not in the caller's company, 403 when the caller may not manage the target, and 409 when it would remove the last owner. The checks SHALL be repeated under the company lock together with the delete, so a concurrent removal of the same member resolves to 404 rather than an error.
 
 #### Scenario: Remove yourself
 
@@ -171,6 +157,11 @@ The system SHALL reject a removal with 409 and a `message` when the target is th
 
 - **WHEN** two admins remove the same member concurrently
 - **THEN** one responds 200 and the other 404
+
+#### Scenario: Owners remove each other concurrently
+
+- **WHEN** the only two owners each remove the other at the same time
+- **THEN** exactly one removal succeeds and the other responds 403 or 404, and the company keeps an owner
 
 ### Requirement: Create an invite
 
@@ -314,3 +305,32 @@ The SPA SHALL fetch the caller's company permissions at most once per session (f
 
 - **WHEN** the permission fetch fails
 - **THEN** pages leave their actions enabled and rely on the API's 403
+
+### Requirement: Granting and member-management rules
+
+The system SHALL let a caller grant a role (invite to it, assign it, resend or revoke an invite for it) only when the role ranks at or below the caller's own. It SHALL let a caller manage an existing member (change their role, remove them) only when the member is not the caller and either the caller strictly outranks every role the member holds or both hold `company_owner`. Admins and members still cannot manage peers.
+
+#### Scenario: Admin invites an admin
+
+- **WHEN** a `company_admin` invites someone as `company_admin`
+- **THEN** the invite is created
+
+#### Scenario: Admin cannot touch another admin
+
+- **WHEN** a `company_admin` tries to remove or re-role another `company_admin`
+- **THEN** the API responds 403 with a `message`
+
+#### Scenario: Owner demotes another owner
+
+- **WHEN** an owner of a company with two owners changes the other owner's role to `company_admin`
+- **THEN** the API responds 200 and the company has one owner left
+
+#### Scenario: Owner removes another owner
+
+- **WHEN** an owner removes another owner of the same company
+- **THEN** the API responds 200 and the removed owner's account is deleted
+
+#### Scenario: Admin cannot touch an owner
+
+- **WHEN** a `company_admin` tries to remove or re-role a `company_owner`
+- **THEN** the API responds 403 with a `message`
