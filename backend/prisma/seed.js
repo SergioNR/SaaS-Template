@@ -6,7 +6,7 @@ import { isSeedAllowed } from './seedGuard.js';
 const ACME_COMPANY_ID = '5f8b7c2e-1d4a-4f6b-8c3a-2a1b3c4d5e6f';
 
 //* Role ids are only used when a role row does not exist yet (same
-//* deterministic UUIDs as the team_invites_rbac migration). Assignments always
+//* deterministic UUIDs as the 0_init migration's reference rows). Assignments always
 //* look the role up by name, so environments seeded with other ids still work
 const roles = [
   {

@@ -24,6 +24,7 @@ const formatActor = (actorKind) => ({
   self: 'the member themselves',
   team: 'a company admin',
   admin: 'a platform admin',
+  system: 'automatic cleanup (unverified account)',
 }[actorKind] ?? 'unknown');
 
 //* Data minimisation by construction: every template only reads the fields

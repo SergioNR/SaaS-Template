@@ -350,12 +350,17 @@ The system SHALL validate and read every request field from exactly one document
 
 ### Requirement: Credential budgets can be shared across replicas
 
-When `RATE_LIMIT_STORE=postgres`, the system SHALL keep the shared credential budget, the per-account login budget, the password-reset email budget and the password-change budget in a database-backed store, so every replica and restart sees the same counters. Without it (default `memory`) counters SHALL be per process. Store errors SHALL let the request through and log a warning.
+When `RATE_LIMIT_STORE=postgres`, the system SHALL keep the shared credential budget, the per-account login budget, the password-reset and verification email budgets and the password-change budget in a database-backed store, so every replica and restart sees the same counters. Without it (default `memory`) counters SHALL be per process. Store errors SHALL let the request through and log a warning.
 
 #### Scenario: Two replicas share the auth budget
 
 - **WHEN** the shared store is enabled and one IP spreads 11 credential requests within 15 minutes across two replicas
 - **THEN** the 11th request responds 429
+
+#### Scenario: Verification emails across replicas
+
+- **WHEN** the shared store is enabled and one IP requests a 6th verification email within an hour across two replicas
+- **THEN** the API responds 429
 
 #### Scenario: Store unavailable
 

@@ -310,6 +310,19 @@ describe('registerUser', () => {
     expect(createUserInDb.mock.invocationCallOrder[0]).toBeLessThan(notifyCompanyRegistered.mock.invocationCallOrder[0]);
   });
 
+  it('still emits the company-registered event when issuing the verification email fails', async () => {
+    getUserByEmail.mockResolvedValue(null);
+    createUserInDb.mockResolvedValue({ id: 'new-user', company_id: 'company-new' });
+    createEmailVerificationTokenInDb.mockRejectedValueOnce(new Error('token insert failed'));
+    const res = mockRes();
+
+    await registerUser({ body: { username: 'new@acme.test', companyName: 'Acme Corp', password: 'Password123' } }, res);
+    await waitUntilCalled(logError);
+
+    expect(notifyCompanyRegistered).toHaveBeenCalledWith('company-new');
+    expect(logError).toHaveBeenCalledWith('Background user registration failed', expect.any(Error));
+  });
+
   it('emits nothing when a concurrent registration won the unique constraint', async () => {
     getUserByEmail.mockResolvedValue(null);
     createUserInDb.mockRejectedValue(Object.assign(new Error('Unique constraint'), { code: 'P2002' }));

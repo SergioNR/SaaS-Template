@@ -26,7 +26,7 @@ import {
 } from '../models/emailVerificationTokensModel.js';
 import { cleanupAfterUserDeletion } from '../utils/userDeletionCleanup.js';
 import { trackBackground } from '../utils/processLifecycle.js';
-import { notifyCompanyRegistered, notifyInviteAccepted } from '../utils/businessEvents.js';
+import { notifyCompanyRegistered, notifyInviteAccepted, notifyUserDeleted } from '../utils/businessEvents.js';
 import { isPrismaErrorCode, sendMappedWriteError } from '../utils/prismaErrors.js';
 
 //* Detached from the request: the lookup, token creation and email all run
@@ -259,6 +259,9 @@ export const acceptTeamInvite = async (req, res) => {
     //* Stripe/S3 cleanup of the claimed unverified account - after the
     //* commit, never throws (effectively a no-op: it could never pay)
     trackBackground(cleanupAfterUserDeletion(acceptResult.claimedDeletion));
+    //* The claimed account (and its company, if it was the last member) is
+    //* gone - reported like every other deletion, as an automatic one
+    trackBackground(notifyUserDeleted(acceptResult.claimedDeletion, 'system')); // Fire-and-forget - after the commit
   }
 
   logAudit(req, 'auth.invite.accepted', { entity: 'user', entityId: acceptResult.user?.id });
@@ -365,11 +368,13 @@ const registerUserInBackground = async (email, password, companyName) => {
       companyName,
     });
 
-    await issueEmailVerification(createdUser);
-    //* Only here - after an account and its company were actually created.
+    //* Only here - after an account and its company were actually created,
+    //* and before the verification email so a failure there cannot drop it.
     //* The existing-account path and the P2002 race send nothing, so the
     //* events chat stays as enumeration-safe as the response
     trackBackground(notifyCompanyRegistered(createdUser?.company_id)); // Fire-and-forget
+
+    await issueEmailVerification(createdUser);
   } catch (error) {
     //* Concurrent registrations can beat the existence check - the unique
     //* constraint resolves the race, nothing else to do

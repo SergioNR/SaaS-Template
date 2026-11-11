@@ -7,7 +7,7 @@ import { Card, Button, PasswordInput, Text, Alert, Box } from '@mantine/core';
 import { IconAlertCircle } from '@tabler/icons-react';
 import { notifySuccess } from '../../utils/notifications.js';
 
-const PasswordUpdateForm = ({ email: emailProp }) => {
+export const PasswordUpdateForm = ({ email: emailProp }) => {
   const { t } = useTranslation();
   //* The email fills the hidden username field so password managers update
   //* the right saved credential: UserWrapper's outlet context in the user

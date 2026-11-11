@@ -1,0 +1,24 @@
+#* Overlay that builds both images from this checkout instead of pulling the
+#* CI images - for verifying a Dockerfile, migration or nginx change on a real
+#* stack before (or without) CI. Uses compose.yaml's services, `.env` and
+#* checklist, so the backend needs the same variables as a deploy:
+#*   TAG=local docker compose -f compose.yaml -f compose.build.yaml up -d --build --wait
+#* TAG=local keeps the locally built images from overwriting pulled `latest`
+#* tags. DOCKERHUB_USERNAME may be any value (nothing is pushed). Run on
+#* localhost: FRONT_WEB_APP_ORIGIN_URL=http://localhost:8080 and
+#* VITE_SITE_BASE_URL / VITE_API_BASE_URL below default to the local ports.
+services:
+  backend:
+    build:
+      context: ./backend
+
+  frontend:
+    build:
+      context: ./frontend
+      #* Baked into the bundle at build time (see README "CI"). Defaults match
+      #* the loopback ports of compose.yaml
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:3000}
+        VITE_SITE_BASE_URL: ${VITE_SITE_BASE_URL:-http://localhost:8080}
+        VITE_PUBLIC_POSTHOG_KEY: ${VITE_PUBLIC_POSTHOG_KEY:-}
+        VITE_PUBLIC_POSTHOG_HOST: ${VITE_PUBLIC_POSTHOG_HOST:-}

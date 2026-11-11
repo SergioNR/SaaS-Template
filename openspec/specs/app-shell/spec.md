@@ -7,7 +7,7 @@ Owns the SPA frame of the template: the route tree and its four areas (public, a
 
 ### Requirement: The route tree separates public, auth, user and admin areas
 
-The web app SHALL serve four areas: the public site at `/` (see `public-site`); the auth area under `/auth` (login at `/auth` and `/auth/login`, registration, password recovery and restore, invite acceptance); the user area as one guarded layout covering `/dashboard` and `/user/profile`, `/user/billing`, `/user/team`, `/user` redirecting to `/dashboard` replacing history; and the admin area under `/admin` (overview, users, companies, account). Any other path SHALL render the not-found page.
+The web app SHALL serve four areas: the public site at `/` (see `public-site`); the auth area under `/auth` (login at `/auth` and `/auth/login`, registration, password recovery and restore, invite acceptance, email verification); the user area as one guarded layout covering `/dashboard`, `/user/profile`, `/user/billing` and `/user/team` (`/user` redirects to `/dashboard`); and the admin area under `/admin` (overview, users, companies, account). Any other path SHALL render the not-found page.
 
 #### Scenario: Bare user path
 
@@ -18,6 +18,11 @@ The web app SHALL serve four areas: the public site at `/` (see `public-site`); 
 
 - **WHEN** a visitor opens `/auth` or `/auth/login`
 - **THEN** the login page renders inside the auth layout
+
+#### Scenario: Email verification link
+
+- **WHEN** a visitor opens `/auth/verify-email`
+- **THEN** the email verification page renders inside the auth layout
 
 #### Scenario: Admin account page
 

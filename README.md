@@ -9,6 +9,7 @@ Full-stack template: an Express.js backend API with a React (Vite + Mantine) SPA
 | `backend/` | Express.js server — auth, billing, PostgreSQL/Prisma, Docker. See [backend/README.md](backend/README.md) |
 | `frontend/` | React SPA — public site, auth, user/admin areas. See [frontend/README.md](frontend/README.md) |
 | `compose.yaml` / `compose.dev.yaml` | Deploy stacks: the CI-built `latest` / `next` images + Postgres |
+| `compose.build.yaml` | Overlay that builds both images from the checkout instead of pulling them |
 | `.env.example` | Root environment for the deploy stacks, with the deploy checklist |
 | `.github/` | CI workflows (PR gate, image build & push, CodeQL), Dependabot, PR templates |
 
@@ -44,6 +45,12 @@ CI pushes the images to Docker Hub; the root compose stacks run them next to a P
 cp .env.example .env   # then follow the deploy checklist at the top of it
 docker compose pull && docker compose up -d --wait                                        # production (latest images)
 docker compose -f compose.dev.yaml pull && docker compose -f compose.dev.yaml up -d --wait  # staging (next images, ports 8081/3001/5433)
+```
+
+To run the same stack from this checkout without CI images (verifying a Dockerfile, migration or nginx change), add the build overlay - it reads the same `.env`:
+
+```bash
+TAG=local docker compose -f compose.yaml -f compose.build.yaml up -d --build --wait
 ```
 
 The backend runs `prisma migrate deploy` on every start. Set `TAG` (or `NEXT_TAG`) in `.env` to a `<branch>-<short sha>` tag to roll back. `backend/compose.yaml` stays the local, database-only setup.

@@ -1,18 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { IconAlertCircle, IconArrowLeft, IconCheck } from '@tabler/icons-react';
-import {
-  Alert,
-  Anchor,
-  Box,
-  Button,
-  Center,
-  Container,
-  Group,
-  Paper,
-  Text,
-  TextInput,
-  Title,
-} from '@mantine/core';
+import { Alert, Anchor, Box, Button, Center, Container, Group, Paper, Text, TextInput, Title } from '@mantine/core';
 import classes from './ForgotPassword.module.css';
 import { Link } from 'react-router';
 import apiClient from '../../config/API/axiosConfig.js';
@@ -20,7 +8,7 @@ import { useRef, useState } from 'react';
 import Seo from '../Seo.jsx';
 import { logApiError } from '../../utils/logApiError.js';
 
-const ForgotPasswordForm = () => {
+export const RecoverPasswordForm = () => {
   const { t } = useTranslation();
   const [recoverPasswordResponse, setRecoverPasswordResponse] = useState(null);
   const [recoverPasswordError, setRecoverPasswordError] = useState(null);
@@ -49,9 +37,7 @@ const ForgotPasswordForm = () => {
       logApiError('Password reset request failed', error);
       setRecoverPasswordResponse(null);
       setRecoverPasswordError(
-        error.response?.status === 429
-          ? t('auth.errors.tooManyAttempts')
-          : t('auth.recover.error')
+        error.response?.status === 429 ? t('auth.errors.tooManyAttempts') : t('auth.recover.error'),
       );
     } finally {
       submittingRef.current = false;
@@ -109,4 +95,4 @@ const ForgotPasswordForm = () => {
   );
 };
 
-export default ForgotPasswordForm;
+export default RecoverPasswordForm;

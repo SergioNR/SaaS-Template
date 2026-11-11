@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { stripeInstance } from '../../config/stripe.js';
 import { getStripePriceId } from '../../config/planPrices.js';
+import { frontendUrl } from '../../utils/frontendUrl.js';
 
 //* An open session is only worth reusing while the customer still has time to
 //* finish it - one about to expire is replaced by a fresh one instead
@@ -57,7 +58,7 @@ export const createStripeCheckoutSession = async (
   const priceId = getStripePriceId(planName, planBillingCycle);
 
   const checkoutSession = await stripeInstance.checkout.sessions.create({
-    success_url: `${process.env.FRONT_WEB_APP_ORIGIN_URL}/user/billing?status=paid`,
+    success_url: frontendUrl('/user/billing', { status: 'paid' }),
     line_items: [
       {
         price: priceId,
@@ -70,7 +71,7 @@ export const createStripeCheckoutSession = async (
       address: 'auto',
     },
     mode: 'subscription',
-    cancel_url: `${process.env.FRONT_WEB_APP_ORIGIN_URL}/user/billing?status=cancelled`,
+    cancel_url: frontendUrl('/user/billing', { status: 'cancelled' }),
     client_reference_id: companyId,
     adaptive_pricing: {
       enabled: true,

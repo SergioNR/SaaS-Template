@@ -66,8 +66,7 @@
         "invalidCredentials": "La combinación de email y contraseña es incorrecta",
         "internal": "Error interno, por favor inténtalo de nuevo más tarde",
         "emailNotVerified": "Tienes que confirmar tu correo electrónico antes de iniciar sesión. Revisa tu bandeja de entrada (y la carpeta de spam)."
-      },
-      "resendVerification": "Reenviar correo de confirmación"
+      }
     },
     "register": {
       "title": "¡Estamos encantados de verte por aqui!",
@@ -342,6 +341,9 @@
   },
   "user": {
     "panelTitle": "Panel de control",
+    "profile": {
+      "title": "Mi perfil"
+    },
     "noSubscriptionBanner": {
       "title": "Suscripción inactiva",
       "body": "No tienes una suscripción activa. Activa un plan para continuar usando la plataforma.",
@@ -428,6 +430,7 @@
     }
   },
   "billing": {
+    "title": "Facturación",
     "status": "Estado de la suscripción:",
     "statusActive": "Activa",
     "statusTrial": "Prueba gratuita",
@@ -459,12 +462,12 @@
       "portal": "Se ha producido un error obteniendo el área de usuario. Por favor, inténtalo más tarde",
       "forbidden": "Solo el propietario de la empresa puede gestionar la facturación.",
       "subscriptionActive": "Tu empresa ya tiene una suscripción activa. Gestiónala desde el portal del cliente.",
+      "checkoutInProgress": "Ya hay un pago en curso. Espera unos segundos e inténtalo de nuevo.",
       "membershipRequired": "Tu cuenta no pertenece a ninguna empresa, así que no tiene facturación asociada."
     },
     "locked": {
       "manage": "Solo el propietario de la empresa puede gestionar la facturación"
-    },
-    "statusPaid": "De pago"
+    }
   },
   "admin": {
     "areaTitle": "Panel de administración",
@@ -549,7 +552,6 @@
       "count_one": "{{count}} usuario",
       "count_other": "{{count}} usuarios",
       "searchPlaceholder": "Buscar por email…",
-      "roleFilterPlaceholder": "Todos los roles",
       "columns": {
         "email": "Email",
         "role": "Rol",
@@ -575,7 +577,6 @@
         "confirm": "Eliminar"
       },
       "searchLabel": "Buscar usuarios por email",
-      "roleFilterLabel": "Filtrar por rol",
       "deleteLastSuperadmin": "Es el único superadministrador de la plataforma. Concede el rol a otra cuenta antes de eliminarla."
     },
     "userDetail": {

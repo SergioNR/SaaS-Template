@@ -1,9 +1,10 @@
 import { stripeInstance } from '../../config/stripe.js';
+import { frontendUrl } from '../../utils/frontendUrl.js';
 
 export const createStripeCustomerPortalSession = async (stripeCustomerId) => {
   const customerPortalSession = await stripeInstance.billingPortal.sessions.create({
     customer: stripeCustomerId,
-    return_url: `${process.env.FRONT_WEB_APP_ORIGIN_URL}/user/billing`,
+    return_url: frontendUrl('/user/billing'),
   });
   return customerPortalSession;
 };
