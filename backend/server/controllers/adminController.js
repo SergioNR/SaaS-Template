@@ -21,6 +21,8 @@ import { deleteUserAndCleanup } from '../utils/userDeletionCleanup.js';
 import { logAudit } from '../config/loggerFunctions.js';
 import { computeNextCursor, parsePagination } from '../utils/cursorPagination.js';
 import { sendMappedWriteError } from '../utils/prismaErrors.js';
+import { buildAdminListWhere } from '../utils/adminColumnFilters.js';
+import { buildAdminListSort } from '../utils/adminColumnSorts.js';
 
 const WEEK_IN_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -29,13 +31,10 @@ const USER_DELETION_WRITE_ERRORS = {
 };
 
 export const getAllUsers = async (req, res) => {
-  const filters = {};
-
-  //* Whitelist the supported filters - any other query parameter is ignored
-  //* instead of being passed through to the database
-  if (req.query.role) {
-    filters.role = req.query.role;
-  }
+  //* Whitelist the supported filters - the registry only reads its own
+  //* (validated) parameters, any other query parameter is ignored instead of
+  //* being passed through to the database. Applied to the page AND the count
+  const filters = buildAdminListWhere('users', req.query);
 
   if (req.query.search) {
     filters.email = {
@@ -45,10 +44,11 @@ export const getAllUsers = async (req, res) => {
   }
 
   const { limit, cursor } = parsePagination(req.query);
+  const sort = buildAdminListSort('users', req.query.sort, req.query.order);
 
   //* Page and total are independent reads - issued together
   const [users, totalUserCount] = await Promise.all([
-    getAllUsersInDb(filters, { limit, cursor }),
+    getAllUsersInDb(filters, { limit, cursor }, sort),
     countUsersInDb(filters),
   ]);
 
@@ -145,10 +145,11 @@ export const deleteOneUserById = async (req, res) => {
 };
 
 export const getAllCompanies = async (req, res) => {
-  const filters = {};
+  //* Whitelist the supported filters - the registry only reads its own
+  //* (validated) parameters, any other query parameter is ignored instead of
+  //* being passed through to the database. Applied to the page AND the count
+  const filters = buildAdminListWhere('companies', req.query);
 
-  //* Whitelist the supported filter - any other query parameter is ignored
-  //* instead of being passed through to the database
   if (req.query.search) {
     filters.name = {
       contains: req.query.search,
@@ -157,10 +158,11 @@ export const getAllCompanies = async (req, res) => {
   }
 
   const { limit, cursor } = parsePagination(req.query);
+  const sort = buildAdminListSort('companies', req.query.sort, req.query.order);
 
   //* Page and total are independent reads - issued together
   const [companies, totalCompanyCount] = await Promise.all([
-    getAllCompaniesInDb(filters, { limit, cursor }),
+    getAllCompaniesInDb(filters, { limit, cursor }, sort),
     countCompaniesInDb(filters),
   ]);
 

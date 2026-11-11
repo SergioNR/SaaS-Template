@@ -106,11 +106,40 @@ describe('getAllUsers', () => {
         email: { contains: 'acme@test.com', mode: 'insensitive' },
       },
       { limit: 10, cursor: undefined },
+      null, //* default newest-first order
     );
     expect(res.status).toHaveBeenCalledWith(200);
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({ userCount: 0, users: [] }),
     );
+  });
+
+  it('applies the registry filters to the page and the count, and resolves the sort', async () => {
+    getAllUsersInDb.mockResolvedValue([]);
+    countUsersInDb.mockResolvedValue(0);
+
+    await getAllUsers({
+      query: {
+        company_id: '00000000-0000-4000-8000-0000000000c0',
+        last_login_to: '2026-08-12',
+        search: 'acme',
+        sort: 'last_login_at',
+        order: 'desc',
+      },
+    }, mockRes());
+
+    const expectedWhere = {
+      company_id: '00000000-0000-4000-8000-0000000000c0',
+      last_login_at: { lt: new Date('2026-08-13T00:00:00.000Z') },
+      email: { contains: 'acme', mode: 'insensitive' },
+    };
+
+    expect(getAllUsersInDb).toHaveBeenCalledWith(expectedWhere, { limit: 50, cursor: undefined }, expect.objectContaining({
+      key: 'last_login_at',
+      direction: 'desc',
+      orderBy: [{ last_login_at: { sort: 'desc', nulls: 'last' } }, { id: 'desc' }],
+    }));
+    expect(countUsersInDb).toHaveBeenCalledWith(expectedWhere);
   });
 
   it('returns nextCursor when the page is full', async () => {
@@ -303,11 +332,26 @@ describe('getAllCompanies', () => {
     expect(getAllCompaniesInDb).toHaveBeenCalledWith(
       { name: { contains: 'acme', mode: 'insensitive' } },
       { limit: 50, cursor: undefined },
+      null,
     );
     expect(res.status).toHaveBeenCalledWith(200);
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({ companyCount: 0, companies: [] }),
     );
+  });
+
+  it('filters Stripe-linked companies on the page and the count, sorted by name', async () => {
+    getAllCompaniesInDb.mockResolvedValue([]);
+    countCompaniesInDb.mockResolvedValue(0);
+
+    await getAllCompanies({ query: { stripe_linked: 'true', sort: 'name' } }, mockRes());
+
+    expect(getAllCompaniesInDb).toHaveBeenCalledWith(
+      { stripe_id: { not: null } },
+      { limit: 50, cursor: undefined },
+      expect.objectContaining({ key: 'name', direction: 'asc' }),
+    );
+    expect(countCompaniesInDb).toHaveBeenCalledWith({ stripe_id: { not: null } });
   });
 });
 

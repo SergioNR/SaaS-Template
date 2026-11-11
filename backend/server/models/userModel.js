@@ -1,5 +1,5 @@
 import { prisma } from '../config/prismaClient.js';
-import { listPaginationArgs } from '../utils/cursorPagination.js';
+import { resolveListQueryArgs } from '../utils/cursorPagination.js';
 import { posthogUserDeleteAccount, posthogUserSignedUp } from './posthogModel.js';
 import { FREE_TRIAL_DURATION_MS } from '../config/security.js';
 import {
@@ -374,9 +374,25 @@ export const updateUserPasswordInDb = async (userId, newPassword, options = {}) 
   return updatedUser;
 };
 
-export const getAllUsersInDb = async (filters = {}, pagination = {}) => {
+//* `sort` is an admin sort spec (utils/adminColumnSorts.js) or null for
+//* the default newest-first order
+export const getAllUsersInDb = async (filters = {}, pagination = {}, sort = null) => {
+  const listArgs = await resolveListQueryArgs(filters, pagination, sort, (cursorId) => prisma.user.findUnique({
+    where: {
+      id: cursorId,
+    },
+    select: {
+      id: true,
+      [sort.field]: true,
+    },
+  }));
+
+  if (!listArgs) {
+    return [];
+  }
+
   const getAllUsersQuery = await prisma.user.findMany({
-    where: filters,
+    ...listArgs,
     omit: {
       password: true,
     },
@@ -388,8 +404,6 @@ export const getAllUsersInDb = async (filters = {}, pagination = {}) => {
         },
       },
     },
-    //* Newest first with the id tiebreaker - the order the cursor walk relies on
-    ...listPaginationArgs(pagination),
   });
 
   return getAllUsersQuery;

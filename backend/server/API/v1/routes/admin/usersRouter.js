@@ -28,17 +28,10 @@ const userListQueryValidation = [
  *   get:
  *     tags: [Admin]
  *     summary: List all users (superadmin only)
- *     description: Returns the users in the database, newest first, with cursor-based pagination. `search` matches the user email. Requires an authenticated session with the `superadmin` platform role.
+ *     description: Returns the users in the database, newest first unless `sort` is given, with cursor-based pagination. `search` matches the user email; the `role`, `company_id`, `created_*` and `last_login_*` filters combine with it and with each other, and `userCount` counts the matching rows. Any other query parameter is ignored. Requires an authenticated session with the `superadmin` platform role.
  *     security:
  *       - sessionCookie: []
  *     parameters:
- *       - in: query
- *         name: role
- *         required: false
- *         schema:
- *           type: string
- *           enum: [user, superadmin]
- *         description: Optional filter by role. Any other query parameter is ignored.
  *       - $ref: '#/components/parameters/SearchQuery'
  *       - $ref: '#/components/parameters/LimitQuery'
  *       - $ref: '#/components/parameters/CursorQuery'

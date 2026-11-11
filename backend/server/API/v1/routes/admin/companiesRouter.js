@@ -26,7 +26,7 @@ const companyListQueryValidation = [
  *   get:
  *     tags: [Admin]
  *     summary: List all companies (superadmin only)
- *     description: Returns the companies in the database, newest first, with cursor-based pagination (`search` matches the company name), their user count and their subscription (public fields). The Stripe customer id is never exposed - only a `stripeLinked` boolean.
+ *     description: Returns the companies in the database, newest first unless `sort` is given, with cursor-based pagination (`search` matches the company name; the `stripe_linked` and `created_*` filters combine with it and `companyCount` counts the matching rows; any other query parameter is ignored), their user count and their subscription (public fields). The Stripe customer id is never exposed - only a `stripeLinked` boolean.
  *     security:
  *       - sessionCookie: []
  *     parameters:

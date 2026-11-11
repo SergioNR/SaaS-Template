@@ -1,5 +1,5 @@
 import { prisma } from '../config/prismaClient.js';
-import { listPaginationArgs } from '../utils/cursorPagination.js';
+import { resolveListQueryArgs } from '../utils/cursorPagination.js';
 
 //* No `id` - for paid rows it is the Stripe subscription id, which is never exposed
 const subscriptionPublicFields = {
@@ -30,9 +30,25 @@ export const lockCompanyForUpdateInDb = async (tx, companyId) => {
   await tx.$queryRaw`SELECT "id" FROM "Company" WHERE "id" = ${companyId} FOR UPDATE`;
 };
 
-export const getAllCompaniesInDb = async (filters = {}, pagination = {}) => {
+//* `sort` is an admin sort spec (utils/adminColumnSorts.js) or null for
+//* the default newest-first order
+export const getAllCompaniesInDb = async (filters = {}, pagination = {}, sort = null) => {
+  const listArgs = await resolveListQueryArgs(filters, pagination, sort, (cursorId) => prisma.company.findUnique({
+    where: {
+      id: cursorId,
+    },
+    select: {
+      id: true,
+      [sort.field]: true,
+    },
+  }));
+
+  if (!listArgs) {
+    return [];
+  }
+
   const getAllCompaniesQuery = await prisma.company.findMany({
-    where: filters,
+    ...listArgs,
     include: {
       _count: {
         select: {
@@ -43,8 +59,6 @@ export const getAllCompaniesInDb = async (filters = {}, pagination = {}) => {
         select: subscriptionPublicFields,
       },
     },
-    //* Newest first with the id tiebreaker - the order the cursor walk relies on
-    ...listPaginationArgs(pagination),
   });
 
   //* The Stripe customer id is destructured away so it never reaches the
