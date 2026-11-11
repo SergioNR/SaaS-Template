@@ -37,3 +37,14 @@ Port Wesel's always-visible panel (Mantine 9 controlled `Popover.Target` no long
 - Should companies be filterable by subscription state (paid / trial / inactive)? It is derived (`is_paid` + `expires_at`), so it needs a hand-written fragment, and its semantics depend on `clarify-subscription-paid-state`.
 - Should users be filterable by company role (owner/admin/member)? Requires a `UserRole` relation filter.
 - Is a `User(last_login_at, id)` index worth a migration now, or only once a product reports slow lists?
+
+## Decisions taken at implementation
+
+- **No `User(last_login_at, id)` index and no migration.** This is the conservative choice: add the index once `EXPLAIN` on a realistic dataset shows the sort is slow.
+- No subscription-state filter on companies, because its semantics depend on `clarify-subscription-paid-state` (batch B). No company-role filter on users either.
+- **Sorted pages walk by keyset, not Prisma `cursor`.** Option A is kept externally: the `cursor` is still the previous page's last row id. Internally, an explicit `sort` reads the cursor row's sort value and ANDs a keyset condition onto the filters: values in the requested direction, then the same value with a same-direction `id` tiebreaker, then the NULL tail. Prisma's own cursor resolves its position by comparing against the cursor row's value, so it cannot place rows around NULL `last_login_at` / company `name`.
+- The default (no `sort`) order and its walk are unchanged.
+- If the cursor row was deleted, the page is empty.
+- The OpenAPI filter/sort parameters are appended to the two list operations in `config/swagger.js` from the registry. The JSDoc blocks keep only search/limit/cursor, so `openapiCoverage.spec.js` checks the generated parameters against the generated validators.
+- SPA: the panel is an uncontrolled `<form>` (frontend form convention). Revert remounts it with the applied values. Selects are `NativeSelect` and dates are `type="date"` inputs, so no `@mantine/dates` dependency is needed. Free-text search stays page state; filters and sort live in the URL.
+- The two admin list pages were not Prettier-clean before this change. They were not reformatted, to keep the merge with the concurrent frontend PR clean.
