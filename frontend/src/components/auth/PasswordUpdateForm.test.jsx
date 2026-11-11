@@ -69,12 +69,16 @@ describe('PasswordUpdateForm', () => {
     expect(await screen.findByText(message)).toBeInTheDocument();
   });
 
-  it('clears session caches and returns to login with next on 401', async () => {
+  //* The global axios 401 interceptor owns the redirect (and cache reset) -
+  //* the form only stays quiet so no error alert flashes before it
+  it('leaves a 401 to the global interceptor without showing an error', async () => {
     apiClient.patch.mockRejectedValue(httpError(401));
 
     renderAndSubmit();
 
-    expect(await screen.findByTestId('where')).toHaveTextContent('/auth/login?next=%2Fuser%2Fprofile');
-    expect(invalidateSessionCaches).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Cambiar contraseña' })).toBeEnabled());
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('where')).not.toBeInTheDocument();
+    expect(invalidateSessionCaches).not.toHaveBeenCalled();
   });
 });

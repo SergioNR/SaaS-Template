@@ -141,7 +141,7 @@ The system SHALL respond 404 with `{}` when the account no longer exists at dele
 
 ### Requirement: Profile page password form
 
-The SPA's profile page SHALL offer a password-change form (with a hidden username field set to the user's email for password managers) that resets the form and shows a success notice on 200; shows specific messages for `AUTH_CURRENT_PASSWORD_INCORRECT` and `AUTH_PASSWORD_UNCHANGED`, an invalid-input message for other 400/422 responses and a generic message otherwise; and on 401 resets session caches and navigates to login with a safe `next`.
+The SPA's profile page SHALL offer a password-change form (with a hidden username field set to the user's email for password managers) that resets the form and shows a success notice on 200; shows specific messages for `AUTH_CURRENT_PASSWORD_INCORRECT` and `AUTH_PASSWORD_UNCHANGED`, an invalid-input message for other 400/422 responses and a generic message otherwise; and on 401 shows no error, leaving the SPA-wide 401 handling to reset session caches and navigate to login with a safe `next`.
 
 #### Scenario: Wrong current password in the UI
 

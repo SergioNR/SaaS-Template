@@ -53,8 +53,8 @@ describe('AdminAccount', () => {
     expect(screen.getByRole('button', { name: 'Eliminar mi cuenta' })).toBeInTheDocument();
   });
 
-  it('sends an expired session on the password form to login with next', async () => {
-    apiClient.patch.mockRejectedValue(httpError(401));
+  it('sends the password change to the account endpoint', async () => {
+    apiClient.patch.mockResolvedValue({ status: 200, data: {} });
     renderPage();
 
     await screen.findByText('admin@example.com');
@@ -62,7 +62,11 @@ describe('AdminAccount', () => {
     fireEvent.change(screen.getByLabelText(/^Nueva contraseña/), { target: { value: 'NewPassw0rd' } });
     fireEvent.click(screen.getByRole('button', { name: 'Cambiar contraseña' }));
 
-    expect(await screen.findByTestId('where')).toHaveTextContent('/auth/login?next=%2Fadmin%2Faccount');
+    expect(apiClient.patch).toHaveBeenCalledWith('/api/v1/user/password', {
+      currentPassword: 'OldPassw0rd',
+      newPassword: 'NewPassw0rd',
+    });
+    expect(screen.queryByTestId('where')).not.toBeInTheDocument();
   });
 
   it('keeps the forms usable when the profile cannot be loaded', async () => {
