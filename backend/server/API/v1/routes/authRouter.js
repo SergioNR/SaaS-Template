@@ -12,6 +12,7 @@ import {
   acceptTeamInvite,
 } from '../../../controllers/authController.js';
 import { updateUserPassword } from '../../../controllers/userController.js';
+import { passwordChangeLimiter } from '../../../middlewares/passwordChangeRateLimiter.js';
 import { sanitizerResult } from '../../../middlewares/sanitizerResult.js';
 import { authLimiter } from '../../../middlewares/authRateLimiter.js';
 import { passwordResetLimiter } from '../../../middlewares/passwordResetRateLimiter.js';
@@ -400,10 +401,16 @@ authPrivateRouter.post('/logout', logoutUser);
  *         $ref: '#/components/responses/NotFound'
  *       422:
  *         $ref: '#/components/responses/ValidationError'
+ *       429:
+ *         description: Too many failed password change attempts - at most 5 wrong current passwords per account per 15 minutes; answered before the current password is checked
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorMessage'
  */
 //* Deprecated alias of PATCH /api/v1/user/password (same handler) - remove once
 //* every client calls the user route
-authPrivateRouter.patch('/update-user-password', checkSchema(updatePasswordSchema), sanitizerResult, updateUserPassword);
+authPrivateRouter.patch('/update-user-password', checkSchema(updatePasswordSchema), sanitizerResult, passwordChangeLimiter, updateUserPassword);
 
 /**
  * @openapi

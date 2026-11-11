@@ -120,6 +120,7 @@
       "errors": {
         "currentPassword": "La contraseña actual es incorrecta",
         "samePassword": "La nueva contraseña debe ser diferente de la contraseña actual",
+        "tooManyAttempts": "Demasiados intentos fallidos. Espera unos minutos antes de volver a intentarlo.",
         "invalid": "Los datos introducidos no son válidos. Por favor, inténtalo de nuevo.",
         "unexpected": "Ha ocurrido un error inesperado. Por favor, inténtalo de nuevo."
       }

@@ -8,6 +8,7 @@ jest.unstable_mockModule('express-rate-limit', () => ({
 
 jest.unstable_mockModule('../server/config/loggerFunctions.js', () => ({
   logRateLimited: jest.fn(),
+  logWarn: jest.fn(),
 }));
 
 rateLimitMock.mockImplementation((options) => options);

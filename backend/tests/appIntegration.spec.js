@@ -280,18 +280,22 @@ const OWNER = {
 
 //* Logs the seeded-like owner in and returns its session cookie. Counts
 //* against authLimiter like any login
-const loginAsOwner = async () => {
+//* `clientIp` (sent as X-Forwarded-For, TRUST_PROXY=1) gives a spec its own
+//* per-IP budgets - the global slow-down otherwise delays every request of
+//* this file once the shared loopback IP passed 30 requests
+const loginAsOwner = async (user = OWNER, { clientIp } = {}) => {
   prismaMock.user.findUnique.mockResolvedValueOnce({
-    ...OWNER,
+    ...user,
     password: await bcrypt.hash('Password123!', 4),
   });
 
-  authLimiterHits += 1;
-  const response = await request(app)
+  if (!clientIp) authLimiterHits += 1;
+  const login = request(app)
     .post('/api/v1/auth/login')
     .set('Origin', FRONT_ORIGIN)
-    .set('X-Forwarded-Proto', 'https')
-    .send({ username: OWNER.email, password: 'Password123!' });
+    .set('X-Forwarded-Proto', 'https');
+  if (clientIp) login.set('X-Forwarded-For', clientIp);
+  const response = await login.send({ username: user.email, password: 'Password123!' });
 
   expect(response.status).toBe(200);
 
@@ -369,6 +373,68 @@ describe('access line request id', () => {
     expect(accessLine.res.statusCode).toBe(500);
     expect(errorLine).toBeDefined();
     expect(errorLine.context.additionalInfo.requestId).toBe(accessLine.reqId);
+  });
+});
+
+describe('password change budget', () => {
+  //* The session lookup returns the user; the password lookup (select
+  //* password) returns its hash
+  const servePasswordChangeUser = async (user) => {
+    const passwordHash = await bcrypt.hash('Password123!', 4);
+
+    prismaMock.user.findUnique.mockImplementation(async (args) => (
+      args?.select?.password ? { password: passwordHash } : user
+    ));
+  };
+
+  const changePassword = (cookie, currentPassword, newPassword = 'NewPassword123', clientIp = '203.0.113.10') => request(app)
+    .patch('/api/v1/user/password')
+    .set('Origin', FRONT_ORIGIN)
+    .set('X-Forwarded-Proto', 'https')
+    .set('X-Forwarded-For', clientIp)
+    .set('Cookie', cookie)
+    .send({ currentPassword, newPassword });
+
+  afterEach(() => {
+    prismaMock.user.findUnique.mockReset();
+  });
+
+  it('answers 429 on the 6th attempt after 5 wrong current passwords, even with the right one', async () => {
+    const user = { ...OWNER, id: '00000000-0000-4000-8000-0000000000b1', email: 'guess@acme.test' };
+    const cookie = await loginAsOwner(user, { clientIp: '203.0.113.10' });
+    await servePasswordChangeUser(user);
+
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const response = await changePassword(cookie, 'WrongPassword1');
+
+      expect(response.status).toBe(400);
+      expect(response.body.code).toBe('AUTH_CURRENT_PASSWORD_INCORRECT');
+    }
+
+    const throttled = await changePassword(cookie, 'Password123!');
+
+    expect(throttled.status).toBe(429);
+    expect(throttled.body).toEqual({ message: 'Too many failed password change attempts - please try again later' });
+  });
+
+  it('does not count unchanged-password rejections nor validation errors', async () => {
+    const user = { ...OWNER, id: '00000000-0000-4000-8000-0000000000b2', email: 'careful@acme.test' };
+    const cookie = await loginAsOwner(user, { clientIp: '203.0.113.11' });
+    await servePasswordChangeUser(user);
+
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const unchanged = await changePassword(cookie, 'Password123!', 'Password123!', '203.0.113.11');
+      expect(unchanged.status).toBe(400);
+      expect(unchanged.body.code).toBe('AUTH_PASSWORD_UNCHANGED');
+
+      const invalid = await changePassword(cookie, 'Password123!', 'short', '203.0.113.11');
+      expect(invalid.status).toBe(422);
+    }
+
+    const wrong = await changePassword(cookie, 'WrongPassword1', 'NewPassword123', '203.0.113.11');
+
+    expect(wrong.status).toBe(400);
+    expect(wrong.body.code).toBe('AUTH_CURRENT_PASSWORD_INCORRECT');
   });
 });
 

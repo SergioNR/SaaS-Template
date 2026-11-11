@@ -1,5 +1,6 @@
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { logRateLimited } from '../config/loggerFunctions.js';
+import { sharedCredentialLimiterOptions } from '../config/rateLimitStore.js';
 
 //* Per-account brute-force guard for login, keyed by the normalized email
 //* (`username`) together with the client IP. The account part throttles
@@ -19,6 +20,9 @@ export const loginAccountLimiter = rateLimit({
   keyGenerator: loginAccountKey,
   standardHeaders: 'draft-8',
   legacyHeaders: false,
+  //* Shared across replicas when RATE_LIMIT_STORE=postgres; fails open.
+  //* The key already carries its own `login:` namespace
+  ...sharedCredentialLimiterOptions('rl:'),
   handler: (req, res /* , next, options */) => {
     logRateLimited(req);
     res.status(429).json({

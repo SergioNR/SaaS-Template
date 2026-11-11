@@ -8,4 +8,5 @@ export const ADVISORY_LOCK_KEYS = {
   cronTeamInvites: 7300002,
   cronPendingFileUploads: 7300003,
   cronExpiredSessions: 7300004,
+  cronExpiredRateLimitHits: 7300005,
 };

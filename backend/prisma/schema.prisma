@@ -176,3 +176,16 @@ enum UserRoles {
   user
   superadmin
 }
+
+//* Shared store of the credential-path rate limiters (RATE_LIMIT_STORE=postgres)
+//* so budgets hold across replicas and restarts. `key` is the limiter prefix
+//* + its client key; `reset_at` is written and compared with the database
+//* clock (timestamptz), so replicas with skewed clocks agree on the window.
+//* Expired rows are purged by cron/deleteExpiredRateLimitHitsScheduler.js
+model RateLimitHit {
+  key      String   @id
+  hits     Int
+  reset_at DateTime @db.Timestamptz(3)
+
+  @@index([reset_at])
+}

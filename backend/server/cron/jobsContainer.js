@@ -3,6 +3,7 @@ import { deletePasswordResetTokensScheduler } from './deletePasswordResetTokensS
 import { deleteTeamInvitesScheduler } from './deleteTeamInvitesScheduler.js';
 import { deletePendingFileUploadsScheduler } from './deletePendingFileUploadsScheduler.js';
 import { deleteExpiredSessionsScheduler } from './deleteExpiredSessionsScheduler.js';
+import { deleteExpiredRateLimitHitsScheduler } from './deleteExpiredRateLimitHitsScheduler.js';
 
 export const startCronJobs = () => {
   logInfo('Starting cron jobs');
@@ -11,6 +12,7 @@ export const startCronJobs = () => {
     deleteTeamInvitesScheduler.start();
     deletePendingFileUploadsScheduler.start();
     deleteExpiredSessionsScheduler.start();
+    deleteExpiredRateLimitHitsScheduler.start();
   } catch (error) {
     logError('error on startCronJobs', error);
   }
@@ -27,6 +29,7 @@ export const stopCronJobs = () => {
       deleteTeamInvitesScheduler.stop(),
       deletePendingFileUploadsScheduler.stop(),
       deleteExpiredSessionsScheduler.stop(),
+      deleteExpiredRateLimitHitsScheduler.stop(),
     ]);
   } catch (error) {
     logError('error on stopCronJobs', error);

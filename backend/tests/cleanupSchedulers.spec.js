@@ -24,6 +24,12 @@ jest.unstable_mockModule('../server/config/prismaClient.js', () => ({
   },
 }));
 
+const deleteExpiredRateLimitHitsInDb = jest.fn().mockResolvedValue(0);
+
+jest.unstable_mockModule('../server/models/rateLimitModel.js', () => ({
+  deleteExpiredRateLimitHitsInDb,
+}));
+
 jest.unstable_mockModule('../server/config/loggerFunctions.js', () => ({
   logError: jest.fn(),
   logInfo: jest.fn(),
@@ -33,6 +39,7 @@ jest.unstable_mockModule('../server/config/loggerFunctions.js', () => ({
 const { deletePasswordResetTokensScheduler } = await import('../server/cron/deletePasswordResetTokensScheduler.js');
 const { deleteTeamInvitesScheduler } = await import('../server/cron/deleteTeamInvitesScheduler.js');
 const { deleteExpiredSessionsScheduler, deleteExpiredSessions } = await import('../server/cron/deleteExpiredSessionsScheduler.js');
+const { deleteExpiredRateLimitHitsScheduler, deleteExpiredRateLimitHits } = await import('../server/cron/deleteExpiredRateLimitHitsScheduler.js');
 const { runExclusiveCronTick } = await import('../server/cron/exclusiveCronTick.js');
 const { ADVISORY_LOCK_KEYS } = await import('../server/config/advisoryLockKeys.js');
 const { logInfo } = await import('../server/config/loggerFunctions.js');
@@ -43,6 +50,7 @@ describe.each([
   ['deletePasswordResetTokensScheduler', () => deletePasswordResetTokensScheduler, '0 3 * * *', 'deleteExpiredPasswordResetTokens', 'cronPasswordResetTokens', () => deleteExpiredPasswordResetTokens],
   ['deleteTeamInvitesScheduler', () => deleteTeamInvitesScheduler, '15 3 * * *', 'deleteExpiredTeamInvites', 'cronTeamInvites', () => deleteExpiredTeamInvites],
   ['deleteExpiredSessionsScheduler', () => deleteExpiredSessionsScheduler, '7-59/15 * * * *', 'deleteExpiredSessions', 'cronExpiredSessions', () => deleteExpiredSessions],
+  ['deleteExpiredRateLimitHitsScheduler', () => deleteExpiredRateLimitHitsScheduler, '30 3 * * *', 'deleteExpiredRateLimitHits', 'cronExpiredRateLimitHits', () => deleteExpiredRateLimitHits],
 ])('%s', (_name, getJob, cronTime, jobName, lockKeyName, getTask) => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -112,5 +120,36 @@ describe('deleteExpiredSessions', () => {
 
   it('runs off the quarter-hour so it never starts with the upload sweep', () => {
     expect(deleteExpiredSessionsScheduler.config.cronTime).not.toBe('*/15 * * * *');
+  });
+});
+
+describe('deleteExpiredRateLimitHits', () => {
+  const originalStore = process.env.RATE_LIMIT_STORE;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  afterAll(() => {
+    if (originalStore === undefined) delete process.env.RATE_LIMIT_STORE;
+    else process.env.RATE_LIMIT_STORE = originalStore;
+  });
+
+  it('purges the shared store and logs the count when it is enabled', async () => {
+    process.env.RATE_LIMIT_STORE = 'postgres';
+    deleteExpiredRateLimitHitsInDb.mockResolvedValueOnce(5);
+
+    await deleteExpiredRateLimitHits();
+
+    expect(deleteExpiredRateLimitHitsInDb).toHaveBeenCalledTimes(1);
+    expect(logInfo).toHaveBeenCalledWith('Deleted 5 expired rate-limit counter(s)');
+  });
+
+  it('does nothing with the memory store', async () => {
+    delete process.env.RATE_LIMIT_STORE;
+
+    await deleteExpiredRateLimitHits();
+
+    expect(deleteExpiredRateLimitHitsInDb).not.toHaveBeenCalled();
   });
 });
