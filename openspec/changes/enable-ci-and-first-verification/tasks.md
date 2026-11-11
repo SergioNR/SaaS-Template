@@ -37,6 +37,25 @@ The history was squashed into `0_init` (`squash-migrations`, archived). Existing
 - [ ] 5.1 Staging with Stripe test keys + `stripe listen --forward-to`: trial company → checkout with a test card → webhook marks paid; portal opens for a company with a billing id; cancellation in the portal syncs; company deletion tears down billing
 - [ ] 5.2 Note any discrepancy against the `billing` spec and open fixes
 
-## 6. Close-out
+## 6. Brevo templates (per environment, dashboard access)
 
-- [ ] 6.1 Update README "CI" if variables/environments changed; tick these tasks with links to the runs/PRs
+From the archived `fix-auth-registration-gaps` (1.1, 1.4) and `add-email-verification` (5.2): emailed links are now built in code and passed as full-URL params.
+
+- [ ] 6.1 Record what link the live reset and invite templates use today; confirm none links to `/auth/reset-password`
+- [ ] 6.2 Switch the reset template to `{{ params.resetPasswordUrl }}` and the invite template to `{{ params.acceptInviteUrl }}`
+- [ ] 6.3 Create the email-verification template (`{{ params.emailVerificationUrl }}`) and set `BREVO_VERIFY_EMAIL_TEMPLATE_ID` - deployed environments refuse to boot without it
+
+## 7. Manual checks the 2026-11-10/11 batches could not run
+
+Each is covered by automated specs; these confirm the behaviour against real infrastructure. Details in each archived change's `tasks.md` under `changes/archive/`.
+
+- [ ] 7.1 Database: `npx prisma db seed` gives verified seed accounts (`add-email-verification` 1.2); admin lists - filter, sort and walk two pages on a seeded DB (`filterable-admin-lists` 4.3)
+- [ ] 7.2 Two API replicas on one database: one session-prune tick per slot (`share-cron-alert-state-across-replicas` 3.2); with `RATE_LIMIT_STORE=postgres` the 11th auth request across both answers 429 (`distributed-rate-limits` 3.3)
+- [ ] 7.3 Logs and alerts: access line `reqId` equals `X-Request-Id` (`fix-access-log-request-id` 2.2); unreachable database → alert shows the error code (`include-error-code-in-alerts` 4.2); unhandled rejection → alert arrives before exit (`harden-process-lifecycle` 3.2)
+- [ ] 7.4 Telegram business events with a test bot: register, accept an invite, Stripe test checkout and cancel, delete the account → one message each, no emails or ids (`add-telegram-business-events` 4.1)
+- [ ] 7.5 Email verification end to end with Brevo: register → email → verify → login; squatted address claimed by invite and by reset (`add-email-verification` 7.2)
+- [ ] 7.6 Browser: session caches reset across two logins on one tab (`fix-session-cache-invalidation-gaps` 3.2); PostHog test key - consent reset from the sidebar and superadmin identify (`consent-controls-everywhere` 3.2); backend stopped on `/dashboard` → error with retry (`show-billing-load-errors` 4.2); two-superadmin seed - password change, self-deletion, last-superadmin refusal on `/admin/account` (`superadmin-self-service` 4.3)
+
+## 8. Close-out
+
+- [ ] 8.1 Update README "CI" if variables/environments changed; tick these tasks with links to the runs/PRs

@@ -18,6 +18,8 @@ No behaviour of the template changes here — this is repository configuration p
 - Protect `latest` and `next`: PR required, required checks `Test, lint and build` and `Analyze (javascript-typescript)`, no force-push.
 - First CI run on a PR into `next`; first image push from `next`.
 - Verify the images and compose stacks locally and on staging, run the two new migrations against a copy of real data, and walk the Stripe flows in test mode.
+- Update the Brevo templates for the code-built links and create the verification template in every environment.
+- Run the manual checks the 2026-11-10/11 OpenSpec batches could not (no database, Telegram, Brevo or browser where they were built) - collected in task group 7.
 - Record findings (and fix PRs for anything broken) under this change's tasks.
 
 ## Capabilities
