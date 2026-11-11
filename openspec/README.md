@@ -22,28 +22,34 @@ npx @fission-ai/openspec@1.16.0 validate --specs --changes --strict
 ```
 
 Then `/opsx:apply <change>` (Claude Code) or `/opsx-apply <change>` (Kilo),
-tick tasks as they land, ship the spec delta in the same PR as the code, and
-`/opsx:archive <change>` after merge.
+tick tasks as they land, and finish the PR with `/opsx:archive <change>` so the
+spec update merges together with the code.
 
-## Suggested order
+## Open work
 
-Changes that touch the same requirement say so in their proposal — whichever
-archives second rebases its delta onto the updated spec.
+Every change from the 2026-11-10 baseline is applied and archived except the
+two below. Both are blocked on things outside the repository, not on code.
 
-| Step | Change | Why here |
-| --- | --- | --- |
-| 1 | `enable-ci-and-first-verification` | Re-enables the PR gate and runs the never-executed images, compose stacks and migrations — everything else relies on CI |
-| 2 | `restrict-validator-field-locations` | Live 500 / credentials-in-URL bug; base for `filterable-admin-lists` |
-| 3 | `fix-access-log-request-id`, `include-error-code-in-alerts`, `harden-process-lifecycle` | Make production incidents diagnosable |
-| 4 | `share-cron-alert-state-across-replicas` | Needs a migration — before `squash-migrations` |
-| 5 | `fix-auth-registration-gaps` → `retire-legacy-password-route` → `add-email-verification` | Same `auth` requirements; this order is what the deltas assume |
-| 6 | `tighten-team-invite-rules`, `allow-owner-demotion` | Team rules |
-| 7 | `clarify-subscription-paid-state` → `show-billing-load-errors` | Breaking `is_paid` change first; the billing UI builds on it |
-| 8 | `harden-remaining-forms`, `fix-session-cache-invalidation-gaps`, `fix-canonical-url-joining` | Small frontend fixes |
-| 9 | `consent-controls-everywhere`, `superadmin-self-service` | Both edit the private navigation shell — merge the second onto the first |
-| 10 | `distributed-rate-limits`, `add-telegram-business-events` | New capabilities for multi-replica / ops |
-| 11 | `squash-migrations` | After every change that adds a migration has landed |
-| 12 | `upgrade-held-dependencies` | When the held releases clear the 7-day cooldown / gain peer support |
-| — | `filterable-admin-lists` (optional) | Whenever needed |
+| Change | Waiting on |
+| --- | --- |
+| `enable-ci-and-first-verification` | A repo admin (re-enable the workflow, Actions variables, `next` environment, branch protection), Docker and a copy of real data, Brevo dashboard access, and the manual checks the applied changes could not run (task groups 6-7) |
+| `upgrade-held-dependencies` | Dates and upstream releases - the unblock date of each group is in its proposal; swagger-jsdoc is already replaced |
+
+New work starts with `/opsx:propose`. Changes that touch the same requirement
+say so in their proposal - whichever archives second rebases its delta onto the
+updated spec.
+
+## History
+
+`changes/archive/` holds the applied changes with their decisions
+(`design.md`) and any task that needed infrastructure the implementer did not
+have (marked "not run"; collected in `enable-ci-and-first-verification`).
+Applied on 2026-11-10/11, in dependency order: validator field locations →
+diagnosability (request-id access lines, error codes in alerts, process
+lifecycle) → cron alert state across replicas → auth (registration gaps →
+legacy password route retired → email verification) → team rules → billing
+(`is_paid` → billing load errors) → frontend fixes and consent / superadmin
+self-service → shared rate limits, Telegram business events, admin list
+filters → migration squash.
 
 Forks: the per-fork placeholder work is the root README "Forking checklist", not an open change.

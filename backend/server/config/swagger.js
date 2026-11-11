@@ -1,4 +1,4 @@
-import swaggerJsdoc from 'swagger-jsdoc';
+import { buildOpenapiDocument } from '../utils/openapiAnnotations.js';
 import { SESSION_COOKIE_NAME } from './security.js';
 import { buildAdminListFilterParameters } from '../utils/adminColumnFilters.js';
 import { buildAdminListSortParameters } from '../utils/adminColumnSorts.js';
@@ -385,15 +385,16 @@ const swaggerOptions = {
       },
     },
   },
+  //* Globs relative to backend/ whose `@openapi` blocks are merged in
   apis: [
-    './server/routers/indexRouter.js',
-    './server/routers/docsRouter.js',
-    './server/API/v1/routes/**/*.js',
-    './server/webhooks/webhooksRouter.js',
+    'server/routers/indexRouter.js',
+    'server/routers/docsRouter.js',
+    'server/API/v1/routes/**/*.js',
+    'server/webhooks/webhooksRouter.js',
   ],
 };
 
-export const openapiSpecification = swaggerJsdoc(swaggerOptions);
+export const openapiSpecification = buildOpenapiDocument(swaggerOptions.definition, swaggerOptions.apis);
 
 //* The admin list filter and sort parameters are generated from the same
 //* registry as their validators and Prisma fragments

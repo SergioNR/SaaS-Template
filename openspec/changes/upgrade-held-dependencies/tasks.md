@@ -25,9 +25,9 @@
 
 ## 5. Replace swagger-jsdoc (backend)
 
-- [ ] 5.1 Snapshot the current generated OpenAPI document to a test fixture
-- [ ] 5.2 Implement the option chosen in design.md; remove `swagger-jsdoc`
-- [ ] 5.3 Verify: generated document deep-equals the snapshot; `openapiCoverage.spec.js`, `docsRouter.spec.js` pass; `npm ls glob minimatch` no longer shows the swagger-jsdoc copies; `npm audit --omit=dev` clean of them
+- [x] 5.1 Snapshot the current generated OpenAPI document (one-time, outside the repo: the coverage spec stays the ongoing guard - a committed fixture would need regenerating on every route doc change)
+- [x] 5.2 Option B from design.md: `server/utils/openapiAnnotations.js` (`extractOpenapiBlocks`, `mergeOpenapiAnnotations` with swagger-jsdoc's merge rules, `buildOpenapiDocument` with `fs.globSync`) on the maintained `yaml` package; `swagger-jsdoc` removed; spec'd in `tests/openapiAnnotations.spec.js`
+- [x] 5.3 Verified: generated document deep-equals the snapshot (path order is now alphabetical within each `apis` glob instead of filesystem order); `openapiCoverage.spec.js`, `docsRouter.spec.js` pass; `npm ls glob minimatch` shows only dev-tool copies; `npm audit --omit=dev` reports 0 vulnerabilities
 
 ## 6. Close-out
 

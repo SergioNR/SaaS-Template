@@ -11,7 +11,7 @@ Two of the held items need a choice rather than a version bump: what replaces `s
 The backend builds its OpenAPI document from `@openapi` JSDoc blocks in the routers (`server/config/swagger.js`), served only on local development (`api-hardening`: "API documentation only on local development") and checked by `tests/openapiCoverage.spec.js`.
 
 - **A. Maintained JSDoc→OpenAPI generator with the same comment format (recommended to evaluate first).** Smallest diff; keeps docs next to routes. Must be verified: maintenance activity, ESM support, no vulnerable transitive `glob`.
-- B. Thin in-repo extractor: read the router files listed explicitly in `swagger.js`, parse `@openapi` blocks with a YAML parser (`js-yaml`, today only a dev-transitive dependency — it would become a direct one), merge into the base definition. ~50 lines, no glob dependency; we own the code.
+- **B. Thin in-repo extractor - chosen on apply (2026-11-11).** Option A was not pursued: any third-party generator would bring back the dependency-maintenance risk this replaces, while B is ~100 lines with no glob dependency (Node's `fs.globSync`). Parser: the `yaml` package (what swagger-jsdoc itself used) rather than `js-yaml`. Original note: read the router files listed explicitly in `swagger.js`, parse `@openapi` blocks with a YAML parser (`js-yaml`, today only a dev-transitive dependency — it would become a direct one), merge into the base definition. ~50 lines, no glob dependency; we own the code.
 - C. Static `openapi.yaml` (or JS object) next to the routers. Removes comment parsing but separates docs from routes — drift risk, mitigated only by the coverage spec.
 
 Acceptance for any option: the generated document is deep-equal to today's (snapshot it before switching).
