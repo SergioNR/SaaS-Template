@@ -463,6 +463,35 @@
       "stripeNotLinked": "No vinculada"
     },
     "loadError": "No se pudo cargar la información. Inténtalo de nuevo más tarde.",
+    "filters": {
+      "title": "Filtros",
+      "apply": "Aplicar filtros",
+      "clear": "Quitar filtros",
+      "revert": "Deshacer cambios",
+      "activeCount_one": "{{count}} filtro activo",
+      "activeCount_other": "{{count}} filtros activos",
+      "anyOption": "Cualquiera",
+      "rangeFrom": "{{field}} desde",
+      "rangeTo": "{{field}} hasta",
+      "sortBy": "Ordenar por {{column}}",
+      "invalid": "Algún filtro u orden no es válido. Revisa los valores (fechas con formato AAAA-MM-DD, la fecha inicial no puede ser posterior a la final) y vuelve a aplicarlos.",
+      "fields": {
+        "role": "Rol",
+        "company_id": "ID de empresa",
+        "created": "Registro",
+        "last_login": "Último acceso",
+        "stripe_linked": "Cliente de Stripe"
+      },
+      "placeholders": {
+        "company_id": "UUID de la empresa"
+      },
+      "options": {
+        "stripe_linked": {
+          "true": "Con cliente de Stripe",
+          "false": "Sin cliente de Stripe"
+        }
+      }
+    },
     "backToUsers": "Volver a usuarios",
     "backToCompanies": "Volver a empresas",
     "overview": {
