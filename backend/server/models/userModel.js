@@ -11,6 +11,7 @@ import { ADVISORY_LOCK_KEYS } from '../config/advisoryLockKeys.js';
 import { deleteUserSessionsInTx } from './sessionModel.js';
 import { deleteUserPasswordResetTokensInTx } from './passwordResetTokensModel.js';
 import { hashSecureToken } from '../utils/secureToken.js';
+import { toPublicSubscription } from '../config/stripeSubscriptionStatuses.js';
 import { canGrantRole, canManageMember, rolesGrantableBy } from '../utils/companyRoleHierarchy.js';
 
 const COMPANY_OWNER_ROLE = 'company_owner';
@@ -667,11 +668,13 @@ export const getUserDetailInDb = async (userId) => {
           name: true,
           stripe_id: true,
           Subscription: {
+            //* No row id; the Stripe subscription id is read only to derive
+            //* status / is_paid and dropped by toPublicSubscription
             select: {
-              id: true,
               created_at: true,
               updated_at: true,
               expires_at: true,
+              stripe_subscription_id: true,
             },
           },
         },
@@ -694,7 +697,7 @@ export const getUserDetailInDb = async (userId) => {
         stripeLinked: Boolean(Company.stripe_id),
         //* The schema models Company -> Subscription as a list with a unique
         //* FK, so the include always returns an array of 0 or 1 rows
-        subscription: Company.Subscription[0] ?? null,
+        subscription: toPublicSubscription(Company.Subscription[0] ?? null),
       }
       : null,
   };

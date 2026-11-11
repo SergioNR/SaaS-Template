@@ -11,6 +11,7 @@ import {
 } from '../models/companyModel.js';
 import {
   countActiveSubscriptionsInDb,
+  countActiveTrialsInDb,
   countTotalSubscriptionsInDb,
 } from '../models/subscriptionModel.js';
 import {
@@ -192,6 +193,7 @@ export const getAdminStats = async (req, res) => {
     totalCompanyCount,
     totalSubscriptionCount,
     activeSubscriptionCount,
+    activeTrialCount,
     activeSessionCount,
   ] = await Promise.all([
     countUsersInDb(),
@@ -200,6 +202,7 @@ export const getAdminStats = async (req, res) => {
     countCompaniesInDb(),
     countTotalSubscriptionsInDb(),
     countActiveSubscriptionsInDb(),
+    countActiveTrialsInDb(),
     countActiveSessionsInDb(),
   ]);
 
@@ -211,6 +214,7 @@ export const getAdminStats = async (req, res) => {
       totalCompanies: totalCompanyCount,
       totalSubscriptions: totalSubscriptionCount,
       activeSubscriptions: activeSubscriptionCount,
+      activeTrials: activeTrialCount,
       activeSessions: activeSessionCount,
     },
   });

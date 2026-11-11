@@ -1,5 +1,6 @@
 import { prisma } from '../config/prismaClient.js';
 import { lockCompanyForUpdateInDb } from './companyModel.js';
+import { toPublicSubscription } from '../config/stripeSubscriptionStatuses.js';
 
 const subscriptionStateFields = {
   stripe_subscription_id: true,
@@ -171,11 +172,10 @@ export const getSubscriptionPublicDataInDb = async (companyId) => {
     return null;
   }
 
-  const { Company, stripe_subscription_id: stripeSubscriptionId, ...publicData } = subscriptionData;
+  const { Company, ...subscriptionRow } = subscriptionData;
 
   return {
-    ...publicData,
-    is_paid: Boolean(stripeSubscriptionId),
+    ...toPublicSubscription(subscriptionRow),
     has_billing_id: Boolean(Company?.stripe_id),
   };
 };
@@ -186,11 +186,14 @@ export const countTotalSubscriptionsInDb = async () => {
   return totalSubscriptionCount;
 };
 
-//* Mirrors the client-side definition of an active subscription:
-//* an existing `expires_at` in the future (null counts as inactive)
+//* Active PAID subscriptions - the isStoredSubscriptionActive definition
+//* (Stripe-backed and unexpired) as a count; trials are counted apart
 export const countActiveSubscriptionsInDb = async () => {
   const activeSubscriptionCount = await prisma.subscription.count({
     where: {
+      stripe_subscription_id: {
+        not: null,
+      },
       expires_at: {
         gt: new Date(),
       },
@@ -198,4 +201,18 @@ export const countActiveSubscriptionsInDb = async () => {
   });
 
   return activeSubscriptionCount;
+};
+
+//* Running trials: not Stripe-backed and unexpired
+export const countActiveTrialsInDb = async () => {
+  const activeTrialCount = await prisma.subscription.count({
+    where: {
+      stripe_subscription_id: null,
+      expires_at: {
+        gt: new Date(),
+      },
+    },
+  });
+
+  return activeTrialCount;
 };

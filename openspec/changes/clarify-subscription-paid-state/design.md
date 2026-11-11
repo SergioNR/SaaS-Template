@@ -30,3 +30,10 @@ Status depends on `stripe_subscription_id`, which must never leave the model; co
 
 - Add `trial_ended` vs `ended` (expired trial vs churned paid) for admins? Recommended: not now; if wanted, it needs only `stripe_subscription_id` presence on an expired row and can be a fourth value later.
 - Should the billing page's checkout offer key off `status !== 'paid'` instead of `is_paid`? Recommended: yes (same result, clearer).
+
+## Implementation decisions (resolved open questions)
+
+- Option 1: `status` added and `is_paid` redefined as `status === 'paid'` (breaking, `feat(billing)!`).
+- No `trial_ended` / `ended` split for now.
+- The billing page's plan offer keys off the context flags derived from `status` (equivalent to `status !== 'paid'`).
+- Shape built in one pure helper, `toPublicSubscription` in `config/stripeSubscriptionStatuses.js`, next to `isStoredSubscriptionActive`; models select `stripe_subscription_id` only to feed it.

@@ -13,11 +13,14 @@ jest.unstable_mockModule('../server/config/prismaClient.js', () => ({
     $transaction: jest.fn((callback) => callback(tx)),
     subscription: {
       findUnique: jest.fn(),
+      count: jest.fn(),
     },
   },
 }));
 
 const {
+  countActiveSubscriptionsInDb,
+  countActiveTrialsInDb,
   getSubscriptionPublicDataInDb,
   syncSubscriptionWithCompanyLockInDb,
 } = await import('../server/models/subscriptionModel.js');
@@ -90,7 +93,7 @@ describe('syncSubscriptionWithCompanyLockInDb', () => {
 });
 
 describe('getSubscriptionPublicDataInDb', () => {
-  it('derives is_paid from the Stripe subscription id and never returns ids', async () => {
+  it('reports an unexpired Stripe-backed row as paid and never returns ids', async () => {
     prisma.subscription.findUnique.mockResolvedValue({
       stripe_subscription_id: 'sub_1',
       expires_at: EARLIER,
@@ -105,9 +108,26 @@ describe('getSubscriptionPublicDataInDb', () => {
       expires_at: EARLIER,
       created_at: EARLIER,
       updated_at: EARLIER,
+      status: 'paid',
       is_paid: true,
       has_billing_id: true,
     });
+  });
+
+  it('reports an ENDED paid subscription as inactive and not paid, keeping has_billing_id', async () => {
+    prisma.subscription.findUnique.mockResolvedValue({
+      stripe_subscription_id: 'sub_1',
+      expires_at: new Date('2020-01-01T00:00:00Z'),
+      created_at: EARLIER,
+      updated_at: EARLIER,
+      Company: { stripe_id: 'cus_1' },
+    });
+
+    await expect(getSubscriptionPublicDataInDb('company-1')).resolves.toEqual(expect.objectContaining({
+      status: 'inactive',
+      is_paid: false,
+      has_billing_id: true,
+    }));
   });
 
   it('reports trials (no Stripe subscription) as unpaid', async () => {
@@ -120,8 +140,33 @@ describe('getSubscriptionPublicDataInDb', () => {
     });
 
     await expect(getSubscriptionPublicDataInDb('company-1')).resolves.toEqual(expect.objectContaining({
+      status: 'trial',
       is_paid: false,
       has_billing_id: false,
     }));
+  });
+});
+
+describe('active subscription counters', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('counts only Stripe-backed unexpired rows as active subscriptions', async () => {
+    prisma.subscription.count.mockResolvedValue(1);
+
+    await expect(countActiveSubscriptionsInDb()).resolves.toBe(1);
+    expect(prisma.subscription.count).toHaveBeenCalledWith({
+      where: { stripe_subscription_id: { not: null }, expires_at: { gt: expect.any(Date) } },
+    });
+  });
+
+  it('counts unexpired rows without a Stripe subscription as active trials', async () => {
+    prisma.subscription.count.mockResolvedValue(2);
+
+    await expect(countActiveTrialsInDb()).resolves.toBe(2);
+    expect(prisma.subscription.count).toHaveBeenCalledWith({
+      where: { stripe_subscription_id: null, expires_at: { gt: expect.any(Date) } },
+    });
   });
 });

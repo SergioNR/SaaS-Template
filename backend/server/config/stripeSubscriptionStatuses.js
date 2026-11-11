@@ -16,3 +16,43 @@ export const isStoredSubscriptionActive = (storedSubscription, now = new Date())
   && storedSubscription.expires_at
   && new Date(storedSubscription.expires_at) > now,
 );
+
+//* The client-facing subscription state, computed from the stored row so the
+//* Stripe subscription id never has to leave the model:
+//* - 'paid': Stripe-backed and unexpired (isStoredSubscriptionActive)
+//* - 'trial': not Stripe-backed and unexpired
+//* - 'inactive': expired, or no expiry at all
+export const storedSubscriptionStatus = (storedSubscription, now = new Date()) => {
+  if (isStoredSubscriptionActive(storedSubscription, now)) {
+    return 'paid';
+  }
+
+  if (storedSubscription?.expires_at && new Date(storedSubscription.expires_at) > now) {
+    return 'trial';
+  }
+
+  return 'inactive';
+};
+
+//* Public subscription shape shared by every payload (billing read, admin
+//* user/company detail and company list): dates plus the derived `status`
+//* and `is_paid` (exactly `status === 'paid'`). The row id and the Stripe
+//* subscription id are dropped here. Null in, null out
+export const toPublicSubscription = (storedSubscription, now = new Date()) => {
+  if (!storedSubscription) {
+    return null;
+  }
+
+  const {
+    id: _rowId,
+    stripe_subscription_id: _stripeSubscriptionId,
+    ...publicFields
+  } = storedSubscription;
+  const status = storedSubscriptionStatus(storedSubscription, now);
+
+  return {
+    ...publicFields,
+    status,
+    is_paid: status === 'paid',
+  };
+};

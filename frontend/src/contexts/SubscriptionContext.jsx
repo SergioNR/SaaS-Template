@@ -56,9 +56,9 @@ export const SubscriptionProvider = ({ children }) => {
   //* actually changes, not on every provider render. Expiry is evaluated
   //* when the subscription is (re)loaded
   const value = useMemo(() => {
-    //* `is_paid` is only true for a paid Stripe subscription; the free trial
-    //* has an `expires_at` too but no payment behind it
-    //* (utils/subscriptionStatus.js, shared with SubscriptionStatusBadge)
+    //* The page state comes from the API's `status` (paid | trial |
+    //* inactive) - utils/subscriptionStatus.js, shared with
+    //* SubscriptionStatusBadge, falls back to the dates only without it
     const status = subscriptionStatus(subscription);
     const hasPaidSubscription = status === 'paid';
     const isTrial = status === 'trial';

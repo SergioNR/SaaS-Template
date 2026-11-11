@@ -451,7 +451,8 @@
     },
     "locked": {
       "manage": "Solo el propietario de la empresa puede gestionar la facturación"
-    }
+    },
+    "statusPaid": "De pago"
   },
   "admin": {
     "areaTitle": "Panel de administración",
@@ -490,8 +491,8 @@
         "users": "Usuarios",
         "usersDetail": "{{newUsers}} nuevos en 7 días · {{superadmins}} superadministradores",
         "companies": "Empresas",
-        "activeSubscriptions": "Suscripciones activas",
-        "subscriptionsDetail": "de {{total}} en total",
+        "activeSubscriptions": "Suscripciones de pago activas",
+        "subscriptionsDetail": "{{trials}} pruebas activas · {{total}} en total",
         "activeSessions": "Sesiones activas"
       },
       "recentUsers": {

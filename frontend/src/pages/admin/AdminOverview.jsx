@@ -96,7 +96,10 @@ const AdminOverview = () => {
             <Stack gap={2}>
               <Text fw={700} style={{ fontSize: '1.5rem' }}>{stats.activeSubscriptions}</Text>
               <Text c="dimmed" size="xs">
-                {t('admin.overview.stats.subscriptionsDetail', { total: stats.totalSubscriptions })}
+                {t('admin.overview.stats.subscriptionsDetail', {
+                  total: stats.totalSubscriptions,
+                  trials: stats.activeTrials ?? 0,
+                })}
               </Text>
             </Stack>
           )}

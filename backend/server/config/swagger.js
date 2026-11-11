@@ -178,6 +178,24 @@ const swaggerOptions = {
             },
           },
         },
+        PublicSubscription: {
+          type: 'object',
+          description: 'Subscription dates plus the server-computed state. Never carries the row id or any Stripe id',
+          properties: {
+            created_at: { type: 'string', format: 'date-time' },
+            updated_at: { type: 'string', format: 'date-time' },
+            expires_at: { type: 'string', format: 'date-time', nullable: true },
+            status: {
+              type: 'string',
+              enum: ['paid', 'trial', 'inactive'],
+              description: '`paid`: backed by a Stripe subscription and `expires_at` in the future; `trial`: not Stripe-backed and `expires_at` in the future; `inactive`: expired or no expiry',
+            },
+            is_paid: {
+              type: 'boolean',
+              description: 'Exactly `status === "paid"` - an ended paid subscription reads false',
+            },
+          },
+        },
         RegisterRequest: {
           type: 'object',
           required: ['username', 'password', 'companyName'],
