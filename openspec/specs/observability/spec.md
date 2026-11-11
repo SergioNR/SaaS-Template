@@ -279,7 +279,7 @@ The system SHALL post business events to the Telegram chat named by `TELEGRAM_EV
 
 ### Requirement: Business event catalogue
 
-The system SHALL emit one event after each of: a self-registration that created a company, a subscription starting (marked as a converted trial or a resubscription), a subscription cancellation being scheduled, a subscription ending, an invite being accepted, an account being deleted, and a company being deleted. Events SHALL fire only after the triggering write committed and never for refused, skipped or stale writes.
+The system SHALL emit one event after each of: a self-registration that created a company, a subscription starting (marked as a converted trial or a resubscription), a subscription cancellation being scheduled, a subscription ending, an invite being accepted, an account or a company being deleted on any path, automatic ones included. Events SHALL fire only after the triggering write committed, even if a later step of the same flow fails, and never for refused, skipped or stale writes.
 
 #### Scenario: Trial converts
 
@@ -300,6 +300,16 @@ The system SHALL emit one event after each of: a self-registration that created 
 
 - **WHEN** a deletion is refused with 409
 - **THEN** no business event is posted
+
+#### Scenario: Verification email fails after registration
+
+- **WHEN** a registration created the company but issuing its verification email fails
+- **THEN** the company-registered event is still posted
+
+#### Scenario: Unverified account removed automatically
+
+- **WHEN** the daily purge or an invite acceptance deletes an unverified account and its company
+- **THEN** account-deleted and company-deleted events are posted naming an automatic cleanup as the actor
 
 ### Requirement: Business events carry minimal data
 
